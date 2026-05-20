@@ -12,9 +12,9 @@ export async function GET() {
 
     const { schedule, attendeeSchedules } = await runScheduler(attendees, requests);
 
-    const byPass: Record<number, number> = {};
+    const meetingsByPass: Record<number, number> = {};
     for (const m of schedule) {
-      byPass[m.passNumber] = (byPass[m.passNumber] ?? 0) + 1;
+      meetingsByPass[m.passNumber] = (meetingsByPass[m.passNumber] ?? 0) + 1;
     }
 
     const scheduledIds = new Set(schedule.flatMap(m => [m.attendeeA, m.attendeeB]));
@@ -23,7 +23,7 @@ export async function GET() {
       .map(a => `${a.id} (${a.name})`);
 
     return NextResponse.json({
-      summary: { totalMeetings: schedule.length, byPass, unmatchedAttendees },
+      summary: { totalMeetings: schedule.length, meetingsByPass, unmatchedAttendees },
       attendeeSchedules,
       allMeetings: schedule,
     });

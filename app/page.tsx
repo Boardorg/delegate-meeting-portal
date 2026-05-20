@@ -1,15 +1,16 @@
 export default function Home() {
   const routes = [
     { method: 'GET', path: '/api/salesforce/auth', description: 'Trigger Salesforce OAuth and return connection status' },
-    { method: 'GET', path: '/api/salesforce/attendees', description: 'Query Attendee object (stub)' },
-    { method: 'POST', path: '/api/scheduling/run', description: 'Accept attendee + request data, return scheduled meetings (stub)' },
-    { method: 'GET', path: '/api/scheduling/mock', description: 'Load and return parsed mock CSV data' },
+    { method: 'GET', path: '/api/salesforce/attendees', description: 'Query Attendee object from Salesforce (stub)' },
+    { method: 'GET', path: '/api/scheduling/mock', description: 'Return parsed mock attendees and requests from CSV' },
+    { method: 'POST', path: '/api/scheduling/run', description: 'Run scheduler against posted attendees + requests, return schedule and per-attendee breakdowns' },
+    { method: 'GET', path: '/api/scheduling/results', description: 'Load mock data, run scheduler, return full results with summary — primary spot-check endpoint' },
   ];
 
   return (
-    <main style={{ fontFamily: 'monospace', maxWidth: 720, margin: '60px auto', padding: '0 24px' }}>
+    <main style={{ fontFamily: 'monospace', maxWidth: 800, margin: '60px auto', padding: '0 24px' }}>
       <h1>Delegate Meeting Portal</h1>
-      <p>App is running. Below are the available API routes.</p>
+      <p>App is running. Available API routes:</p>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 24 }}>
         <thead>
           <tr>

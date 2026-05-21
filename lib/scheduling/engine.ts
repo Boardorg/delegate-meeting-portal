@@ -273,10 +273,7 @@ export async function runScheduler(
 	// Initialize a set to track which pairs have already been scheduled to prevent duplicates.
 	const scheduled = new Set<string>();
 
-	// Initialize sets of cumulative meeting counts per attendee across all passes.
-	const counts = new Map<string, number>(attendees.map(a => [a.id, 0]));
-
-	// Track how many slots each attendee has used per day for slotIndex assignment.
+	// Track how many slots each attendee has used per day for slotIndex assignment and cap enforcement.
 	const slotCounters = new Map<string, { 1: number; 2: number }>(
 		attendees.map(a => [a.id, { 1: 0, 2: 0 }])
 	);
@@ -339,24 +336,29 @@ export async function runScheduler(
 			const requester = attendeeMap.get(req.requesterId)!;
 			const target = attendeeMap.get(req.targetId)!;
 
-			// Check the cumulative meeting counts and caps for both attendees.
-			const requesterCount = counts.get(req.requesterId) ?? 0;
-			const targetCount = counts.get(req.targetId) ?? 0;
-			const requesterCap = getCap(requester, pass);
-			const targetCap = getCap(target, pass);
+			// Set the day for this meeting based on the current pass configuration.
+			const day = pass.day;
 
-			// Skip if either attendee has hit their cumulative cap for this pass.
-			if (requesterCount >= requesterCap) continue;
-			if (targetCount >= targetCap) continue;
+			// Get the current slot usage for both attendees.
+			const aSlots = slotCounters.get(req.requesterId)!;
+			const bSlots = slotCounters.get(req.targetId)!;
+
+			// Set the day key for slot count lookup based on the current pass's day.
+			const dayKey = day === 1 ? 'day1SlotCount' : 'day2SlotCount';
+
+			// Calculate the effective cap for both attendees under this pass's rules and their personal limits.
+			const requesterCap = Math.min(getCap(requester, pass), requester[dayKey]);
+			const targetCap    = Math.min(getCap(target,    pass), target[dayKey]);
+
+			// Skip if either attendee has already filled their per-day cap.
+			if (aSlots[day] >= requesterCap) continue;
+			if (bSlots[day] >= targetCap)   continue;
 
 			// Skip if this meeting would give either attendee too many meetings with the same company.
 			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.requesterId, req.targetId, 2)) continue;
 			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.targetId, req.requesterId, 2)) continue;
 
 			// Assign the next available slot index for this day, using the later of the two attendees' counters.
-			const day = pass.day;
-			const aSlots = slotCounters.get(req.requesterId)!;
-			const bSlots = slotCounters.get(req.targetId)!;
 			const slotIndex = Math.max(aSlots[day], bSlots[day]);
 
 			// Create the ScheduledMeeting record for this meeting.
@@ -373,10 +375,6 @@ export async function runScheduler(
 
 			// Mark the pair as scheduled so no later pass can schedule them again.
 			scheduled.add(key);
-
-			// Increment both attendees' cumulative meeting counts.
-			counts.set(req.requesterId, requesterCount + 1);
-			counts.set(req.targetId, targetCount + 1);
 
 			// Advance both attendees' slot counters for this day.
 			aSlots[day] = slotIndex + 1;

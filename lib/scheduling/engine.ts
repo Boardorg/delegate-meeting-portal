@@ -156,6 +156,7 @@ export function wouldViolateCompanyDiversity(
 // Scheduler
 // ---------------------------------------------------------------------------
 
+// Defines the configuration for each pass of the scheduling algorithm, including caps and filters.
 interface PassConfig {
 	passNumber: number;
 	day: 1 | 2;

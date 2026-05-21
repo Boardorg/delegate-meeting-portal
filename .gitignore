@@ -34,9 +34,6 @@ yarn-error.log*
 .env*
 !.env.local.example
 
-# mock data (may contain sensitive attendee info)
-/data/mock
-
 # vercel
 .vercel
 

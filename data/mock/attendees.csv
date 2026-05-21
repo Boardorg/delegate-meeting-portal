@@ -1,0 +1,14 @@
+id,name,role,company,sponsorTier,day1SlotCount,day2SlotCount
+s1,Acme Corp Rep,sponsor,Acme Corp,diamond,7,0
+s2,Globex Rep,sponsor,Globex,standard,7,0
+s3,Initech Rep,sponsor,Initech,standard,7,0
+s4,Umbrella Rep,sponsor,Umbrella Corp,standard,7,0
+s5,Massive Dynamic Rep,sponsor,Massive Dynamic,diamond,7,0
+d1,Alice Delegate,delegate,Wayne Enterprises,null,7,2
+d2,Bob Delegate,delegate,Stark Industries,null,7,2
+d3,Carol Delegate,delegate,Oscorp,null,7,2
+d4,Dan Delegate,delegate,Initech,null,7,2
+d5,Eve Delegate,delegate,Globex,null,7,2
+d6,Frank Delegate,delegate,Wayne Enterprises,null,7,2
+d7,Grace Delegate,delegate,Acme Corp,null,7,2
+d8,Hank Delegate,delegate,Stark Industries,null,7,2

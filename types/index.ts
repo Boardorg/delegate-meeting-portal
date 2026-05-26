@@ -1,3 +1,15 @@
+export type CachedAuth = {
+	accessToken: string;
+	instanceUrl: string;
+	expiresAt: number;
+};
+
+export type AttendeeRecordSF = {
+	Id: string;
+	Name: string;
+	[key: string]: unknown;
+};
+
 /**
  * Attendee role. Determines scheduling rules, day eligibility, and meeting caps.
  * - `delegate`: Event attendee; eligible for sponsor meetings on Day 1 and peer meetings on Day 2.

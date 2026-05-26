@@ -16,8 +16,8 @@ export async function GET() {
 
 		// Load attendee and request data.
 		const [attendees, requests] = await Promise.all([
-			loadMockData(path.join(base, 'attendees.csv')),
-			loadMockRequests(path.join(base, 'requests.csv')),
+			loadMockData(path.join(base, 'attendees.json')),
+			loadMockRequests(path.join(base, 'requests.json')),
 		]);
 
 		// Run the scheduler to generate the meeting schedule and individual attendee schedules.

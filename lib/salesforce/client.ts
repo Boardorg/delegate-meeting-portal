@@ -1,7 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import jsforce, { Connection, type Record as SfRecord } from "jsforce";
-import type { Attendee, AttendeeRecordSF, AttendeeRole, CachedAuth, SponsorTier } from "@/types";
+import type {
+    Attendee,
+    AttendeeRecordSF,
+    AttendeeRole,
+    CachedAuth,
+    SponsorTier,
+} from "@/types";
 
 const API_VERSION = process.env.SALESFORCE_API_VERSION ?? "59.0";
 
@@ -95,6 +101,106 @@ export async function query<T extends SfRecord = SfRecord>(
     });
 }
 
+// Reverse-engineered from report 00OPZ00000DSuhJ2AT ("Contacts with Attendees
+// and Registration"). We query Attendee__c directly with the same field set
+// and filter logic as the report, scoped to one conference.
+//
+// The Contact lookup on Attendee__c is `Delegate__c` (relationship `Delegate__r`).
+// Attendee__c also has a `Contact__c` field labeled "Test SFDC contact" — do not
+// use that one. We also require Delegate__c != NULL to mimic the report's
+// inner join through Contact.
+const MEETING_DATA_FIELDS = [
+    "Id",
+    "Name",
+    "Status__c",
+    "Replaced_By__c",
+    "Speaker__c",
+    "Conference__c",
+    "Conference_Year__c",
+    "Attendee_Gross_Amount__c",
+    "Attendee_Type__c",
+    "Attendee_Type_Formula__c",
+    "Delegate__r.FirstName",
+    "Delegate__r.LastName",
+    "Delegate__r.Title",
+    "Delegate__r.Email",
+    "Delegate__r.Account.Name",
+    "Delegate__r.Dietary_Requirements__c",
+    "Delegate__r.Dietary_Restrictions__c",
+    "Delegate__r.Special_Accommodations__c",
+    "Registration__r.Name",
+    "Registration__r.CloseDate",
+    "Registration__r.Probability",
+    "Registration__r.StageName",
+    "Registration__r.Booking_Code__c",
+    "Registration__r.Discount_Code__c",
+    "Registration__r.RecordType.Name",
+] as const;
+
+const EXCLUDED_DISCOUNT_CODES = ["JUSTTESTING", "DOLLARTEST", "ONEDOLLARTEST"];
+const SPECIAL_DELEGATE_DISCOUNT_CODES = [
+    "SPEAKERPASS",
+    "BOARDMEMBERBUNDLE",
+    "BOARDMEMBERPO",
+    "REPLACEMENT",
+    "BOARDMEMBERCOMP",
+    "BOARDMEMBERSWAP",
+];
+const EXCLUDED_ACCOUNT_NAME_FRAGMENTS = [
+    "Test",
+    "Testing",
+    "SocialMedia",
+    "Assemble",
+];
+
+function soqlStringList(values: readonly string[]): string {
+    return values.map((v) => `'${v.replace(/'/g, "\\'")}'`).join(", ");
+}
+
+function commonMeetingDataWhere(eventCode: string): string {
+    const safeEvent = eventCode.replace(/'/g, "\\'");
+    const accountNotContain = EXCLUDED_ACCOUNT_NAME_FRAGMENTS.map(
+        (f) => `(NOT Delegate__r.Account.Name LIKE '%${f}%')`,
+    ).join(" AND ");
+    return [
+        `Delegate__c != NULL`,
+        `Delegate__r.AccountId != NULL`,
+        `Registration__r.Active_Conference__c = TRUE`,
+        `Registration__r.Discount_Code__c NOT IN (${soqlStringList(EXCLUDED_DISCOUNT_CODES)})`,
+        `Registration__r.Conference__c = '${safeEvent}'`,
+        accountNotContain,
+        `(Status__c = NULL OR Status__c = 'Pending Replacement')`,
+    ].join(" AND ");
+}
+
+export async function getMeetingDataSponsors(eventCode: string) {
+    const where = [
+        commonMeetingDataWhere(eventCode),
+        `Registration__r.RecordType.Name = 'Sponsor'`,
+        `Registration__r.StageName IN ('Closed-Won', 'Registered')`,
+    ].join(" AND ");
+    const soql = `SELECT ${MEETING_DATA_FIELDS.join(", ")} FROM Attendee__c WHERE ${where}`;
+    return query(soql);
+}
+
+export async function getMeetingDataDelegates(eventCode: string) {
+    const where = [
+        commonMeetingDataWhere(eventCode),
+        `Registration__r.RecordType.Name IN ('Board Event', 'Delegate')`,
+        `(Registration__r.StageName = 'Closed-Won' OR Registration__r.Discount_Code__c IN (${soqlStringList(SPECIAL_DELEGATE_DISCOUNT_CODES)}))`,
+    ].join(" AND ");
+    const soql = `SELECT ${MEETING_DATA_FIELDS.join(", ")} FROM Attendee__c WHERE ${where}`;
+    return query(soql);
+}
+
+export async function getMeetingDataByEvent(eventCode: string) {
+    const [delegates, sponsors] = await Promise.all([
+        getMeetingDataDelegates(eventCode),
+        getMeetingDataSponsors(eventCode),
+    ]);
+    return { delegates, sponsors };
+}
+
 export async function getAttendeesByEventId(
     eventId: string,
 ): Promise<AttendeeRecordSF[]> {
@@ -134,11 +240,20 @@ export async function getAttendeeById(
 // sponsorTier and day1/day2 slot counts are not currently in ATTENDEE_FIELDS,
 // so they default — extend ATTENDEE_FIELDS and this mapper together when those
 // fields are needed.
-export function attendeeRecordsToAttendees(records: AttendeeRecordSF[]): Attendee[] {
+export function attendeeRecordsToAttendees(
+    records: AttendeeRecordSF[],
+): Attendee[] {
     return records.map((r) => {
-        const rawType = typeof r.Attendee_Type__c === "string" ? r.Attendee_Type__c.toLowerCase() : "";
-        const role: AttendeeRole = rawType === "sponsor" ? "sponsor" : "delegate";
-        const rawTier = typeof r.Sponsor_Tier__c === "string" ? r.Sponsor_Tier__c.toLowerCase() : null;
+        const rawType =
+            typeof r.Attendee_Type__c === "string"
+                ? r.Attendee_Type__c.toLowerCase()
+                : "";
+        const role: AttendeeRole =
+            rawType === "sponsor" ? "sponsor" : "delegate";
+        const rawTier =
+            typeof r.Sponsor_Tier__c === "string"
+                ? r.Sponsor_Tier__c.toLowerCase()
+                : null;
         const sponsorTier: SponsorTier =
             rawTier === "diamond" || rawTier === "standard" ? rawTier : null;
         return {
@@ -147,8 +262,14 @@ export function attendeeRecordsToAttendees(records: AttendeeRecordSF[]): Attende
             role,
             company: typeof r.Company__c === "string" ? r.Company__c : "",
             sponsorTier,
-            day1SlotCount: typeof r.Day1_Slot_Count__c === "number" ? r.Day1_Slot_Count__c : 0,
-            day2SlotCount: typeof r.Day2_Slot_Count__c === "number" ? r.Day2_Slot_Count__c : 0,
+            day1SlotCount:
+                typeof r.Day1_Slot_Count__c === "number"
+                    ? r.Day1_Slot_Count__c
+                    : 0,
+            day2SlotCount:
+                typeof r.Day2_Slot_Count__c === "number"
+                    ? r.Day2_Slot_Count__c
+                    : 0,
         };
     });
 }
@@ -168,12 +289,17 @@ function csvCell(value: unknown): string {
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export async function writeAttendeesCsv(attendees: Attendee[], filename: string): Promise<string> {
+export async function writeAttendeesCsv(
+    attendees: Attendee[],
+    filename: string,
+): Promise<string> {
     const dir = path.join(process.cwd(), "data", "temp");
     await fs.mkdir(dir, { recursive: true });
     const filePath = path.join(dir, filename);
     const header = CSV_COLUMNS.join(",");
-    const rows = attendees.map((a) => CSV_COLUMNS.map((c) => csvCell(a[c])).join(","));
+    const rows = attendees.map((a) =>
+        CSV_COLUMNS.map((c) => csvCell(a[c])).join(","),
+    );
     await fs.writeFile(filePath, [header, ...rows].join("\n") + "\n", "utf8");
     return filePath;
 }

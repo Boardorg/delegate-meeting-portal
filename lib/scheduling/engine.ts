@@ -1,69 +1,43 @@
 import fs from 'fs';
-import { Attendee, AttendeeRole, AttendeeSchedule, MeetingRequest, ScheduledMeeting, SponsorTier } from '@/types';
+import path from 'path';
+import {
+	Attendee,
+	AttendeeRole,
+	AttendeeSchedule,
+	AttendeeSlot,
+	MeetingRequest,
+	ScheduledMeeting,
+	SponsorTier,
+} from '@/types';
 
 // ---------------------------------------------------------------------------
-// CSV loaders
+// JSON loaders
 // ---------------------------------------------------------------------------
 
 /**
- * Splits a raw CSV string into rows of trimmed cell values, skipping the header line.
+ * Reads and parses `attendees.json` at the given path into typed `Attendee` records.
  *
- * @param {string} raw - The full contents of a CSV file as a string.
- * @returns {string[][]} An array of rows, each row being an array of cell strings.
- */
-function parseLines(raw: string): string[][] {
-
-	// Remove the header row and split the rest into individual lines.
-	const lines = raw.trim().split('\n').slice(1);
-
-	// Split each line into cells by comma and trim whitespace from each value.
-	return lines.map(line => line.split(',').map(v => v.trim()));
-}
-
-/**
- * Reads and parses `attendees.csv` at the given path into typed `Attendee` records.
- *
- * @param {string} filePath - Absolute path to the attendees CSV file.
+ * @param {string} filePath - Absolute path to the attendees JSON file.
  * @returns {Promise<Attendee[]>} Resolves to an array of parsed `Attendee` objects.
  */
 export async function loadMockData(filePath: string): Promise<Attendee[]> {
 
-	// Read the file from disk as a UTF-8 string.
-	const raw = fs.readFileSync(filePath, 'utf-8');
-
-	// Map each row to an Attendee object, casting string values to their correct types.
-	return parseLines(raw).map(([id, name, role, company, sponsorTier, day1SlotCount, day2SlotCount]) => ({
-		id,
-		name,
-		role: role as AttendeeRole,
-		company,
-
-		// The CSV stores null as the string "null" so convert it to an actual null.
-		sponsorTier: sponsorTier === 'null' ? null : (sponsorTier as SponsorTier),
-
-		// Parse slot counts from strings to integers
-		day1SlotCount: parseInt(day1SlotCount, 10),
-		day2SlotCount: parseInt(day2SlotCount, 10),
-	}));
+	// Read the file from disk as a UTF-8 string and parse it as JSON.
+	const raw = fs.readFileSync(path.resolve(filePath), 'utf-8');
+	return JSON.parse(raw) as Attendee[];
 }
 
 /**
- * Reads and parses `requests.csv` at the given path into typed `MeetingRequest` records.
+ * Reads and parses `requests.json` at the given path into typed `MeetingRequest` records.
  *
- * @param {string} filePath - Absolute path to the meeting requests CSV file.
+ * @param {string} filePath - Absolute path to the meeting requests JSON file.
  * @returns {Promise<MeetingRequest[]>} Resolves to an array of parsed `MeetingRequest` objects.
  */
 export async function loadMockRequests(filePath: string): Promise<MeetingRequest[]> {
 
-	// Read the file from disk as a UTF-8 string.
-	const raw = fs.readFileSync(filePath, 'utf-8');
-
-	// Map each row to a MeetingRequest object, parsing rank as an integer.
-	return parseLines(raw).map(([requesterId, targetId, rank]) => ({
-		requesterId,
-		targetId,
-		rank: parseInt(rank, 10),
-	}));
+	// Read the file from disk as a UTF-8 string and parse it as JSON.
+	const raw = fs.readFileSync(path.resolve(filePath), 'utf-8');
+	return JSON.parse(raw) as MeetingRequest[];
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +85,42 @@ export function computeMutualPairs(requests: MeetingRequest[]): Set<string> {
 }
 
 /**
+ * Finds the first pair of matching available slots between two attendees on a given day.
+ * A valid pair requires both attendees to have an available slot at the same start time.
+ *
+ * @param {AttendeeSlot[]} slotsA - Slot array for the first attendee.
+ * @param {AttendeeSlot[]} slotsB - Slot array for the second attendee.
+ * @param {1 | 2} day - The event day to search within.
+ * @returns {{ slotA: AttendeeSlot; slotB: AttendeeSlot } | null} The matched slot pair, or null if none found.
+ */
+function findMutualSlot(
+	slotsA: AttendeeSlot[],
+	slotsB: AttendeeSlot[],
+	day: 1 | 2
+): { slotA: AttendeeSlot; slotB: AttendeeSlot } | null {
+
+	// Filter each attendee's slots down to only available slots on the target day.
+	const availableA = slotsA.filter(s => s.day === day && s.status === 'available');
+	const availableB = slotsB.filter(s => s.day === day && s.status === 'available');
+
+	// Build a map of startTime -> slot key-value pairs for attendee B.
+	const mapB = new Map(availableB.map(s => [s.startTime, s]));
+
+	// Loop through attendee A's available slots and return the first one that matches a B slot.
+	for (const slotA of availableA) {
+
+		// Try to get the corresponding slot from B that has the same start time.
+		const slotB = mapB.get(slotA.startTime);
+
+		// If a matching slot exists, return both slots as a pair.
+		if (slotB) return { slotA, slotB };
+	}
+
+	// No overlapping available slot found.
+	return null;
+}
+
+/**
  * Checks whether scheduling a meeting between two attendees would exceed the same-company cap.
  *
  * @param {ScheduledMeeting[]} scheduledMeetings - All meetings scheduled so far.
@@ -148,7 +158,7 @@ export function wouldViolateCompanyDiversity(
 		return attendees.get(otherId)?.company === candidateCompany;
 	}).length;
 
-	// Check to see if adding this meeting would violate the max number of same-company meetings allowed.
+	// Return true if adding this meeting would meet or exceed the cap.
 	return sameCompanyCount >= maxSameCompany;
 }
 
@@ -170,20 +180,24 @@ interface PassConfig {
 	) => boolean;
 }
 
-// Cumulative meeting caps for each sponsor tier at pass 5.
-const SPONSOR_CAPS_PASS5: Record<string, number> = { diamond: 10, standard: 8 };
+// Cumulative meeting caps per sponsor tier at Pass 5.
+const SPONSOR_CAPS_PASS5: Record<string, number> = { diamond: 10, standard: 7 };
 
 // Defines the seven passes of the scheduling algorithm with their specific rules and caps.
 const PASSES: PassConfig[] = [
 	{
+		// Pass 1: Mutual sponsor <-> delegate requests only. Both parties requested each other.
 		passNumber: 1,
 		day: 1,
 		delegateCap: 2,
 		sponsorCap: () => 3,
 		filter: (req, tgt, _rank, mutual) =>
-			mutual && ((req.role === 'sponsor' && tgt.role === 'delegate') || (req.role === 'delegate' && tgt.role === 'sponsor')),
+			mutual &&
+			((req.role === 'sponsor' && tgt.role === 'delegate') ||
+				(req.role === 'delegate' && tgt.role === 'sponsor')),
 	},
 	{
+		// Pass 2: High-interest sponsor requests (rank >= 4), regardless of mutuality.
 		passNumber: 2,
 		day: 1,
 		delegateCap: 3,
@@ -192,6 +206,7 @@ const PASSES: PassConfig[] = [
 			req.role === 'sponsor' && tgt.role === 'delegate' && rank >= 4,
 	},
 	{
+		// Pass 3: High-interest delegate requests for sponsors (rank >= 4), regardless of mutuality.
 		passNumber: 3,
 		day: 1,
 		delegateCap: 4,
@@ -200,22 +215,27 @@ const PASSES: PassConfig[] = [
 			req.role === 'delegate' && tgt.role === 'sponsor' && rank >= 4,
 	},
 	{
+		// Pass 4: Second pass on mutual sponsor <-> delegate requests. Raises caps to fill remaining slots.
 		passNumber: 4,
 		day: 1,
 		delegateCap: 5,
 		sponsorCap: () => 8,
 		filter: (req, tgt, _rank, mutual) =>
-			mutual && ((req.role === 'sponsor' && tgt.role === 'delegate') || (req.role === 'delegate' && tgt.role === 'sponsor')),
+			mutual &&
+			((req.role === 'sponsor' && tgt.role === 'delegate') ||
+				(req.role === 'delegate' && tgt.role === 'sponsor')),
 	},
 	{
+		// Pass 5: All remaining sponsor requests, any rank. Caps raised to fulfill package meeting guarantees.
 		passNumber: 5,
 		day: 1,
 		delegateCap: 7,
-		sponsorCap: (tier) => (tier ? SPONSOR_CAPS_PASS5[tier] ?? 8 : 8),
+		sponsorCap: (tier) => (tier ? (SPONSOR_CAPS_PASS5[tier] ?? 7) : 7),
 		filter: (req, tgt, _rank, _mutual) =>
 			req.role === 'sponsor' && tgt.role === 'delegate',
 	},
 	{
+		// Pass 6: Mutual delegate <-> delegate requests on Day 2 only.
 		passNumber: 6,
 		day: 2,
 		delegateCap: 2,
@@ -224,6 +244,7 @@ const PASSES: PassConfig[] = [
 			mutual && req.role === 'delegate' && tgt.role === 'delegate',
 	},
 	{
+		// Pass 7: All remaining delegate <-> delegate requests on Day 2, any rank.
 		passNumber: 7,
 		day: 2,
 		delegateCap: 2,
@@ -242,18 +263,38 @@ const PASSES: PassConfig[] = [
  */
 function getCap(attendee: Attendee, pass: PassConfig): number {
 
-	// Sponsors and delegates have separate cap functions per pass.
+	// Sponsors and delegates use separate cap functions per pass.
 	return attendee.role === 'sponsor'
 		? pass.sponsorCap(attendee.sponsorTier)
 		: pass.delegateCap;
 }
 
 /**
+ * Counts how many meetings an attendee currently has scheduled on a specific day.
+ *
+ * @param {ScheduledMeeting[]} meetings - All meetings scheduled so far.
+ * @param {string} attendeeId - The attendee to count for.
+ * @param {1 | 2} day - The event day to count on.
+ * @returns {number} The number of meetings this attendee has on that day.
+ */
+function countMeetingsOnDay(
+	meetings: ScheduledMeeting[],
+	attendeeId: string,
+	day: 1 | 2
+): number {
+	return meetings.filter(
+		m => m.day === day && (m.attendeeA === attendeeId || m.attendeeB === attendeeId)
+	).length;
+}
+
+/**
  * Runs the full multi-pass scheduling algorithm against a set of attendees and requests.
  *
  * Meetings are scheduled across seven passes in priority order. Caps are cumulative —
- * each pass raises the ceiling without resetting counts. Business rules (no duplicates,
- * no self-meetings, company diversity) are enforced on every candidate before scheduling.
+ * each pass raises the ceiling without resetting counts. Before confirming any meeting,
+ * the engine verifies that both attendees have a mutually available time slot, then marks
+ * those slots as blocked so they cannot be reused. Business rules (no duplicates,
+ * no self-meetings, company diversity) are enforced on every candidate.
  *
  * @param {Attendee[]} attendees - All attendees to schedule meetings for.
  * @param {MeetingRequest[]} requests - All submitted meeting requests.
@@ -265,30 +306,36 @@ export async function runScheduler(
 	requests: MeetingRequest[]
 ): Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }> {
 
-	// Index attendees by ID for O(1) lookup throughout the algorithm.
+	// Index attendees by ID for lookup throughout the algorithm.
 	const attendeeMap = new Map(attendees.map(a => [a.id, a]));
 
 	// Pre-compute all mutual pairs once so each pass can check mutuality cheaply.
 	const mutualPairs = computeMutualPairs(requests);
 
 	// Initialize a set to track which pairs have already been scheduled to prevent duplicates.
-	const scheduled = new Set<string>();
+	const scheduledPairs = new Set<string>();
 
-	// Track how many slots each attendee has used per day for slotIndex assignment and cap enforcement.
-	const slotCounters = new Map<string, { 1: number; 2: number }>(
-		attendees.map(a => [a.id, { 1: 0, 2: 0 }])
+	// Create a mutable copy of each attendee's slots keyed by attendee ID.
+	const slotsByAttendee = new Map<string, AttendeeSlot[]>(
+		attendees.map(a => [
+			a.id,
+			a.scheduling.slots.map(s => ({ ...s })),
+		])
 	);
 
 	// Initialize the master list of all scheduled meetings.
 	const allMeetings: ScheduledMeeting[] = [];
 
-	// Loop through each pass in order, applying its specific filters and caps to schedule meetings.
+	// Auto-increment counter for generating unique meeting IDs.
+	let meetingCounter = 1;
+
+	// Loop through each pass in order, applying its specific filters and caps.
 	for (const pass of PASSES) {
 
 		// Collect every request that is eligible to be scheduled in this pass.
 		const candidates: Array<{ req: MeetingRequest; isMutual: boolean }> = [];
 
-		// Loop through all requests to find candidates for this pass based on the pass's filter function and mutuality.
+		// Loop through all requests to find candidates for this pass.
 		for (const req of requests) {
 
 			// Get the requester and target Attendee objects for this request.
@@ -298,17 +345,14 @@ export async function runScheduler(
 			// Skip if either party isn't in the attendee list.
 			if (!requester || !target) continue;
 
-			// Generate the canonical pair key for this request to check if it's already scheduled.
-			const key = pairKey(req.requesterId, req.targetId);
-
-			// Skip pairs already scheduled in a previous pass.
-			if (scheduled.has(key)) continue;
-
 			// Skip self-requests.
 			if (req.requesterId === req.targetId) continue;
 
-			// Check if this pair is mutual.
-			const isMutual = mutualPairs.has(key);
+			// Skip pairs already scheduled in a previous pass.
+			if (scheduledPairs.has(pairKey(req.requesterId, req.targetId))) continue;
+
+			// Check whether this pair is mutual.
+			const isMutual = mutualPairs.has(pairKey(req.requesterId, req.targetId));
 
 			// Apply this pass's eligibility filter.
 			if (!pass.filter(requester, target, req.rank, isMutual)) continue;
@@ -324,62 +368,75 @@ export async function runScheduler(
 			return a.req.targetId.localeCompare(b.req.targetId);
 		});
 
-		// Loop through the sorted candidates and schedule them if they still meet the criteria.
-		for (const { req } of candidates) {
+		// Attempt to schedule each candidate in sorted priority order.
+		for (const { req, isMutual } of candidates) {
 
-			// Re-generate the pair key for this request to check if it's already scheduled.
 			const key = pairKey(req.requesterId, req.targetId);
 
-			// Check if a higher-priority candidate in this same pass already claimed this pair.
-			if (scheduled.has(key)) continue;
+			// Check again in case a higher-priority candidate in this same pass claimed this pair.
+			if (scheduledPairs.has(key)) continue;
 
 			// Get the requester and target Attendee objects again for this request.
 			const requester = attendeeMap.get(req.requesterId)!;
 			const target = attendeeMap.get(req.targetId)!;
-
-			// Set the day for this meeting based on the current pass configuration.
 			const day = pass.day;
 
-			// Get the current slot usage for both attendees.
-			const aSlots = slotCounters.get(req.requesterId)!;
-			const bSlots = slotCounters.get(req.targetId)!;
+			// Count how many meetings each attendee already has on this day.
+			const requesterDayCount = countMeetingsOnDay(allMeetings, req.requesterId, day);
+			const targetDayCount    = countMeetingsOnDay(allMeetings, req.targetId,    day);
 
-			// Set the day key for slot count lookup based on the current pass's day.
-			const dayKey = day === 1 ? 'day1SlotCount' : 'day2SlotCount';
+			// Derive the available slot count for each attendee on this day from the mutable slot map.
+			const requesterAvailableSlots = (slotsByAttendee.get(req.requesterId) ?? [])
+				.filter(s => s.day === day && s.status === 'available').length;
+			const targetAvailableSlots    = (slotsByAttendee.get(req.targetId) ?? [])
+				.filter(s => s.day === day && s.status === 'available').length;
 
-			// Calculate the effective cap for both attendees under this pass's rules and their personal limits.
-			const requesterCap = Math.min(getCap(requester, pass), requester[dayKey]);
-			const targetCap    = Math.min(getCap(target,    pass), target[dayKey]);
+			// Cap is the lower of the pass cap and the attendee's total available slots on this day.
+			const requesterCap = Math.min(getCap(requester, pass), requesterAvailableSlots + requesterDayCount);
+			const targetCap    = Math.min(getCap(target,    pass), targetAvailableSlots    + targetDayCount);
 
-			// Skip if either attendee has already filled their per-day cap.
-			if (aSlots[day] >= requesterCap) continue;
-			if (bSlots[day] >= targetCap)   continue;
+			// Skip if either attendee has already reached their cumulative cap for this pass.
+			if (requesterDayCount >= requesterCap) continue;
+			if (targetDayCount    >= targetCap)    continue;
 
-			// Skip if this meeting would give either attendee too many meetings with the same company.
-			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.requesterId, req.targetId, 2)) continue;
-			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.targetId, req.requesterId, 2)) continue;
+			// Skip if this meeting would violate the company diversity rule for either attendee.
+			const requesterMaxSame = requester.scheduling.maxSameCompanyMeetings ?? 2;
+			const targetMaxSame    = target.scheduling.maxSameCompanyMeetings    ?? 2;
+			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.requesterId, req.targetId, requesterMaxSame)) continue;
+			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.targetId, req.requesterId, targetMaxSame))    continue;
 
-			// Assign the next available slot index for this day, using the later of the two attendees' counters.
-			const slotIndex = Math.max(aSlots[day], bSlots[day]);
+			// Find a mutually available time slot for both attendees on this day.
+			const requesterSlots = slotsByAttendee.get(req.requesterId) ?? [];
+			const targetSlots    = slotsByAttendee.get(req.targetId)    ?? [];
+			const mutualSlot     = findMutualSlot(requesterSlots, targetSlots, day);
 
-			// Create the ScheduledMeeting record for this meeting.
+			// Skip this pair if no overlapping available slot exists.
+			if (!mutualSlot) continue;
+
+			// Mark both matched slots as blocked so they can't be reassigned to another meeting.
+			mutualSlot.slotA.status = 'blocked';
+			mutualSlot.slotB.status = 'blocked';
+
+			// Build the ScheduledMeeting record with all required fields.
 			const meeting: ScheduledMeeting = {
+				id: `mtg-${String(meetingCounter++).padStart(3, '0')}`,
 				attendeeA: req.requesterId,
 				attendeeB: req.targetId,
 				day,
-				slotIndex,
+				slotIdA: mutualSlot.slotA.slotId,
+				slotIdB: mutualSlot.slotB.slotId,
 				passNumber: pass.passNumber,
+				mutual: isMutual,
+				startTime: mutualSlot.slotA.startTime,
+				endTime: mutualSlot.slotA.endTime,
+				cventAppointmentId: null,
 			};
 
-			// Add this meeting to the master schedule.
+			// Add the meeting to the master schedule.
 			allMeetings.push(meeting);
 
-			// Mark the pair as scheduled so no later pass can schedule them again.
-			scheduled.add(key);
-
-			// Advance both attendees' slot counters for this day.
-			aSlots[day] = slotIndex + 1;
-			bSlots[day] = slotIndex + 1;
+			// Mark this pair as done so no later pass attempts to schedule them again.
+			scheduledPairs.add(key);
 		}
 	}
 
@@ -388,11 +445,14 @@ export async function runScheduler(
 		attendeeId: a.id,
 		name: a.name,
 		company: a.company,
-		role: a.role,
-		day1Meetings: allMeetings.filter(m => m.day === 1 && (m.attendeeA === a.id || m.attendeeB === a.id)),
-		day2Meetings: allMeetings.filter(m => m.day === 2 && (m.attendeeA === a.id || m.attendeeB === a.id)),
+		role: a.role as AttendeeRole,
+		day1Meetings: allMeetings
+			.filter(m => m.day === 1 && (m.attendeeA === a.id || m.attendeeB === a.id))
+			.sort((a, b) => a.startTime!.localeCompare(b.startTime!)),
+		day2Meetings: allMeetings
+			.filter(m => m.day === 2 && (m.attendeeA === a.id || m.attendeeB === a.id))
+			.sort((a, b) => a.startTime!.localeCompare(b.startTime!)),
 	}));
 
-	// Return both the flat list of all scheduled meetings and the per-attendee schedules.
 	return { schedule: allMeetings, attendeeSchedules };
 }

@@ -47,19 +47,6 @@ export interface AttendeeSlot {
  */
 export interface AttendeeProfile {
 	/**
-	 * Attendee's budgetary responsibility level.
-	 * Null for sponsors.
-	 * Example values: '<1M' | '1M-10M' | '10M-50M' | '50M-100M' | '100M-500M' | '500M-1B' | '>1B'
-	 */
-	budgetaryResponsibility: string | null;
-
-	/**
-	 * Attendee's areas of interest.
-	 * Example values: ['cybersecurity', 'cloud infrastructure', 'AI/ML']
-	 */
-	areasOfInterest: string[];
-
-	/**
 	 * Attendee's company annual revenue range.
 	 * Null for sponsors.
 	 * Example values: '<10M' | '10M-50M' | '50M-100M' | '100M-500M' | '500M-1B' | '1B-5B' | '>5B'
@@ -67,11 +54,48 @@ export interface AttendeeProfile {
 	annualRevenue: string | null;
 
 	/**
+	 * Attendee's budgetary responsibility level.
+	 * Null for sponsors.
+	 * Example values: '<1M' | '1M-10M' | '10M-50M' | '50M-100M' | '100M-500M' | '500M-1B' | '>1B'
+	 */
+	budgetaryResponsibility: string | null;
+
+	/**
+	 * The attendee's areas of professional specialization.
+	 * Example values: ['cybersecurity', 'cloud infrastructure', 'AI/ML']
+	 */
+	areasOfSpecialization: string[];
+
+	/**
+	 * The industry sector the attendee's company operates in.
+	 * Example values: ['technology', 'healthcare', 'financial services', 'manufacturing']
+	 */
+	industrySectors: string[];
+	
+	/**
+	 * Planned company spend on the attendee's selected areas of specialization over the next 12–24 months.
+	 * Example values: '<1M' | '1M-5M' | '5M-25M' | '25M-100M' | '>100M'
+	 */
+	plannedSpend: string | null;
+
+	/**
 	 * Attendee's company size.
 	 * Null for sponsors.
 	 * Example values: '1-50' | '51-200' | '200-500' | '500-1000' | '1000-5000' | '>5000'
 	 */
 	companySize: string | null;
+
+	/**
+	 * The geographic regions the attendee oversees or is responsible for.
+	 * Example values: ['North America', 'EMEA', 'APAC', 'LATAM']
+	 */
+	regionsOverseen: string[];
+
+	/**
+	 * The attendee's top strategic priorities for the coming year.
+	 * Example values: ['cost reduction', 'digital transformation', 'talent acquisition']
+	 */
+	strategicPriorities: string[];
 }
 
 /**

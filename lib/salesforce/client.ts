@@ -102,7 +102,8 @@ export async function query<T extends SfRecord = SfRecord>(
 }
 
 // Reverse-engineered from report 00OPZ00000DSuhJ2AT ("Contacts with Attendees
-// and Registration"). We query Attendee__c directly with the same field set
+// and Registration", "Master List: Summit Reg Attendee Count").
+// We query Attendee__c directly with the same field set
 // and filter logic as the report, scoped to one conference.
 //
 // The Contact lookup on Attendee__c is `Delegate__c` (relationship `Delegate__r`).
@@ -117,24 +118,24 @@ const MEETING_DATA_FIELDS = [
     "Speaker__c",
     "Conference__c",
     "Conference_Year__c",
-    "Attendee_Gross_Amount__c",
     "Attendee_Type__c",
-    "Attendee_Type_Formula__c",
     "Delegate__r.FirstName",
     "Delegate__r.LastName",
     "Delegate__r.Title",
     "Delegate__r.Email",
     "Delegate__r.Account.Name",
+    "Delegate__r.Account.Website",
+    "Delegate__r.Account.Industry_Category__c",
+    "Delegate__r.Account.AnnualRevenue",
+    "Delegate__r.Account.NumberOfEmployees",
     "Delegate__r.Dietary_Requirements__c",
     "Delegate__r.Dietary_Restrictions__c",
     "Delegate__r.Special_Accommodations__c",
     "Registration__r.Name",
-    "Registration__r.CloseDate",
-    "Registration__r.Probability",
     "Registration__r.StageName",
-    "Registration__r.Booking_Code__c",
     "Registration__r.Discount_Code__c",
     "Registration__r.RecordType.Name",
+    "Registration__r.Sponsorship_Package__c",
 ] as const;
 
 const EXCLUDED_DISCOUNT_CODES = ["JUSTTESTING", "DOLLARTEST", "ONEDOLLARTEST"];

@@ -16,8 +16,8 @@ export async function GET() {
 
 		// Load attendee and meeting request data.
 		const [attendees, requests] = await Promise.all([
-			loadMockData(path.join(base, 'attendees.csv')),
-			loadMockRequests(path.join(base, 'requests.csv')),
+			loadMockData(path.join(base, 'attendees.json')),
+			loadMockRequests(path.join(base, 'requests.json')),
 		]);
 
 		// Return the loaded attendees and meeting requests as JSON.

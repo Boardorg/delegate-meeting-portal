@@ -1,0 +1,1078 @@
+[
+  {
+    "id": "s1",
+    "cventContactId": "cvent-s1-uuid",
+    "salesforceId": "sf-s1-id",
+    "name": "Acme Corp Rep",
+    "email": "rep@acmecorp.com",
+    "role": "sponsor",
+    "company": "Acme Corp",
+    "title": "Director of Partnerships",
+    "sponsorTier": "diamond",
+    "profile": {
+      "budgetaryResponsibility": null,
+      "areasOfInterest": [
+        "enterprise software",
+        "digital transformation"
+      ],
+      "annualRevenue": null,
+      "companySize": null
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "s1-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s1-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s1-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "blocked"
+        },
+        {
+          "slotId": "s1-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s1-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s1-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s1-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": null
+    }
+  },
+  {
+    "id": "s2",
+    "cventContactId": "cvent-s2-uuid",
+    "salesforceId": "sf-s2-id",
+    "name": "Globex Rep",
+    "email": "rep@globex.com",
+    "role": "sponsor",
+    "company": "Globex",
+    "title": "VP of Sales",
+    "sponsorTier": "standard",
+    "profile": {
+      "budgetaryResponsibility": null,
+      "areasOfInterest": [
+        "cloud infrastructure",
+        "security"
+      ],
+      "annualRevenue": null,
+      "companySize": null
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "s2-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s2-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s2-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s2-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s2-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s2-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s2-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": null
+    }
+  },
+  {
+    "id": "s3",
+    "cventContactId": "cvent-s3-uuid",
+    "salesforceId": "sf-s3-id",
+    "name": "Initech Rep",
+    "email": "rep@initech.com",
+    "role": "sponsor",
+    "company": "Initech",
+    "title": "Head of Business Development",
+    "sponsorTier": "standard",
+    "profile": {
+      "budgetaryResponsibility": null,
+      "areasOfInterest": [
+        "AI/ML",
+        "automation"
+      ],
+      "annualRevenue": null,
+      "companySize": null
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "s3-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "blocked"
+        },
+        {
+          "slotId": "s3-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s3-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s3-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s3-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s3-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s3-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": null
+    }
+  },
+  {
+    "id": "s4",
+    "cventContactId": "cvent-s4-uuid",
+    "salesforceId": "sf-s4-id",
+    "name": "Umbrella Rep",
+    "email": "rep@umbrellacorp.com",
+    "role": "sponsor",
+    "company": "Umbrella Corp",
+    "title": "Director of Enterprise Sales",
+    "sponsorTier": "standard",
+    "profile": {
+      "budgetaryResponsibility": null,
+      "areasOfInterest": [
+        "biotech",
+        "research"
+      ],
+      "annualRevenue": null,
+      "companySize": null
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "s4-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s4-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s4-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s4-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s4-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s4-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s4-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": null
+    }
+  },
+  {
+    "id": "s5",
+    "cventContactId": "cvent-s5-uuid",
+    "salesforceId": "sf-s5-id",
+    "name": "Massive Dynamic Rep",
+    "email": "rep@massivedynamic.com",
+    "role": "sponsor",
+    "company": "Massive Dynamic",
+    "title": "Chief Revenue Officer",
+    "sponsorTier": "diamond",
+    "profile": {
+      "budgetaryResponsibility": null,
+      "areasOfInterest": [
+        "advanced research",
+        "defense",
+        "AI/ML"
+      ],
+      "annualRevenue": null,
+      "companySize": null
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "s5-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s5-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s5-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s5-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s5-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "blocked"
+        },
+        {
+          "slotId": "s5-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "s5-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": null
+    }
+  },
+  {
+    "id": "d1",
+    "cventContactId": "cvent-d1-uuid",
+    "salesforceId": "sf-d1-id",
+    "name": "Alice Delegate",
+    "email": "alice@wayneenterprises.com",
+    "role": "delegate",
+    "company": "Wayne Enterprises",
+    "title": "VP of Technology",
+    "sponsorTier": null,
+    "profile": {
+      "budgetaryResponsibility": "10M-50M",
+      "areasOfInterest": [
+        "cybersecurity",
+        "AI/ML"
+      ],
+      "annualRevenue": "500M-1B",
+      "companySize": "1000-5000"
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "d1-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d1-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d1-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d1-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "blocked"
+        },
+        {
+          "slotId": "d1-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d1-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d1-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d1-d2-01",
+          "day": 2,
+          "startTime": "2026-10-15T09:00:00Z",
+          "endTime": "2026-10-15T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d1-d2-02",
+          "day": 2,
+          "startTime": "2026-10-15T09:30:00Z",
+          "endTime": "2026-10-15T09:50:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": 2
+    }
+  },
+  {
+    "id": "d2",
+    "cventContactId": "cvent-d2-uuid",
+    "salesforceId": "sf-d2-id",
+    "name": "Bob Delegate",
+    "email": "bob@starkindustries.com",
+    "role": "delegate",
+    "company": "Stark Industries",
+    "title": "CTO",
+    "sponsorTier": null,
+    "profile": {
+      "budgetaryResponsibility": "50M-100M",
+      "areasOfInterest": [
+        "defense",
+        "advanced manufacturing"
+      ],
+      "annualRevenue": ">5B",
+      "companySize": ">5000"
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "d2-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d2-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d2-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d2-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d2-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d2-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d2-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d2-d2-01",
+          "day": 2,
+          "startTime": "2026-10-15T09:00:00Z",
+          "endTime": "2026-10-15T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d2-d2-02",
+          "day": 2,
+          "startTime": "2026-10-15T09:30:00Z",
+          "endTime": "2026-10-15T09:50:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": 2
+    }
+  },
+  {
+    "id": "d3",
+    "cventContactId": "cvent-d3-uuid",
+    "salesforceId": "sf-d3-id",
+    "name": "Carol Delegate",
+    "email": "carol@oscorp.com",
+    "role": "delegate",
+    "company": "Oscorp",
+    "title": "VP of R&D",
+    "sponsorTier": null,
+    "profile": {
+      "budgetaryResponsibility": "10M-50M",
+      "areasOfInterest": [
+        "biotech",
+        "AI/ML",
+        "research"
+      ],
+      "annualRevenue": "100M-500M",
+      "companySize": "500-1000"
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "d3-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d3-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "blocked"
+        },
+        {
+          "slotId": "d3-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d3-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d3-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d3-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d3-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d3-d2-01",
+          "day": 2,
+          "startTime": "2026-10-15T09:00:00Z",
+          "endTime": "2026-10-15T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d3-d2-02",
+          "day": 2,
+          "startTime": "2026-10-15T09:30:00Z",
+          "endTime": "2026-10-15T09:50:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": 2
+    }
+  },
+  {
+    "id": "d4",
+    "cventContactId": "cvent-d4-uuid",
+    "salesforceId": "sf-d4-id",
+    "name": "Dan Delegate",
+    "email": "dan@initech.com",
+    "role": "delegate",
+    "company": "Initech",
+    "title": "Director of IT",
+    "sponsorTier": null,
+    "profile": {
+      "budgetaryResponsibility": "1M-10M",
+      "areasOfInterest": [
+        "automation",
+        "cloud infrastructure"
+      ],
+      "annualRevenue": "10M-50M",
+      "companySize": "200-500"
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "d4-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d4-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d4-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d4-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d4-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d4-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d4-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d4-d2-01",
+          "day": 2,
+          "startTime": "2026-10-15T09:00:00Z",
+          "endTime": "2026-10-15T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d4-d2-02",
+          "day": 2,
+          "startTime": "2026-10-15T09:30:00Z",
+          "endTime": "2026-10-15T09:50:00Z",
+          "status": "blocked"
+        }
+      ],
+      "maxSameCompanyMeetings": 2
+    }
+  },
+  {
+    "id": "d5",
+    "cventContactId": "cvent-d5-uuid",
+    "salesforceId": "sf-d5-id",
+    "name": "Eve Delegate",
+    "email": "eve@globex.com",
+    "role": "delegate",
+    "company": "Globex",
+    "title": "Head of Procurement",
+    "sponsorTier": null,
+    "profile": {
+      "budgetaryResponsibility": "10M-50M",
+      "areasOfInterest": [
+        "security",
+        "cloud infrastructure"
+      ],
+      "annualRevenue": "500M-1B",
+      "companySize": "1000-5000"
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "d5-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d5-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d5-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d5-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d5-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d5-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "blocked"
+        },
+        {
+          "slotId": "d5-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d5-d2-01",
+          "day": 2,
+          "startTime": "2026-10-15T09:00:00Z",
+          "endTime": "2026-10-15T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d5-d2-02",
+          "day": 2,
+          "startTime": "2026-10-15T09:30:00Z",
+          "endTime": "2026-10-15T09:50:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": 2
+    }
+  },
+  {
+    "id": "d6",
+    "cventContactId": "cvent-d6-uuid",
+    "salesforceId": "sf-d6-id",
+    "name": "Frank Delegate",
+    "email": "frank@wayneenterprises.com",
+    "role": "delegate",
+    "company": "Wayne Enterprises",
+    "title": "VP of Operations",
+    "sponsorTier": null,
+    "profile": {
+      "budgetaryResponsibility": "10M-50M",
+      "areasOfInterest": [
+        "digital transformation",
+        "automation"
+      ],
+      "annualRevenue": "500M-1B",
+      "companySize": "1000-5000"
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "d6-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d6-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d6-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d6-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d6-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d6-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d6-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d6-d2-01",
+          "day": 2,
+          "startTime": "2026-10-15T09:00:00Z",
+          "endTime": "2026-10-15T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d6-d2-02",
+          "day": 2,
+          "startTime": "2026-10-15T09:30:00Z",
+          "endTime": "2026-10-15T09:50:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": 2
+    }
+  },
+  {
+    "id": "d7",
+    "cventContactId": "cvent-d7-uuid",
+    "salesforceId": "sf-d7-id",
+    "name": "Grace Delegate",
+    "email": "grace@acmecorp.com",
+    "role": "delegate",
+    "company": "Acme Corp",
+    "title": "Director of Strategy",
+    "sponsorTier": null,
+    "profile": {
+      "budgetaryResponsibility": "1M-10M",
+      "areasOfInterest": [
+        "enterprise software",
+        "digital transformation"
+      ],
+      "annualRevenue": "100M-500M",
+      "companySize": "500-1000"
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "d7-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "blocked"
+        },
+        {
+          "slotId": "d7-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d7-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d7-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d7-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d7-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d7-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "blocked"
+        },
+        {
+          "slotId": "d7-d2-01",
+          "day": 2,
+          "startTime": "2026-10-15T09:00:00Z",
+          "endTime": "2026-10-15T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d7-d2-02",
+          "day": 2,
+          "startTime": "2026-10-15T09:30:00Z",
+          "endTime": "2026-10-15T09:50:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": 2
+    }
+  },
+  {
+    "id": "d8",
+    "cventContactId": "cvent-d8-uuid",
+    "salesforceId": "sf-d8-id",
+    "name": "Hank Delegate",
+    "email": "hank@starkindustries.com",
+    "role": "delegate",
+    "company": "Stark Industries",
+    "title": "VP of Engineering",
+    "sponsorTier": null,
+    "profile": {
+      "budgetaryResponsibility": "50M-100M",
+      "areasOfInterest": [
+        "advanced manufacturing",
+        "AI/ML"
+      ],
+      "annualRevenue": ">5B",
+      "companySize": ">5000"
+    },
+    "scheduling": {
+      "slots": [
+        {
+          "slotId": "d8-d1-01",
+          "day": 1,
+          "startTime": "2026-10-14T09:00:00Z",
+          "endTime": "2026-10-14T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d8-d1-02",
+          "day": 1,
+          "startTime": "2026-10-14T09:30:00Z",
+          "endTime": "2026-10-14T09:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d8-d1-03",
+          "day": 1,
+          "startTime": "2026-10-14T10:00:00Z",
+          "endTime": "2026-10-14T10:20:00Z",
+          "status": "blocked"
+        },
+        {
+          "slotId": "d8-d1-04",
+          "day": 1,
+          "startTime": "2026-10-14T10:30:00Z",
+          "endTime": "2026-10-14T10:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d8-d1-05",
+          "day": 1,
+          "startTime": "2026-10-14T11:00:00Z",
+          "endTime": "2026-10-14T11:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d8-d1-06",
+          "day": 1,
+          "startTime": "2026-10-14T11:30:00Z",
+          "endTime": "2026-10-14T11:50:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d8-d1-07",
+          "day": 1,
+          "startTime": "2026-10-14T14:00:00Z",
+          "endTime": "2026-10-14T14:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d8-d2-01",
+          "day": 2,
+          "startTime": "2026-10-15T09:00:00Z",
+          "endTime": "2026-10-15T09:20:00Z",
+          "status": "available"
+        },
+        {
+          "slotId": "d8-d2-02",
+          "day": 2,
+          "startTime": "2026-10-15T09:30:00Z",
+          "endTime": "2026-10-15T09:50:00Z",
+          "status": "available"
+        }
+      ],
+      "maxSameCompanyMeetings": 2
+    }
+  }
+]

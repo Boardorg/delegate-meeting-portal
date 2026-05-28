@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import jsforce, { Connection, type Record as SfRecord } from "jsforce";
 import type { AttendeeRecordSF, CachedAuth } from "@/types";
 
@@ -93,6 +95,107 @@ export async function query<T extends SfRecord = SfRecord>(
     });
 }
 
+// Reverse-engineered from report 00OPZ00000DSuhJ2AT ("Contacts with Attendees
+// and Registration", "Master List: Summit Reg Attendee Count").
+// We query Attendee__c directly with the same field set
+// and filter logic as the report, scoped to one conference.
+//
+// The Contact lookup on Attendee__c is `Delegate__c` (relationship `Delegate__r`).
+// Attendee__c also has a `Contact__c` field labeled "Test SFDC contact" — do not
+// use that one. We also require Delegate__c != NULL to mimic the report's
+// inner join through Contact.
+const MEETING_DATA_FIELDS = [
+    "Id",
+    "Name",
+    "Status__c",
+    "Replaced_By__c",
+    "Speaker__c",
+    "Conference__c",
+    "Conference_Year__c",
+    "Attendee_Type__c",
+    "Delegate__r.FirstName",
+    "Delegate__r.LastName",
+    "Delegate__r.Title",
+    "Delegate__r.Email",
+    "Delegate__r.Account.Name",
+    "Delegate__r.Account.Website",
+    "Delegate__r.Account.Industry_Category__c",
+    "Delegate__r.Account.AnnualRevenue",
+    "Delegate__r.Account.NumberOfEmployees",
+    "Delegate__r.Dietary_Requirements__c",
+    "Delegate__r.Dietary_Restrictions__c",
+    "Delegate__r.Special_Accommodations__c",
+    "Registration__r.Name",
+    "Registration__r.StageName",
+    "Registration__r.Discount_Code__c",
+    "Registration__r.RecordType.Name",
+    "Registration__r.Sponsorship_Package__c",
+] as const;
+
+const EXCLUDED_DISCOUNT_CODES = ["JUSTTESTING", "DOLLARTEST", "ONEDOLLARTEST"];
+const SPECIAL_DELEGATE_DISCOUNT_CODES = [
+    "SPEAKERPASS",
+    "BOARDMEMBERBUNDLE",
+    "BOARDMEMBERPO",
+    "REPLACEMENT",
+    "BOARDMEMBERCOMP",
+    "BOARDMEMBERSWAP",
+];
+const EXCLUDED_ACCOUNT_NAME_FRAGMENTS = [
+    "Test",
+    "Testing",
+    "SocialMedia",
+    "Assemble",
+];
+
+function soqlStringList(values: readonly string[]): string {
+    return values.map((v) => `'${v.replace(/'/g, "\\'")}'`).join(", ");
+}
+
+function commonMeetingDataWhere(eventCode: string): string {
+    const safeEvent = eventCode.replace(/'/g, "\\'");
+    const accountNotContain = EXCLUDED_ACCOUNT_NAME_FRAGMENTS.map(
+        (f) => `(NOT Delegate__r.Account.Name LIKE '%${f}%')`,
+    ).join(" AND ");
+    return [
+        `Delegate__c != NULL`,
+        `Delegate__r.AccountId != NULL`,
+        `Registration__r.Active_Conference__c = TRUE`,
+        `Registration__r.Discount_Code__c NOT IN (${soqlStringList(EXCLUDED_DISCOUNT_CODES)})`,
+        `Registration__r.Conference__c = '${safeEvent}'`,
+        accountNotContain,
+        `(Status__c = NULL OR Status__c = 'Pending Replacement')`,
+    ].join(" AND ");
+}
+
+export async function getMeetingDataSponsors(eventCode: string) {
+    const where = [
+        commonMeetingDataWhere(eventCode),
+        `Registration__r.RecordType.Name = 'Sponsor'`,
+        `Registration__r.StageName IN ('Closed-Won', 'Registered')`,
+    ].join(" AND ");
+    const soql = `SELECT ${MEETING_DATA_FIELDS.join(", ")} FROM Attendee__c WHERE ${where}`;
+    return query(soql);
+}
+
+export async function getMeetingDataDelegates(eventCode: string) {
+    const where = [
+        commonMeetingDataWhere(eventCode),
+        `Registration__r.RecordType.Name IN ('Board Event', 'Delegate')`,
+        `(Registration__r.StageName = 'Closed-Won' OR Registration__r.Discount_Code__c IN (${soqlStringList(SPECIAL_DELEGATE_DISCOUNT_CODES)}))`,
+    ].join(" AND ");
+    const soql = `SELECT ${MEETING_DATA_FIELDS.join(", ")} FROM Attendee__c WHERE ${where}`;
+    return query(soql);
+}
+
+export async function getMeetingDataByEvent(eventCode: string) {
+    const [delegates, sponsors] = await Promise.all([
+        getMeetingDataDelegates(eventCode),
+        getMeetingDataSponsors(eventCode),
+    ]);
+    return { delegates, sponsors };
+}
+
 export async function getAttendeesByEventId(
     eventId: string,
 ): Promise<AttendeeRecordSF[]> {
@@ -124,4 +227,15 @@ export async function getAttendeeById(
     const records = await query<AttendeeRecordSF>(soql);
 
     return records[0];
+}
+
+export async function writeJsonToTemp(
+    data: unknown,
+    filename: string,
+): Promise<string> {
+    const dir = path.join(process.cwd(), "data", "temp");
+    await fs.mkdir(dir, { recursive: true });
+    const filePath = path.join(dir, filename);
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
+    return filePath;
 }

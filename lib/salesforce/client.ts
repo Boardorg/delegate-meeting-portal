@@ -1,13 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import jsforce, { Connection, type Record as SfRecord } from "jsforce";
-import type {
-    Attendee,
-    AttendeeRecordSF,
-    AttendeeRole,
-    CachedAuth,
-    SponsorTier,
-} from "@/types";
+import type { AttendeeRecordSF, CachedAuth } from "@/types";
 
 const API_VERSION = process.env.SALESFORCE_API_VERSION ?? "59.0";
 
@@ -235,72 +229,13 @@ export async function getAttendeeById(
     return records[0];
 }
 
-// The SOQL above selects Salesforce field names; the scheduling engine and the
-// existing mock CSV use the normalized Attendee shape. The mapping below
-// assumes Attendee_Type__c contains "delegate"/"sponsor" (case-insensitive).
-// sponsorTier and day1/day2 slot counts are not currently in ATTENDEE_FIELDS,
-// so they default — extend ATTENDEE_FIELDS and this mapper together when those
-// fields are needed.
-export function attendeeRecordsToAttendees(
-    records: AttendeeRecordSF[],
-): Attendee[] {
-    return records.map((r) => {
-        const rawType =
-            typeof r.Attendee_Type__c === "string"
-                ? r.Attendee_Type__c.toLowerCase()
-                : "";
-        const role: AttendeeRole =
-            rawType === "sponsor" ? "sponsor" : "delegate";
-        const rawTier =
-            typeof r.Sponsor_Tier__c === "string"
-                ? r.Sponsor_Tier__c.toLowerCase()
-                : null;
-        const sponsorTier: SponsorTier =
-            rawTier === "diamond" || rawTier === "standard" ? rawTier : null;
-        return {
-            id: r.Id,
-            name: r.Name,
-            role,
-            company: typeof r.Company__c === "string" ? r.Company__c : "",
-            sponsorTier,
-            day1SlotCount:
-                typeof r.Day1_Slot_Count__c === "number"
-                    ? r.Day1_Slot_Count__c
-                    : 0,
-            day2SlotCount:
-                typeof r.Day2_Slot_Count__c === "number"
-                    ? r.Day2_Slot_Count__c
-                    : 0,
-        };
-    });
-}
-
-const CSV_COLUMNS: Array<keyof Attendee> = [
-    "id",
-    "name",
-    "role",
-    "company",
-    "sponsorTier",
-    "day1SlotCount",
-    "day2SlotCount",
-];
-
-function csvCell(value: unknown): string {
-    const s = value === null || value === undefined ? "" : String(value);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-export async function writeAttendeesCsv(
-    attendees: Attendee[],
+export async function writeJsonToTemp(
+    data: unknown,
     filename: string,
 ): Promise<string> {
     const dir = path.join(process.cwd(), "data", "temp");
     await fs.mkdir(dir, { recursive: true });
     const filePath = path.join(dir, filename);
-    const header = CSV_COLUMNS.join(",");
-    const rows = attendees.map((a) =>
-        CSV_COLUMNS.map((c) => csvCell(a[c])).join(","),
-    );
-    await fs.writeFile(filePath, [header, ...rows].join("\n") + "\n", "utf8");
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
     return filePath;
 }

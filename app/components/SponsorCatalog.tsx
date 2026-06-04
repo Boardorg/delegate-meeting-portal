@@ -58,7 +58,12 @@ function dotTags(arr: string[] | null | undefined): string {
 }
 
 function str(v: unknown): string {
-    return v != null ? String(v) : '—';
+    return v != null ? String(v) : 'N/A';
+}
+
+/** Returns true if a scalar profile value should be shown on a card. */
+function hasValue(v: unknown): boolean {
+    return v != null && v !== '';
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -107,7 +112,7 @@ function DrawerItem({
 }) {
     const [detailOpen, setDetailOpen] = useState(false);
     const p = d.profile;
-    const rc = revClass(p.annualRevenue);
+    const rc = revClass(p.annualRevenue) || 'rev-na';
 
     return (
         <div className="d-item">
@@ -140,11 +145,11 @@ function DrawerItem({
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '11px' }}>
                     <span style={{ color: 'var(--t3)', flexShrink: 0 }}>Budget resp.</span>
-                    <span style={{ color: 'var(--t2)', textAlign: 'right' }}>{p.budgetaryResponsibility || '—'}</span>
+                    <span style={{ color: 'var(--t2)', textAlign: 'right' }}>{p.budgetaryResponsibility || 'N/A'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '11px' }}>
                     <span style={{ color: 'var(--t3)', flexShrink: 0 }}>Planned spend</span>
-                    <span style={{ color: 'var(--t2)', textAlign: 'right' }}>{p.plannedSpend || '—'}</span>
+                    <span style={{ color: 'var(--t2)', textAlign: 'right' }}>{p.plannedSpend || 'N/A'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '11px' }}>
                     <span style={{ color: 'var(--t3)', flexShrink: 0 }}>Co. size</span>
@@ -152,11 +157,11 @@ function DrawerItem({
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '11px', marginTop: '2px' }}>
                     <span style={{ color: 'var(--t3)', flexShrink: 0 }}>Specialization</span>
-                    <span style={{ color: 'var(--t2)', textAlign: 'right' }}>{dotTags(p.areasOfSpecialization) || '—'}</span>
+                    <span style={{ color: 'var(--t2)', textAlign: 'right' }}>{dotTags(p.areasOfSpecialization) || 'N/A'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '11px' }}>
                     <span style={{ color: 'var(--t3)', flexShrink: 0 }}>Industries</span>
-                    <span style={{ color: 'var(--t2)', textAlign: 'right' }}>{dotTags(p.industrySectors) || '—'}</span>
+                    <span style={{ color: 'var(--t2)', textAlign: 'right' }}>{dotTags(p.industrySectors) || 'N/A'}</span>
                 </div>
             </div>
             <div className="d-rank-label">Interest level</div>
@@ -513,7 +518,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                     const req = requests[d.id];
                     const capped = atCap && req === undefined;
                     const p = d.profile;
-                    const rc = revClass(p.annualRevenue);
+                    const rc = revClass(p.annualRevenue) || 'rev-na';
                     return (
                         <div
                             key={d.id}
@@ -529,14 +534,18 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                     <span className="ca-label">Revenue</span>
                                     <span className={`${rc} rev-chip`}>{str(p.annualRevenue)}</span>
                                 </div>
-                                <div className="card-attr">
-                                    <span className="ca-label">Budget resp.</span>
-                                    <span className="ca-value">{p.budgetaryResponsibility || '—'}</span>
-                                </div>
-                                <div className="card-attr">
-                                    <span className="ca-label">Planned spend</span>
-                                    <span className="ca-value">{p.plannedSpend || '—'}</span>
-                                </div>
+                                {hasValue(p.budgetaryResponsibility) && (
+                                    <div className="card-attr">
+                                        <span className="ca-label">Budget resp.</span>
+                                        <span className="ca-value">{p.budgetaryResponsibility}</span>
+                                    </div>
+                                )}
+                                {hasValue(p.plannedSpend) && (
+                                    <div className="card-attr">
+                                        <span className="ca-label">Planned spend</span>
+                                        <span className="ca-value">{p.plannedSpend}</span>
+                                    </div>
+                                )}
                                 <div className="card-attr">
                                     <span className="ca-label">Co. size</span>
                                     <span className="ca-value">{str(p.companySize)}</span>
@@ -577,7 +586,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                         const isPicking = pickingId === d.id;
                         const capped = atCap && req === undefined;
                         const p = d.profile;
-                        const rc = revClass(p.annualRevenue);
+                        const rc = revClass(p.annualRevenue) || 'rev-na';
 
                         let action: React.ReactNode;
                         if (req !== undefined && !isPicking) {
@@ -634,10 +643,10 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                     <span className={`${rc} rev-chip`}>{str(p.annualRevenue)}</span>
                                 </div>
                                 <div className="list-cell">
-                                    <span className="lc-val">{p.budgetaryResponsibility || '—'}</span>
+                                    <span className="lc-val">{p.budgetaryResponsibility || 'N/A'}</span>
                                 </div>
                                 <div className="list-cell">
-                                    <span className="lc-val">{p.plannedSpend || '—'}</span>
+                                    <span className="lc-val">{p.plannedSpend || 'N/A'}</span>
                                 </div>
                                 <div className="list-cell">
                                     <span className="lc-val">{str(p.companySize)}</span>
@@ -674,7 +683,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                     const isPicking = pickingId === d.id;
                     const capped = atCap && req === undefined;
                     const p = d.profile;
-                    const rc = revClass(p.annualRevenue);
+                    const rc = revClass(p.annualRevenue) || 'rev-na';
 
                     let action: React.ReactNode;
                     if (req !== undefined && !isPicking) {
@@ -729,14 +738,18 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                             </div>
                             <div className="hcard-body-cols">
                                 <div className="hcard-left">
-                                    <div className="hcard-attr">
-                                        <span className="hca-label">Budget resp.</span>
-                                        <span className="hca-value">{p.budgetaryResponsibility || '—'}</span>
-                                    </div>
-                                    <div className="hcard-attr">
-                                        <span className="hca-label">Planned spend</span>
-                                        <span className="hca-value">{p.plannedSpend || '—'}</span>
-                                    </div>
+                                    {hasValue(p.budgetaryResponsibility) && (
+                                        <div className="hcard-attr">
+                                            <span className="hca-label">Budget resp.</span>
+                                            <span className="hca-value">{p.budgetaryResponsibility}</span>
+                                        </div>
+                                    )}
+                                    {hasValue(p.plannedSpend) && (
+                                        <div className="hcard-attr">
+                                            <span className="hca-label">Planned spend</span>
+                                            <span className="hca-value">{p.plannedSpend}</span>
+                                        </div>
+                                    )}
                                     <div className="hcard-attr">
                                         <span className="hca-label">Co. size</span>
                                         <span className="hca-value">{str(p.companySize)}</span>
@@ -745,19 +758,19 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                 <div className="hcard-right">
                                     <div className="hcard-tag-attr">
                                         <span className="hca-label">Specialization</span>
-                                        <span className="hca-value">{dotTags(p.areasOfSpecialization) || '—'}</span>
+                                        <span className="hca-value">{dotTags(p.areasOfSpecialization) || 'N/A'}</span>
                                     </div>
                                     <div className="hcard-tag-attr">
                                         <span className="hca-label">Industries</span>
-                                        <span className="hca-value">{dotTags(p.industrySectors) || '—'}</span>
+                                        <span className="hca-value">{dotTags(p.industrySectors) || 'N/A'}</span>
                                     </div>
                                     <div className="hcard-tag-attr">
                                         <span className="hca-label">Regions</span>
-                                        <span className="hca-value">{dotTags(p.regionsOverseen) || '—'}</span>
+                                        <span className="hca-value">{dotTags(p.regionsOverseen) || 'N/A'}</span>
                                     </div>
                                     <div className="hcard-tag-attr">
                                         <span className="hca-label">Priorities</span>
-                                        <span className="hca-value">{dotTags(p.strategicPriorities) || '—'}</span>
+                                        <span className="hca-value">{dotTags(p.strategicPriorities) || 'N/A'}</span>
                                     </div>
                                 </div>
                             </div>

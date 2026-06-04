@@ -118,6 +118,7 @@ a { color: inherit; text-decoration: none; }
 .rev-5 { background:rgba(14,165,192,0.12); color:var(--rev-5); border:1px solid rgba(14,165,192,0.28); }
 .rev-6 { background:rgba(26,127,181,0.13); color:var(--rev-6); border:1px solid rgba(26,127,181,0.3); }
 .rev-7 { background:rgba(30,79,160,0.15);  color:var(--rev-7); border:1px solid rgba(30,79,160,0.35); }
+.rev-na { background:rgba(88,92,110,0.12); color:var(--t3); border:1px solid rgba(88,92,110,0.22); }
 
 /* ── CARD GRID ── */
 .card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }

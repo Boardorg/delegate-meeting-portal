@@ -2,21 +2,22 @@
   {
     "id": "s1",
     "cventContactId": "cvent-s1-uuid",
-    "salesforceId": "sf-s1-id",
-    "name": "Acme Corp Rep",
-    "email": "rep@acmecorp.com",
+    "salesforceId": "a00PZ00000TMLocYAH",
+    "name": "Jordan Marsh",
+    "email": "jordan.marsh@nexapathbio.com",
     "role": "sponsor",
-    "company": "Acme Corp",
-    "title": "Director of Partnerships",
+    "company": "Nexapath Biologics",
+    "title": "VP, Strategic Partnerships",
     "sponsorTier": "diamond",
     "profile": {
+      "annualRevenue": 185000000,
       "budgetaryResponsibility": null,
-      "areasOfInterest": [
-        "enterprise software",
-        "digital transformation"
-      ],
-      "annualRevenue": null,
-      "companySize": null
+      "areasOfSpecialization": [],
+      "industrySectors": ["BtoB Services"],
+      "plannedSpend": null,
+      "companySize": 420,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -76,21 +77,22 @@
   {
     "id": "s2",
     "cventContactId": "cvent-s2-uuid",
-    "salesforceId": "sf-s2-id",
-    "name": "Globex Rep",
-    "email": "rep@globex.com",
+    "salesforceId": "a00PZ00000TMKz1YAH",
+    "name": "Priya Sundaram",
+    "email": "priya.sundaram@cellavance.com",
     "role": "sponsor",
-    "company": "Globex",
-    "title": "VP of Sales",
+    "company": "Cellavance Solutions",
+    "title": "Director, Global Marketing",
     "sponsorTier": "standard",
     "profile": {
+      "annualRevenue": 62000000,
       "budgetaryResponsibility": null,
-      "areasOfInterest": [
-        "cloud infrastructure",
-        "security"
-      ],
-      "annualRevenue": null,
-      "companySize": null
+      "areasOfSpecialization": [],
+      "industrySectors": ["BtoB Services"],
+      "plannedSpend": null,
+      "companySize": 99,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -150,21 +152,22 @@
   {
     "id": "s3",
     "cventContactId": "cvent-s3-uuid",
-    "salesforceId": "sf-s3-id",
-    "name": "Initech Rep",
-    "email": "rep@initech.com",
+    "salesforceId": "a00PZ00000fp2wQYAQ",
+    "name": "Marcus Delacroix",
+    "email": "marcus.delacroix@omnipathbio.com",
     "role": "sponsor",
-    "company": "Initech",
-    "title": "Head of Business Development",
+    "company": "OmniPath Biotech",
+    "title": "Senior Manager, Business Development",
     "sponsorTier": "standard",
     "profile": {
-      "budgetaryResponsibility": null,
-      "areasOfInterest": [
-        "AI/ML",
-        "automation"
-      ],
       "annualRevenue": null,
-      "companySize": null
+      "budgetaryResponsibility": null,
+      "areasOfSpecialization": [],
+      "industrySectors": ["BtoB Services"],
+      "plannedSpend": null,
+      "companySize": null,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -224,21 +227,22 @@
   {
     "id": "s4",
     "cventContactId": "cvent-s4-uuid",
-    "salesforceId": "sf-s4-id",
-    "name": "Umbrella Rep",
-    "email": "rep@umbrellacorp.com",
+    "salesforceId": "a00PZ00000TML09YAH",
+    "name": "Elaine Forster",
+    "email": "elaine.forster@helix-mfg.com",
     "role": "sponsor",
-    "company": "Umbrella Corp",
-    "title": "Director of Enterprise Sales",
+    "company": "Helix Manufacturing Partners",
+    "title": "VP Sales & Client Success",
     "sponsorTier": "standard",
     "profile": {
+      "annualRevenue": 310000000,
       "budgetaryResponsibility": null,
-      "areasOfInterest": [
-        "biotech",
-        "research"
-      ],
-      "annualRevenue": null,
-      "companySize": null
+      "areasOfSpecialization": [],
+      "industrySectors": ["Manufacturing"],
+      "plannedSpend": null,
+      "companySize": 850,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -298,22 +302,22 @@
   {
     "id": "s5",
     "cventContactId": "cvent-s5-uuid",
-    "salesforceId": "sf-s5-id",
-    "name": "Massive Dynamic Rep",
-    "email": "rep@massivedynamic.com",
+    "salesforceId": "a00PZ00000TML0EYAX",
+    "name": "Tobias Wren",
+    "email": "tobias.wren@vericelsciences.com",
     "role": "sponsor",
-    "company": "Massive Dynamic",
+    "company": "Vericel Sciences",
     "title": "Chief Revenue Officer",
     "sponsorTier": "diamond",
     "profile": {
+      "annualRevenue": 520000000,
       "budgetaryResponsibility": null,
-      "areasOfInterest": [
-        "advanced research",
-        "defense",
-        "AI/ML"
-      ],
-      "annualRevenue": null,
-      "companySize": null
+      "areasOfSpecialization": [],
+      "industrySectors": ["Biotechnology"],
+      "plannedSpend": null,
+      "companySize": 1200,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -373,21 +377,22 @@
   {
     "id": "d1",
     "cventContactId": "cvent-d1-uuid",
-    "salesforceId": "sf-d1-id",
-    "name": "Alice Delegate",
-    "email": "alice@wayneenterprises.com",
+    "salesforceId": "a00PZ00000cOBpoYAG",
+    "name": "Miriam Kastner",
+    "email": "m.kastner@brenvaxpharma.com",
     "role": "delegate",
-    "company": "Wayne Enterprises",
-    "title": "VP of Technology",
+    "company": "Brenvax Pharmaceuticals",
+    "title": "Chief Quality Officer & SVP, Global Operations",
     "sponsorTier": null,
     "profile": {
-      "budgetaryResponsibility": "10M-50M",
-      "areasOfInterest": [
-        "cybersecurity",
-        "AI/ML"
-      ],
-      "annualRevenue": "500M-1B",
-      "companySize": "1000-5000"
+      "annualRevenue": 54100000000,
+      "budgetaryResponsibility": null,
+      "areasOfSpecialization": [],
+      "industrySectors": ["Healthcare;Pharmaceuticals"],
+      "plannedSpend": null,
+      "companySize": 94300,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -461,21 +466,22 @@
   {
     "id": "d2",
     "cventContactId": "cvent-d2-uuid",
-    "salesforceId": "sf-d2-id",
-    "name": "Bob Delegate",
-    "email": "bob@starkindustries.com",
+    "salesforceId": "a00PZ00000ckAv1YAE",
+    "name": "Renata Osei",
+    "email": "r.osei@genomerabiologics.com",
     "role": "delegate",
-    "company": "Stark Industries",
-    "title": "CTO",
+    "company": "Genomera Biologics",
+    "title": "Executive Vice President & President, Manufacturing Operations",
     "sponsorTier": null,
     "profile": {
-      "budgetaryResponsibility": "50M-100M",
-      "areasOfInterest": [
-        "defense",
-        "advanced manufacturing"
-      ],
-      "annualRevenue": ">5B",
-      "companySize": ">5000"
+      "annualRevenue": 34126000000,
+      "budgetaryResponsibility": null,
+      "areasOfSpecialization": [],
+      "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
+      "plannedSpend": null,
+      "companySize": 28000,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -549,22 +555,22 @@
   {
     "id": "d3",
     "cventContactId": "cvent-d3-uuid",
-    "salesforceId": "sf-d3-id",
-    "name": "Carol Delegate",
-    "email": "carol@oscorp.com",
+    "salesforceId": "a00PZ00000cuEKCYA2",
+    "name": "Stefan Holmqvist",
+    "email": "stefan.holmqvist@brenvaxpharma.com",
     "role": "delegate",
-    "company": "Oscorp",
-    "title": "VP of R&D",
+    "company": "Brenvax Pharmaceuticals",
+    "title": "SVP, Head of Global MSAT, Engineering & Sustainability",
     "sponsorTier": null,
     "profile": {
-      "budgetaryResponsibility": "10M-50M",
-      "areasOfInterest": [
-        "biotech",
-        "AI/ML",
-        "research"
-      ],
-      "annualRevenue": "100M-500M",
-      "companySize": "500-1000"
+      "annualRevenue": 54100000000,
+      "budgetaryResponsibility": null,
+      "areasOfSpecialization": [],
+      "industrySectors": ["Healthcare;Pharmaceuticals"],
+      "plannedSpend": null,
+      "companySize": 94300,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -638,21 +644,22 @@
   {
     "id": "d4",
     "cventContactId": "cvent-d4-uuid",
-    "salesforceId": "sf-d4-id",
-    "name": "Dan Delegate",
-    "email": "dan@initech.com",
+    "salesforceId": "a00PZ00000cxnS0YAI",
+    "name": "Anita Rourke",
+    "email": "anita.rourke@clarivantbio.com",
     "role": "delegate",
-    "company": "Initech",
-    "title": "Director of IT",
+    "company": "Clarivant Biosciences",
+    "title": "Vice President, Quality Assurance",
     "sponsorTier": null,
     "profile": {
-      "budgetaryResponsibility": "1M-10M",
-      "areasOfInterest": [
-        "automation",
-        "cloud infrastructure"
-      ],
-      "annualRevenue": "10M-50M",
-      "companySize": "200-500"
+      "annualRevenue": null,
+      "budgetaryResponsibility": null,
+      "areasOfSpecialization": [],
+      "industrySectors": [],
+      "plannedSpend": null,
+      "companySize": null,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -726,21 +733,22 @@
   {
     "id": "d5",
     "cventContactId": "cvent-d5-uuid",
-    "salesforceId": "sf-d5-id",
-    "name": "Eve Delegate",
-    "email": "eve@globex.com",
+    "salesforceId": "a00PZ00000dFeF5YAK",
+    "name": "Laurence Mbeki",
+    "email": "l.mbeki@genomera.com",
     "role": "delegate",
-    "company": "Globex",
-    "title": "Head of Procurement",
+    "company": "Genomera Biologics",
+    "title": "Executive Director, Manufacturing Plant Manager",
     "sponsorTier": null,
     "profile": {
-      "budgetaryResponsibility": "10M-50M",
-      "areasOfInterest": [
-        "security",
-        "cloud infrastructure"
-      ],
-      "annualRevenue": "500M-1B",
-      "companySize": "1000-5000"
+      "annualRevenue": 34126000000,
+      "budgetaryResponsibility": null,
+      "areasOfSpecialization": [],
+      "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
+      "plannedSpend": null,
+      "companySize": 28000,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -814,21 +822,22 @@
   {
     "id": "d6",
     "cventContactId": "cvent-d6-uuid",
-    "salesforceId": "sf-d6-id",
-    "name": "Frank Delegate",
-    "email": "frank@wayneenterprises.com",
+    "salesforceId": "a00PZ00000dINr4YAG",
+    "name": "Ingrid Solvang",
+    "email": "ingrid.solvang@clarivantbio.com",
     "role": "delegate",
-    "company": "Wayne Enterprises",
-    "title": "VP of Operations",
+    "company": "Clarivant Biosciences",
+    "title": "Global Head of Technical Operations",
     "sponsorTier": null,
     "profile": {
-      "budgetaryResponsibility": "10M-50M",
-      "areasOfInterest": [
-        "digital transformation",
-        "automation"
-      ],
-      "annualRevenue": "500M-1B",
-      "companySize": "1000-5000"
+      "annualRevenue": null,
+      "budgetaryResponsibility": null,
+      "areasOfSpecialization": [],
+      "industrySectors": [],
+      "plannedSpend": null,
+      "companySize": null,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -902,21 +911,22 @@
   {
     "id": "d7",
     "cventContactId": "cvent-d7-uuid",
-    "salesforceId": "sf-d7-id",
-    "name": "Grace Delegate",
-    "email": "grace@acmecorp.com",
+    "salesforceId": "a00PZ00000dIinUYAS",
+    "name": "Devon Harcastle",
+    "email": "d.harcastle@solisbiogen.com",
     "role": "delegate",
-    "company": "Acme Corp",
-    "title": "Director of Strategy",
+    "company": "Solis Biogen",
+    "title": "SVP, Product Development & Clinical Supply",
     "sponsorTier": null,
     "profile": {
-      "budgetaryResponsibility": "1M-10M",
-      "areasOfInterest": [
-        "enterprise software",
-        "digital transformation"
-      ],
-      "annualRevenue": "100M-500M",
-      "companySize": "500-1000"
+      "annualRevenue": 63616000000,
+      "budgetaryResponsibility": null,
+      "areasOfSpecialization": [],
+      "industrySectors": ["Healthcare;Pharmaceuticals"],
+      "plannedSpend": null,
+      "companySize": 75000,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [
@@ -990,21 +1000,22 @@
   {
     "id": "d8",
     "cventContactId": "cvent-d8-uuid",
-    "salesforceId": "sf-d8-id",
-    "name": "Hank Delegate",
-    "email": "hank@starkindustries.com",
+    "salesforceId": "a00PZ00000e8YDcYAM",
+    "name": "Camille Tran",
+    "email": "camille.tran@solisbiogen.com",
     "role": "delegate",
-    "company": "Stark Industries",
-    "title": "VP of Engineering",
+    "company": "Solis Biogen",
+    "title": "Vice President, Manufacturing Sciences",
     "sponsorTier": null,
     "profile": {
-      "budgetaryResponsibility": "50M-100M",
-      "areasOfInterest": [
-        "advanced manufacturing",
-        "AI/ML"
-      ],
-      "annualRevenue": ">5B",
-      "companySize": ">5000"
+      "annualRevenue": 63616000000,
+      "budgetaryResponsibility": null,
+      "areasOfSpecialization": [],
+      "industrySectors": ["Healthcare;Pharmaceuticals"],
+      "plannedSpend": null,
+      "companySize": 75000,
+      "regionsOverseen": [],
+      "strategicPriorities": []
     },
     "scheduling": {
       "slots": [

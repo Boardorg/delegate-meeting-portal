@@ -32,21 +32,30 @@ export async function proxy(request: NextRequest) {
             return NextResponse.next();
         }
 
-        // Server-to-server integrations: require the shared API key header.
+        // Server-to-server integrations: API key header takes priority.
         const key = request.headers.get("api_key");
-        if (!key) {
-            return NextResponse.json(
-                { error: "Authentication required. Please provide an API key" },
-                { status: 401 },
-            );
+        if (key) {
+            if (key !== process.env.API_KEY) {
+                return NextResponse.json(
+                    { error: "Invalid API Key" },
+                    { status: 401 },
+                );
+            }
+            return NextResponse.next();
         }
-        if (key !== process.env.API_KEY) {
-            return NextResponse.json(
-                { error: "Invalid API Key" },
-                { status: 401 },
-            );
+
+        // Browser-initiated requests (e.g. from the sponsor catalog) may
+        // authenticate with the session cookie instead of an API key.
+        const token = request.cookies.get(SESSION_COOKIE)?.value;
+        const session = await decryptSession(token);
+        if (session || process.env.DISABLE_FRONT_END_LOGIN === "true") {
+            return NextResponse.next();
         }
-        return NextResponse.next();
+
+        return NextResponse.json(
+            { error: "Authentication required. Please provide an API key" },
+            { status: 401 },
+        );
     }
 
     // ----- Frontend pages -----

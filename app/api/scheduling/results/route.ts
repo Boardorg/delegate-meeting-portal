@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { loadMockData, loadMockRequests, runScheduler } from '@/lib/scheduling/engine';
+import { loadMockData, loadMockRequests } from '@/lib/scheduling/loader';
+import { runScheduler } from '@/lib/scheduling/engine';
 import path from 'path';
 
 /**

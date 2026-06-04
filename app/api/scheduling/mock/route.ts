@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { loadMockData, loadMockRequests } from '@/lib/scheduling/engine';
+import { loadMockData, loadMockRequests } from '@/lib/scheduling/loader';
 import path from 'path';
 
 /**

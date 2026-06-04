@@ -1,170 +1,12 @@
-import fs from 'fs';
-import path from 'path';
 import {
 	Attendee,
 	AttendeeRole,
 	AttendeeSchedule,
-	AttendeeSlot,
 	MeetingRequest,
 	ScheduledMeeting,
 	SponsorTier,
 } from '@/types';
-
-// ---------------------------------------------------------------------------
-// JSON loaders
-// ---------------------------------------------------------------------------
-
-/**
- * Reads and parses `attendees.json` at the given path into typed `Attendee` records.
- *
- * @param {string} filePath - Absolute path to the attendees JSON file.
- * @returns {Promise<Attendee[]>} Resolves to an array of parsed `Attendee` objects.
- */
-export async function loadMockData(filePath: string): Promise<Attendee[]> {
-
-	// Read the file from disk as a UTF-8 string and parse it as JSON.
-	const raw = fs.readFileSync(path.resolve(filePath), 'utf-8');
-	return JSON.parse(raw) as Attendee[];
-}
-
-/**
- * Reads and parses `requests.json` at the given path into typed `MeetingRequest` records.
- *
- * @param {string} filePath - Absolute path to the meeting requests JSON file.
- * @returns {Promise<MeetingRequest[]>} Resolves to an array of parsed `MeetingRequest` objects.
- */
-export async function loadMockRequests(filePath: string): Promise<MeetingRequest[]> {
-
-	// Read the file from disk as a UTF-8 string and parse it as JSON.
-	const raw = fs.readFileSync(path.resolve(filePath), 'utf-8');
-	return JSON.parse(raw) as MeetingRequest[];
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Produces a canonical, order-independent key for a pair of attendee IDs (e.g. `"d1|s2"`).
- *
- * @param {string} a - First attendee ID.
- * @param {string} b - Second attendee ID.
- * @returns {string} A stable key regardless of argument order.
- */
-function pairKey(a: string, b: string): string {
-
-	// Sort the two IDs alphabetically so the key is the same regardless of which is passed first.
-	return [a, b].sort().join('|');
-}
-
-/**
- * Computes the set of attendee pairs where both parties requested each other.
- *
- * @param {MeetingRequest[]} requests - The full list of meeting requests.
- * @returns {Set<string>} A set of canonical pair keys (via `pairKey`) for mutual pairs.
- */
-export function computeMutualPairs(requests: MeetingRequest[]): Set<string> {
-
-	// Build a fast lookup set of every directed request as "requesterId->targetId".
-	const requestSet = new Set(requests.map(r => `${r.requesterId}->${r.targetId}`));
-
-	// Initialize an empty set to hold the canonical keys of mutual pairs.
-	const mutual = new Set<string>();
-
-	// For each request, check whether the reverse request also exists.
-	for (const r of requests) {
-		if (requestSet.has(`${r.targetId}->${r.requesterId}`)) {
-
-			// Store the pair using the canonical key so duplicates are automatically deduplicated.
-			mutual.add(pairKey(r.requesterId, r.targetId));
-		}
-	}
-
-	// Return the set of mutual pair keys.
-	return mutual;
-}
-
-/**
- * Finds the first pair of matching available slots between two attendees on a given day.
- * A valid pair requires both attendees to have an available slot at the same start time.
- *
- * @param {AttendeeSlot[]} slotsA - Slot array for the first attendee.
- * @param {AttendeeSlot[]} slotsB - Slot array for the second attendee.
- * @param {1 | 2} day - The event day to search within.
- * @returns {{ slotA: AttendeeSlot; slotB: AttendeeSlot } | null} The matched slot pair, or null if none found.
- */
-function findMutualSlot(
-	slotsA: AttendeeSlot[],
-	slotsB: AttendeeSlot[],
-	day: 1 | 2
-): { slotA: AttendeeSlot; slotB: AttendeeSlot } | null {
-
-	// Filter each attendee's slots down to only available slots on the target day.
-	const availableA = slotsA.filter(s => s.day === day && s.status === 'available');
-	const availableB = slotsB.filter(s => s.day === day && s.status === 'available');
-
-	// Build a map of startTime -> slot key-value pairs for attendee B.
-	const mapB = new Map(availableB.map(s => [s.startTime, s]));
-
-	// Loop through attendee A's available slots and return the first one that matches a B slot.
-	for (const slotA of availableA) {
-
-		// Try to get the corresponding slot from B that has the same start time.
-		const slotB = mapB.get(slotA.startTime);
-
-		// If a matching slot exists, return both slots as a pair.
-		if (slotB) return { slotA, slotB };
-	}
-
-	// No overlapping available slot found.
-	return null;
-}
-
-/**
- * Checks whether scheduling a meeting between two attendees would exceed the same-company cap.
- *
- * @param {ScheduledMeeting[]} scheduledMeetings - All meetings scheduled so far.
- * @param {Map<string, Attendee>} attendees - Lookup map of all attendees by ID.
- * @param {string} attendeeId - The attendee whose existing schedule is being checked.
- * @param {string} candidateId - The prospective meeting partner.
- * @param {number} maxSameCompany - Maximum allowed meetings with attendees from the same company.
- * @returns {boolean} `true` if adding this meeting would violate the diversity rule.
- */
-export function wouldViolateCompanyDiversity(
-	scheduledMeetings: ScheduledMeeting[],
-	attendees: Map<string, Attendee>,
-	attendeeId: string,
-	candidateId: string,
-	maxSameCompany: number
-): boolean {
-
-	// Look up the company of the person we're considering scheduling.
-	const candidateCompany = attendees.get(candidateId)?.company;
-
-	// If the candidate doesn't exist in the map, allow the meeting.
-	if (!candidateCompany) return false;
-
-	// Count how many of the attendee's existing meetings are with people from the same company.
-	const sameCompanyCount = scheduledMeetings.filter(m => {
-		const isInvolved = m.attendeeA === attendeeId || m.attendeeB === attendeeId;
-
-		// Skip meetings this attendee isn't part of.
-		if (!isInvolved) return false;
-
-		// Determine which participant is the other person in the meeting.
-		const otherId = m.attendeeA === attendeeId ? m.attendeeB : m.attendeeA;
-
-		// Check if the other person's company matches the candidate's company.
-		return attendees.get(otherId)?.company === candidateCompany;
-	}).length;
-
-	// Return true if adding this meeting would meet or exceed the cap.
-	return sameCompanyCount >= maxSameCompany;
-}
-
-// ---------------------------------------------------------------------------
-// Scheduler
-// ---------------------------------------------------------------------------
+import { pairKey, computeMutualPairs, findMutualSlot, wouldViolateCompanyDiversity } from './helpers';
 
 // Defines the configuration for each pass of the scheduling algorithm, including caps and filters.
 interface PassConfig {
@@ -316,7 +158,7 @@ export async function runScheduler(
 	const scheduledPairs = new Set<string>();
 
 	// Create a mutable copy of each attendee's slots keyed by attendee ID.
-	const slotsByAttendee = new Map<string, AttendeeSlot[]>(
+	const slotsByAttendee = new Map(
 		attendees.map(a => [
 			a.id,
 			a.scheduling.slots.map(s => ({ ...s })),

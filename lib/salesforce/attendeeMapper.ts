@@ -172,8 +172,10 @@ const profileMapper: FieldMapper<"profile"> = (record): AttendeeProfile => {
  * record (or, for placeholder-only fields, generates one when the flag is on).
  */
 export const attendeeFieldMappers: AttendeeFieldMappers = {
-    // App-level id; no SF source. Use a generated id only with placeholders on.
-    id: (_record, ctx) => (ctx.usePlaceholders ? placeholderId(ctx) : ""),
+    // App-level id. Use a generated short id with placeholders on; otherwise
+    // fall back to the Salesforce record Id, which is always unique.
+    id: (record, ctx) =>
+        ctx.usePlaceholders ? placeholderId(ctx) : String(record.Id ?? ""),
 
     // Cvent contact UUID; no SF source today. Fabricate when placeholders on.
     cventContactId: (_record, ctx) =>

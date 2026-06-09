@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
+//adding browser to terminal for development for now. Feel free to remove later
 const nextConfig: NextConfig = {
-  /* config options here */
+    logging: {
+        browserToTerminal: true,
+    },
 };
 
 export default nextConfig;

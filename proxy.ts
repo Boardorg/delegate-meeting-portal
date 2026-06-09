@@ -48,7 +48,7 @@ export async function proxy(request: NextRequest) {
         // authenticate with the session cookie instead of an API key.
         const token = request.cookies.get(SESSION_COOKIE)?.value;
         const session = await decryptSession(token);
-        if (session || process.env.DISABLE_FRONT_END_LOGIN === "true") {
+        if (session || process.env.DISABLE_LOGIN_AUTHENTICATION === "true") {
             return NextResponse.next();
         }
 
@@ -63,7 +63,7 @@ export async function proxy(request: NextRequest) {
     // Allow listed public pages straight through (login form, etc.).
     if (
         PUBLIC_PAGE_PATHS.includes(pathname) ||
-        process.env.DISABLE_FRONT_END_LOGIN === "true"
+        process.env.DISABLE_LOGIN_AUTHENTICATION === "true"
     ) {
         return NextResponse.next();
     }

@@ -6,11 +6,18 @@ import { useRouter } from "next/navigation";
 /**
  * Button that clears the session cookie and redirects to /login.
  *
- * @returns {JSX.Element} The rendered button.
+ * Returns null when NEXT_PUBLIC_DISABLE_LOGIN_AUTHENTICATION is on — there
+ * is no session to log out of in that mode, so the button would be a no-op.
+ * The variable is `NEXT_PUBLIC_` so Next.js inlines it into the client bundle.
+ *
+ * @returns {JSX.Element | null} The rendered button, or null when auth is bypassed.
  */
 export default function LogoutButton() {
     const router = useRouter();
     const [pending, setPending] = useState(false);
+
+    const authDisabled =
+        process.env.NEXT_PUBLIC_DISABLE_LOGIN_AUTHENTICATION === "true";
 
     /**
      * Calls the logout API and navigates to /login.
@@ -30,7 +37,7 @@ export default function LogoutButton() {
         <button
             type="button"
             onClick={handleLogout}
-            disabled={pending}
+            disabled={pending || authDisabled}
             style={{
                 padding: "6px 12px",
                 fontSize: 14,

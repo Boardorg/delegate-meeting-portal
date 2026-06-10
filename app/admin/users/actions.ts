@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, type User } from "@/lib/db/schema";
+import { normalizePhone } from "@/lib/auth/phone";
 
 // ---------------------------------------------------------------------------
 // Server actions for the /admin/users CRUD UI.
@@ -169,14 +170,17 @@ export type CreateUserInput = {
 export async function createUser(
     input: CreateUserInput,
 ): Promise<ActionResult> {
-    if (!input.phone) return { ok: false, error: "Error: invalid phone" };
+    // Strip formatting noise but keep the entered country-code shape as-is
+    // — what's stored here is what the login flow compares against.
+    const phone = normalizePhone(input.phone ?? "");
+    if (!phone) return { ok: false, error: "Error: invalid phone" };
 
     try {
         const [user] = await db
             .insert(users)
             .values({
                 email: trimToNull(input.email),
-                phone: input.phone,
+                phone,
                 username: trimToNull(input.username),
             })
             .returning();
@@ -218,8 +222,9 @@ export async function updateUser(
     const patch: Partial<typeof users.$inferInsert> = {};
 
     if (input.phone !== undefined) {
-        if (!input.phone) return { ok: false, error: "Error: invalid phone" };
-        patch.phone = input.phone;
+        const phone = normalizePhone(input.phone);
+        if (!phone) return { ok: false, error: "Error: invalid phone" };
+        patch.phone = phone;
     }
     if (input.email !== undefined) patch.email = trimToNull(input.email);
     if (input.username !== undefined)

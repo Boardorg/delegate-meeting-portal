@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import "@/app/backend.css";
 import TopBar from "@/app/components/TopBar";
 import AdminSidebar from "@/app/components/AdminSidebar";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { ADMIN_NAV } from "./nav";
 
 // ---------------------------------------------------------------------------
@@ -10,18 +12,47 @@ import { ADMIN_NAV } from "./nav";
 // Wraps every page under /admin with the shared TopBar (no "My Requests" — the
 // admin context doesn't have meeting requests) and a fixed left-side sidebar
 // for navigation between admin sections.
+//
+// Also gates the section by role: any logged-in non-admin who lands on
+// /admin/* is bounced to "/" before the page renders.
 // ---------------------------------------------------------------------------
 
 /**
  * Renders the admin shell around child pages.
  *
  * @param {{ children: ReactNode }} props - The nested admin page.
- * @returns {JSX.Element} The admin layout element.
+ * @returns {Promise<JSX.Element>} The admin layout element.
  */
-export default function AdminLayout({ children }: { children: ReactNode }) {
+export default async function AdminLayout({
+    children,
+}: {
+    children: ReactNode;
+}) {
+    // proxy.ts already enforces "must be logged in" — this is the role check.
+    // A missing user row means the phone-only session has no admin grant, so
+    // they get the same treatment as a logged-in non-admin: redirect home.
+    //
+    // NEXT_PUBLIC_DISABLE_LOGIN_AUTHENTICATION mirrors the proxy's bypass:
+    // when it's "true" (local dev / preview environments) we skip the role
+    // check too, so the admin area is reachable without any users-table row.
+    const authDisabled =
+        process.env.NEXT_PUBLIC_DISABLE_LOGIN_AUTHENTICATION === "true";
+    const user = await getCurrentUser();
+    if (!authDisabled && (!user || user.role !== "admin")) {
+        redirect("/");
+    }
+
+    // Show the most-specific identifier we have for the user, in priority
+    // order: username → email → phone. When auth is disabled and there's no
+    // session, fall back to a generic placeholder.
+    const displayName = user
+        ? (user.username ?? user.email ?? user.phone)
+        : "Anonymous";
+    const displayRole = user?.role ?? "auth disabled";
+
     return (
         <>
-            <TopBar />
+            <TopBar user={{ name: displayName, title: displayRole }} />
             <div className="admin-shell">
                 <AdminSidebar items={ADMIN_NAV} />
                 <main className="admin-main">{children}</main>

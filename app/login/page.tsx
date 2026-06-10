@@ -23,8 +23,11 @@ export default function LoginPage() {
     const searchParams = useSearchParams();
 
     // Where to send the user after a successful login. Proxy.ts adds `?next=`
-    // when it redirects an unauthenticated request to /login.
-    const next = searchParams.get("next") || "/";
+    // when it redirects an unauthenticated request to /login, so if it's set
+    // we honor it (the user was trying to go somewhere specific). Otherwise
+    // we fall back to the role-based default returned by /api/auth/verify
+    // (admins land on /admin, everyone else on /).
+    const explicitNext = searchParams.get("next");
 
     // UI state machine: which step we're on, what was entered, what the server
     // echoed back, and whether a request is in flight.
@@ -84,9 +87,14 @@ export default function LoginPage() {
                 setError(data.error ?? "Could not verify code.");
                 return;
             }
+            // Prefer the user's originally-requested page (if proxy.ts
+            // injected one) over the role-based default suggested by the
+            // server.
+            const target =
+                explicitNext || (typeof data.redirectTo === "string" ? data.redirectTo : "/");
             // router.refresh() ensures any server components re-render against
             // the now-authenticated cookie before/after the push.
-            router.push(next);
+            router.push(target);
             router.refresh();
         } catch {
             setError("Network error. Please try again.");

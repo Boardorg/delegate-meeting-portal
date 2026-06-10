@@ -1,3 +1,5 @@
+import { pgEnum, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+
 // ---------------------------------------------------------------------------
 // Drizzle schema
 //
@@ -14,6 +16,47 @@
 //   3. Run `npm run db:migrate` to apply it to the database.
 // ---------------------------------------------------------------------------
 
-// Intentionally empty for now — first table will be added with the admin
-// user-management work.
-export {};
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/**
+ * Application roles. Stored as a Postgres enum so a typo or bad value is
+ * rejected at the DB layer. Add new roles here, then re-generate migrations.
+ */
+export const userRole = pgEnum("user_role", ["admin", "user"]);
+
+// ---------------------------------------------------------------------------
+// Tables
+// ---------------------------------------------------------------------------
+
+/**
+ * Portal users. One row per person who can log in. The `phone` column is
+ * the join key with the SMS login flow — login normalizes to E.164 and the
+ * session cookie carries the same value.
+ */
+export const users = pgTable("users", {
+    // Auto-incrementing integer PK (Postgres `serial`).
+    id: serial("id").primaryKey(),
+
+    // Contact + identity columns. All three are unique so a duplicate signup
+    // fails at the DB rather than producing two records that collide later.
+    email: text("email").notNull().unique(),
+    phone: text("phone").notNull().unique(),
+    username: text("username").notNull().unique(),
+
+    // Authorization level — see the `userRole` enum above.
+    role: userRole("role").notNull().default("admin"),
+
+    // Audit timestamps. `created` is stamped by Postgres on insert;
+    created: timestamp("created", { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+    lastLogin: timestamp("last_login", { withTimezone: true }),
+});
+
+// Inferred row types for use in app code:
+//   `User`     — what a SELECT returns
+//   `NewUser`  — what an INSERT accepts (auto-generated columns optional)
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;

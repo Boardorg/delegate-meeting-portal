@@ -1,0 +1,53 @@
+/* ---------------------------------------------------------------------------
+   backend.css
+   ---------------------------------------------------------------------------
+   Styles for the administration section: the admin shell (sidebar +
+   main column) and the users-management table. Imported by
+   app/admin/layout.tsx so it loads on /admin/* routes only.
+   --------------------------------------------------------------------------- */
+
+/* ── Admin shell + sidebar ── */
+.admin-shell { display:flex; min-height:calc(100vh - 58px); }
+.admin-sidebar { width:240px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border); position:sticky; top:58px; height:calc(100vh - 58px); overflow-y:auto; padding:14px 8px; display:flex; flex-direction:column; gap:2px; }
+.admin-sidebar-item { display:flex; flex-direction:column; }
+.admin-sidebar-row { display:flex; align-items:center; gap:10px; width:100%; padding:8px 12px; background:none; border:none; border-radius:var(--r); font-family:var(--body); font-size:13px; font-weight:500; color:var(--text); text-decoration:none; cursor:pointer; transition:background .12s, color .12s; text-align:left; }
+.admin-sidebar-row:hover { background:var(--s2); }
+.admin-sidebar-row.active { background:var(--s3); color:var(--text); }
+.admin-sidebar-icon { width:16px; display:inline-flex; align-items:center; justify-content:center; color:var(--t2); flex-shrink:0; }
+.admin-sidebar-row.active .admin-sidebar-icon { color:var(--text); }
+.admin-sidebar-label { flex:1; }
+.admin-sidebar-chevron { font-size:10px; color:var(--t3); transition:transform .15s; }
+.admin-sidebar-children { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
+.admin-main { flex:1; padding:24px; overflow:auto; }
+
+/* ── Users admin table ── */
+.users-page { display:flex; flex-direction:column; gap:16px; }
+.users-page-head { display:flex; align-items:center; justify-content:space-between; }
+.users-page-title { font-family:var(--display); font-size:20px; font-weight:600; margin:0; }
+.users-new-btn { background:var(--s2); border:1px solid var(--border-up); border-radius:var(--r); padding:7px 14px; font-family:var(--body); font-size:13px; font-weight:500; color:var(--text); cursor:pointer; transition:background .15s; }
+.users-new-btn:hover:not(:disabled) { background:var(--s3); }
+.users-new-btn:disabled { opacity:.5; cursor:not-allowed; }
+.users-table { width:100%; border-collapse:collapse; font-size:13px; }
+.users-table th, .users-table td { padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle; }
+.users-table th { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--t2); font-weight:600; background:var(--surface); }
+.users-row td { color:var(--text); }
+.users-row-new td { background:rgba(0,112,243,0.04); }
+.users-actions-col { width:200px; text-align:right; }
+/* Actions cell stays a regular table-cell (so it shares the row's auto height
+   with every other cell). The flex layout lives on an inner wrapper so the
+   buttons sit on one line with consistent spacing regardless of mode. */
+.users-actions-cell { vertical-align:middle; }
+.users-actions-inner { display:flex; gap:6px; justify-content:flex-end; align-items:center; min-height:28px; }
+.users-empty { text-align:center; color:var(--t3); padding:32px !important; }
+.users-input { width:100%; padding:5px 8px; font-size:12px; font-family:var(--body); background:var(--s2); border:1px solid var(--border); border-radius:4px; color:var(--text); }
+.users-input:focus { outline:none; border-color:var(--blue-b); }
+.users-input:disabled { opacity:.6; }
+.users-btn { background:var(--s2); border:1px solid var(--border); border-radius:4px; padding:4px 10px; font-family:var(--body); font-size:12px; color:var(--text); cursor:pointer; transition:background .12s; }
+.users-btn:hover:not(:disabled) { background:var(--s3); }
+.users-btn:disabled { opacity:.5; cursor:not-allowed; }
+.users-btn-primary { background:var(--blue, #0070f3); border-color:var(--blue, #0070f3); color:#fff; }
+.users-btn-primary:hover:not(:disabled) { filter:brightness(1.1); background:var(--blue, #0070f3); }
+.users-btn-danger { background:transparent; border-color:var(--red-b, #e8391e); color:var(--red, #e8391e); }
+.users-btn-danger:hover:not(:disabled) { background:rgba(232,57,30,0.1); }
+.users-confirm-label { font-size:12px; color:var(--t2); margin-right:4px; }
+.users-row-error td { background:rgba(232,57,30,0.07); color:var(--red, #e8391e); font-size:12px; padding:6px 12px; }

@@ -1,5 +1,6 @@
 "use client";
 
+import "@/app/frontend.css";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { Attendee, AttendeeProfile } from "@/types";
 import TopBar from "@/app/components/TopBar";

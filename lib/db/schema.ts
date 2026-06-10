@@ -39,11 +39,12 @@ export const users = pgTable("users", {
     // Auto-incrementing integer PK (Postgres `serial`).
     id: serial("id").primaryKey(),
 
-    // Contact + identity columns. All three are unique so a duplicate signup
-    // fails at the DB rather than producing two records that collide later.
-    email: text("email").notNull().unique(),
+    // Contact + identity columns. Phone is the only required identifier
+    // (the SMS login flow uses it as the user's key). Email and username
+    // are optional but still unique when present so duplicates fail loudly.
+    email: text("email").unique(),
     phone: text("phone").notNull().unique(),
-    username: text("username").notNull().unique(),
+    username: text("username").unique(),
 
     // Authorization level — see the `userRole` enum above.
     role: userRole("role").notNull().default("admin"),

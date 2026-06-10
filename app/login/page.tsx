@@ -1,5 +1,6 @@
 "use client";
 
+import "@/app/frontend.css";
 import { useState, SubmitEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 

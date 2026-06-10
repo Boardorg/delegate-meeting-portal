@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import "@/app/backend.css";
 import TopBar from "@/app/components/TopBar";
 import AdminSidebar from "@/app/components/AdminSidebar";
 import { ADMIN_NAV } from "./nav";

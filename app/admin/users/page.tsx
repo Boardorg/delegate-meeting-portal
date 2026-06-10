@@ -1,12 +1,20 @@
+import { listUsers } from "./actions";
+import UsersTable from "./UsersTable";
+
 // ---------------------------------------------------------------------------
 // /admin/users — user administration page.
+//
+// Server component: fetches the user list at request time and hands it to
+// the client-side <UsersTable /> which renders the inline-editable rows and
+// invokes the server actions for create/update/delete.
 // ---------------------------------------------------------------------------
 
 /**
- * Placeholder users admin page.
+ * Renders the users-management page.
  *
- * @returns {JSX.Element} A blank users page.
+ * @returns {Promise<JSX.Element>} The page element.
  */
-export default function AdminUsersPage() {
-    return <div>Users Main</div>;
+export default async function AdminUsersPage() {
+    const users = await listUsers();
+    return <UsersTable users={users} />;
 }

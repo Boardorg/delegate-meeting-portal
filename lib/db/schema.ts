@@ -1,4 +1,12 @@
-import { pgEnum, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import {
+    integer,
+    pgEnum,
+    pgTable,
+    serial,
+    text,
+    timestamp,
+    unique,
+} from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
 // Drizzle schema
@@ -68,3 +76,38 @@ export const users = pgTable("users", {
 //   `NewUser`  — what an INSERT accepts (auto-generated columns optional)
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+
+/**
+ * Sponsor meeting requests. One row per (requester, target) pair. Rank 1–5
+ * expresses interest level; rank 0 is never stored — the route deletes the
+ * row instead, so the table only contains active requests.
+ *
+ * The unique constraint on (requester_id, target_id) enables upsert semantics:
+ * submitting the same pair with a new rank updates rather than duplicates.
+ */
+export const meetingRequests = pgTable(
+    "meeting_requests",
+    {
+        id: serial("id").primaryKey(),
+        // Attendee.id of the sponsor submitting the request.
+        requesterId: text("requester_id").notNull(),
+        // Attendee.id of the delegate being requested.
+        targetId: text("target_id").notNull(),
+        rank: integer("rank").notNull(),
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .notNull()
+            .defaultNow(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
+            .notNull()
+            .defaultNow(),
+    },
+    (t) => [
+        unique("meeting_requests_requester_target_unique").on(
+            t.requesterId,
+            t.targetId,
+        ),
+    ],
+);
+
+export type MeetingRequestRow = typeof meetingRequests.$inferSelect;
+export type NewMeetingRequest = typeof meetingRequests.$inferInsert;

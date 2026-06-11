@@ -24,7 +24,7 @@ import { pgEnum, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
  * Application roles. Stored as a Postgres enum so a typo or bad value is
  * rejected at the DB layer. Add new roles here, then re-generate migrations.
  */
-export const userRole = pgEnum("user_role", ["admin", "user"]);
+export const userRole = pgEnum("user_role", ["admin", "user", "sponsor"]);
 
 // ---------------------------------------------------------------------------
 // Tables
@@ -45,6 +45,13 @@ export const users = pgTable("users", {
     email: text("email").unique(),
     phone: text("phone").notNull().unique(),
     username: text("username").unique(),
+
+    // Optional Salesforce Attendee/Contact id. Set for locally-managed rows
+    // (e.g. an admin or manually-added sponsor) so their SF record can be
+    // referenced when attaching requests/schedules. Unique when present.
+    // Frontend users matched live from Salesforce carry their id on the
+    // resolved identity instead (see lib/auth/identity.ts).
+    salesforceId: text("salesforce_id").unique(),
 
     // Authorization level — see the `userRole` enum above.
     role: userRole("role").notNull().default("admin"),

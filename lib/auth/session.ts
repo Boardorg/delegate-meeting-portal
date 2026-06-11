@@ -16,6 +16,8 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export type SessionPayload = JWTPayload & {
     phone: string;
     issuedAt: number;
+    // Event code captured from the `?event=` query param at login.
+    eventCode?: string;
 };
 
 /**
@@ -76,6 +78,18 @@ export async function decryptSession(
     }
 }
 
+/**
+ * Reads and verifies the session cookie, returning its payload or null. A
+ * convenience wrapper over `decryptSession` for callers that just need the
+ * current session without juggling the cookie jar themselves.
+ *
+ * @returns {Promise<SessionPayload | null>} The current session, or null.
+ */
+export async function getSession(): Promise<SessionPayload | null> {
+    const jar = await cookies();
+    return decryptSession(jar.get(SESSION_COOKIE)?.value);
+}
+
 // ---------------------------------------------------------------------------
 // Cookie management (server-side only)
 // ---------------------------------------------------------------------------
@@ -86,11 +100,15 @@ export async function decryptSession(
  * the one-time code.
  *
  * @param {string} phone - E.164-normalized phone number to associate with the session.
+ * @param {string} [eventCode] - Event code from the login URL to persist for the session's lifetime.
  * @returns {Promise<void>}
  */
-export async function createSession(phone: string): Promise<void> {
+export async function createSession(
+    phone: string,
+    eventCode?: string,
+): Promise<void> {
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-    const token = await encryptSession({ phone, issuedAt: Date.now() });
+    const token = await encryptSession({ phone, issuedAt: Date.now(), eventCode });
 
     // HttpOnly so client JS can't read it; Secure so it only goes over HTTPS
     // in production; SameSite=lax keeps it out of cross-site POSTs while still

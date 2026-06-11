@@ -28,7 +28,7 @@ import { users } from "@/lib/db/schema";
  */
 export async function POST(request: NextRequest) {
     // Parse defensively — a non-JSON body shouldn't 500 the route.
-    let body: { phone?: unknown; code?: unknown };
+    let body: { phone?: unknown; code?: unknown; eventCode?: unknown };
     try {
         body = await request.json();
     } catch {
@@ -43,6 +43,10 @@ export async function POST(request: NextRequest) {
     const phone = typeof body.phone === "string" ? normalizePhone(body.phone) : null;
     const e164 = typeof body.phone === "string" ? toE164(body.phone) : null;
     const code = typeof body.code === "string" ? body.code.trim() : "";
+    // Event code from the login URL — persisted to the session so getEventCode()
+    // can resolve it on later requests, once the `?event=` param is gone.
+    const eventCode =
+        typeof body.eventCode === "string" ? body.eventCode : undefined;
 
     if (!phone || !e164 || !code) {
         return NextResponse.json(
@@ -73,7 +77,7 @@ export async function POST(request: NextRequest) {
     // Approval is the only authorization gate today — anyone with a working
     // phone can sign in. Tighten here (e.g. allow-list check against the
     // users table) when the product requires it.
-    await createSession(phone);
+    await createSession(phone, eventCode);
 
     // Look up the user record so we can update last_login and steer admins
     // to the admin section. Doing this AFTER createSession means a missing

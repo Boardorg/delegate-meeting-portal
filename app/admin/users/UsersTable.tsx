@@ -27,7 +27,7 @@ type EditDraft = {
     email: string;
     phone: string;
     username: string;
-    role: "admin" | "user";
+    role: "admin" | "user" | "sponsor";
 };
 
 /**
@@ -229,6 +229,7 @@ export default function UsersTable({ users }: Props) {
                     >
                         <option value="admin">admin</option>
                         <option value="user">user</option>
+                        <option value="sponsor">sponsor</option>
                     </select>
                 </td>
             </>

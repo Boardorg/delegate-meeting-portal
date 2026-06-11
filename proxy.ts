@@ -75,9 +75,12 @@ export async function proxy(request: NextRequest) {
 
     if (!session) {
         // Preserve the originally-requested URL so login can bounce the user
-        // back to it on success.
+        // back to it on success, and carry the event code through so the login
+        // page can persist it to the session on success.
         const loginUrl = new URL("/login", request.url);
         loginUrl.searchParams.set("next", pathname + request.nextUrl.search);
+        const eventCode = request.nextUrl.searchParams.get("event");
+        if (eventCode) loginUrl.searchParams.set("event", eventCode);
         return NextResponse.redirect(loginUrl);
     }
 

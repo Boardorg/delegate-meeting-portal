@@ -26,7 +26,7 @@ export type ActionResult<T = User> =
 
 // Role values accepted by the DB enum. Kept as a tuple so it can drive both
 // the runtime validation and the form's <select> options without drift.
-const ROLE_VALUES = ["admin", "user"] as const;
+const ROLE_VALUES = ["admin", "user", "sponsor"] as const;
 type Role = (typeof ROLE_VALUES)[number];
 
 /**

@@ -25,6 +25,7 @@ export type MeetingDataRecord = {
         LastName?: string | null;
         Title?: string | null;
         Email?: string | null;
+        Phone?: string | null;
         Account?: {
             Name?: string | null;
             Website?: string | null;
@@ -194,6 +195,10 @@ export const attendeeFieldMappers: AttendeeFieldMappers = {
     // Direct passthrough from the joined Contact.
     email: (record) => record.Delegate__r?.Email ?? "",
 
+    // Contact.Phone. Used to match the SMS-login phone to an attendee record
+    // when the user isn't in the local users table (see lib/auth/identity.ts).
+    phone: (record) => record.Delegate__r?.Phone ?? "",
+
     // Role isn't on the SF record itself; it's tagged by the caller via ctx
     // based on which sub-list (delegates vs sponsors) the record came from.
     role: (_record, ctx) => ctx.role,
@@ -258,6 +263,7 @@ function buildAttendee(
         salesforceId: attendeeFieldMappers.salesforceId(record, ctx),
         name: attendeeFieldMappers.name(record, ctx),
         email: attendeeFieldMappers.email(record, ctx),
+        phone: attendeeFieldMappers.phone(record, ctx),
         role: attendeeFieldMappers.role(record, ctx),
         company: attendeeFieldMappers.company(record, ctx),
         title: attendeeFieldMappers.title(record, ctx),
@@ -268,10 +274,8 @@ function buildAttendee(
 }
 
 /**
- * Converts a meeting-data pull (separate delegate and sponsor record arrays)
- * into a single flat `Attendee[]`. Each record's role and 0-based position
- * within its sub-list are passed through context so per-field mappers can
- * generate stable placeholder ids when needed.
+ * Converts a meeting-data pull (separate delegate and sponsor record arrays from Salesforce)
+ * into a single flat `Attendee[]`.
  *
  * @param {{ delegates: MeetingDataRecord[]; sponsors: MeetingDataRecord[] }} data - Output of getMeetingDataByEvent().
  * @param {boolean} usePlaceholders - Whether to generate synthetic values for fields with no SF source.

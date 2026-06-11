@@ -29,6 +29,11 @@ export default function LoginPage() {
     // (admins land on /admin, everyone else on /).
     const explicitNext = searchParams.get("next");
 
+    // Event code captured from the first visit (`?event=`, carried onto /login
+    // by proxy.ts). Sent in the body of the auth requests so the server can
+    // match against the right event and persist the code to the session.
+    const event = searchParams.get("event") ?? undefined;
+
     // UI state machine: which step we're on, what was entered, what the server
     // echoed back, and whether a request is in flight.
     const [step, setStep] = useState<Step>("phone");
@@ -50,7 +55,7 @@ export default function LoginPage() {
             const res = await fetch("/api/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ phone: phoneInput }),
+                body: JSON.stringify({ phone: phoneInput, eventCode: event }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -80,7 +85,7 @@ export default function LoginPage() {
             const res = await fetch("/api/auth/verify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ phone: normalizedPhone, code }),
+                body: JSON.stringify({ phone: normalizedPhone, code, eventCode: event }),
             });
             const data = await res.json();
             if (!res.ok) {

@@ -137,6 +137,13 @@ export interface Attendee {
     /** Email address. */
     email: string;
 
+    /**
+     * Contact phone number (raw from Salesforce/source data).
+     * Used to match the SMS-login phone to this attendee when the user is not
+     * in the local users table. See lib/auth/identity.ts.
+     */
+    phone: string;
+
     /** Attendee role. */
     role: AttendeeRole;
 

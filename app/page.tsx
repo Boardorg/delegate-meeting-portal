@@ -1,14 +1,21 @@
-import { loadAttendees } from '@/lib/attendees/loader';
-import SponsorCatalog from '@/app/components/SponsorCatalog';
+import { redirect } from "next/navigation";
+import { loadAttendees } from "@/lib/attendees/loader";
+import { getCurrentIdentity } from "@/lib/auth/currentUser";
+import SponsorCatalog from "@/app/components/SponsorCatalog";
 
 export default async function Home() {
+    // The session must resolve to a known identity to view the catalog; the
+    // resolved identity always carries its own attendee record.
+    const identity = await getCurrentIdentity();
+    if (!identity) redirect("/login");
+
     const attendees = await loadAttendees();
-    const delegates = attendees.filter(a => a.role === 'delegate');
-    const sponsors = attendees.filter(a => a.role === 'sponsor');
+    const delegates = attendees.filter((a) => a.role === "delegate");
 
-    // TODO: map the session phone number to the correct sponsor record once
-    // a phone field is added to Attendee. For now, default to the first sponsor.
-    const currentSponsor = sponsors[0] ?? attendees[0];
-
-    return <SponsorCatalog delegates={delegates} currentSponsor={currentSponsor} />;
+    return (
+        <SponsorCatalog
+            delegates={delegates}
+            currentSponsor={identity.attendee}
+        />
+    );
 }

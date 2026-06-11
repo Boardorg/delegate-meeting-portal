@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
 /**
  * POST /api/requests
@@ -19,20 +19,25 @@ export async function POST(request: NextRequest) {
 
         if (!requesterId || !targetId) {
             return NextResponse.json(
-                { error: 'Missing required fields: requesterId, targetId' },
+                { error: "Missing required fields: requesterId, targetId" },
                 { status: 400 },
             );
         }
 
-        if (typeof rank !== 'number' || rank < 0 || rank > 5) {
+        if (typeof rank !== "number" || rank < 0 || rank > 5) {
             return NextResponse.json(
-                { error: 'rank must be a number between 0 and 5' },
+                { error: "rank must be a number between 0 and 5" },
                 { status: 400 },
             );
         }
+
+        //TODO: actually save the request
 
         return NextResponse.json({ ok: true, requesterId, targetId, rank });
     } catch {
-        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+        return NextResponse.json(
+            { error: "Invalid JSON body" },
+            { status: 400 },
+        );
     }
 }

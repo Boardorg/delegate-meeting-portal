@@ -50,8 +50,9 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
  */
 export const getCurrentIdentity = cache(
     async (): Promise<ResolvedIdentity | null> => {
-        //
-        if (process.env.NEXT_PUBLIC_DISABLE_LOGIN_AUTHENTICATION !== "true") {
+        // Auth bypass for dev/preview: skip the real session and hand back a
+        // mock identity so the frontend renders without logging in.
+        if (process.env.NEXT_PUBLIC_DISABLE_LOGIN_AUTHENTICATION === "true") {
             return resolveMockIdentity();
         }
         const session = await getSession();

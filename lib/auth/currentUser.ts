@@ -1,10 +1,9 @@
 import "server-only";
 import { cache } from "react";
-import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, type User } from "@/lib/db/schema";
-import { decryptSession, SESSION_COOKIE } from "./session";
+import { getSession } from "./session";
 import { resolveIdentity, type ResolvedIdentity } from "./identity";
 import { loadAttendees } from "../attendees/loader";
 
@@ -27,9 +26,7 @@ import { loadAttendees } from "../attendees/loader";
  * @returns {Promise<User | null>} The matching user, or null.
  */
 export const getCurrentUser = cache(async (): Promise<User | null> => {
-    const jar = await cookies();
-    const token = jar.get(SESSION_COOKIE)?.value;
-    const session = await decryptSession(token);
+    const session = await getSession();
     if (!session) return null;
 
     const [user] = await db
@@ -57,9 +54,7 @@ export const getCurrentIdentity = cache(
         if (process.env.NEXT_PUBLIC_DISABLE_LOGIN_AUTHENTICATION !== "true") {
             return resolveMockIdentity();
         }
-        const jar = await cookies();
-        const token = jar.get(SESSION_COOKIE)?.value;
-        const session = await decryptSession(token);
+        const session = await getSession();
         if (!session) return null;
         return resolveIdentity(session.phone);
     },

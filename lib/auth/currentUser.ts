@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, type User } from "@/lib/db/schema";
 import { getSession } from "./session";
-import { resolveIdentity, type ResolvedIdentity } from "./identity";
+import { resolveIdentity } from "./identity";
+import type { ResolvedIdentity } from "@/types";
 import { loadAttendees } from "../attendees/loader";
 
 // ---------------------------------------------------------------------------

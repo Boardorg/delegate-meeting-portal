@@ -4,7 +4,7 @@ import { db } from "@/lib/db/client";
 import { users, type User } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { toE164 } from "@/lib/auth/phone";
-import type { Attendee } from "@/types";
+import type { Attendee, ResolvedIdentity } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Identity resolution — the single place that decides who a phone number is.
@@ -18,30 +18,6 @@ import type { Attendee } from "@/types";
 // A phone that matches neither is unrecognized → `null`, and the login flow
 // rejects it before sending an SMS code.
 // ---------------------------------------------------------------------------
-
-/**
- * The resolved owner of a phone number.
- *
- * - `source: "users"`  → `user` is the DB row; `attendee` is a thin Attendee
- *   shaped from that row (see `userToAttendee`).
- * - `source: "salesforce"` → `attendee` is the matched record; `user` is null.
- *
- * `attendee` is always populated so callers always have one shape to render.
- */
-export type ResolvedIdentity = {
-    /** Normalized phone the identity was resolved for. */
-    phone: string;
-    /** Application role driving where the user lands. */
-    role: "admin" | "user" | "sponsor";
-    /** Where the identity came from. */
-    source: "users" | "salesforce";
-    /** Salesforce id used to attach records later, when known. */
-    salesforceId: string | null;
-    /** The DB row, when resolved from the users table. */
-    user: User | null;
-    /** The attendee record for this identity (always present). */
-    attendee: Attendee;
-};
 
 /**
  * Shapes a local users-table row into a thin `Attendee`. Most browse/profile

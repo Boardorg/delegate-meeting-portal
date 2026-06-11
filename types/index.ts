@@ -1,3 +1,5 @@
+import type { User } from "@/lib/db/schema";
+
 export type CachedAuth = {
     accessToken: string;
     instanceUrl: string;
@@ -311,3 +313,32 @@ export interface SchedulerRunResult {
     /** Flat list of all scheduled meetings across all attendees and passes. */
     allMeetings: ScheduledMeeting[];
 }
+
+/**
+ * The resolved owner of a phone number, produced by lib/auth/identity.ts.
+ *
+ * - `source: "users"`  → `user` is the DB row; `attendee` is a thin Attendee
+ *   shaped from that row.
+ * - `source: "salesforce"` → `attendee` is the matched record; `user` is null.
+ *
+ * `attendee` is always populated so callers always have one shape to render.
+ */
+export type ResolvedIdentity = {
+    /** Normalized phone the identity was resolved for. */
+    phone: string;
+
+    /** Application role driving where the user lands. */
+    role: "admin" | "user" | "sponsor";
+
+    /** Where the identity came from. */
+    source: "users" | "salesforce";
+
+    /** Salesforce id used to attach records later, when known. */
+    salesforceId: string | null;
+
+    /** The DB row, when resolved from the users table. */
+    user: User | null;
+
+    /** The attendee record for this identity (always present). */
+    attendee: Attendee;
+};

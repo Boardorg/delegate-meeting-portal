@@ -106,34 +106,34 @@ describe('findMutualSlot', () => {
     });
 
     test('returns null when slots do not overlap', () => {
-        const slotsA = [makeSlot('a1', 1, '09:00')];
-        const slotsB = [makeSlot('b1', 1, '10:00')];
+        const slotsA = [makeSlot('a-d1-01', 1, '09:00')];
+        const slotsB = [makeSlot('b-d1-01', 1, '10:00')];
         expect(findMutualSlot(slotsA, slotsB, 1)).toBeNull();
     });
 
     test('returns null when the matching slot is on a different day', () => {
-        const slotsA = [makeSlot('a1', 1, '09:00')];
-        const slotsB = [makeSlot('b1', 2, '09:00')];
+        const slotsA = [makeSlot('a-d1-01', 1, '09:00')];
+        const slotsB = [makeSlot('b-d2-01', 2, '09:00')];
         expect(findMutualSlot(slotsA, slotsB, 1)).toBeNull();
     });
 
     test('returns null when the matching slot is blocked', () => {
-        const slotsA = [makeSlot('a1', 1, '09:00')];
-        const slotsB = [makeSlot('b1', 1, '09:00', 'blocked')];
+        const slotsA = [makeSlot('a-d1-01', 1, '09:00')];
+        const slotsB = [makeSlot('b-d1-01', 1, '09:00', 'blocked')];
         expect(findMutualSlot(slotsA, slotsB, 1)).toBeNull();
     });
 
     test('returns the matched slot pair when both attendees are available at the same time', () => {
-        const slotA = makeSlot('a1', 1, '09:00');
-        const slotB = makeSlot('b1', 1, '09:00');
+        const slotA = makeSlot('a-d1-01', 1, '09:00');
+        const slotB = makeSlot('b-d1-01', 1, '09:00');
         expect(findMutualSlot([slotA], [slotB], 1)).toEqual({ slotA, slotB });
     });
 
     test('returns the first overlapping slot when multiple are available', () => {
-        const slotA1 = makeSlot('a1', 1, '09:00');
-        const slotA2 = makeSlot('a2', 1, '10:00');
-        const slotB1 = makeSlot('b1', 1, '09:00');
-        const slotB2 = makeSlot('b2', 1, '10:00');
+        const slotA1 = makeSlot('a-d1-01', 1, '09:00');
+        const slotA2 = makeSlot('a-d1-02', 1, '10:00');
+        const slotB1 = makeSlot('b-d1-01', 1, '09:00');
+        const slotB2 = makeSlot('b-d1-02', 1, '10:00');
         expect(findMutualSlot([slotA1, slotA2], [slotB1, slotB2], 1)).toEqual({ slotA: slotA1, slotB: slotB1 });
     });
 });

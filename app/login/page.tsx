@@ -1,7 +1,7 @@
 "use client";
 
 import "@/app/frontend.css";
-import { useState, SubmitEvent } from "react";
+import { Suspense, useState, SubmitEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 // ---------------------------------------------------------------------------
@@ -18,7 +18,20 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 type Step = "phone" | "code";
 
+/**
+ * The login page wraps the form in a Suspense boundary because the form reads
+ * `useSearchParams()` (next/event), which Next requires to be suspense-bounded
+ * so the rest of the route can still be prerendered.
+ */
 export default function LoginPage() {
+    return (
+        <Suspense>
+            <LoginForm />
+        </Suspense>
+    );
+}
+
+function LoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
 

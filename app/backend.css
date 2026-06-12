@@ -51,3 +51,20 @@
 .users-btn-danger:hover:not(:disabled) { background:rgba(232,57,30,0.1); }
 .users-confirm-label { font-size:12px; color:var(--t2); margin-right:4px; }
 .users-row-error td { background:rgba(232,57,30,0.07); color:var(--red, #e8391e); font-size:12px; padding:6px 12px; }
+
+/* Meeting-requests toolbar: event picker + live search above the table. */
+.requests-toolbar { display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; }
+.requests-field { display:flex; flex-direction:column; gap:4px; }
+.requests-field-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--t2); font-weight:600; }
+.requests-select { width:auto; min-width:120px; }
+.requests-search { width:auto; min-width:260px; flex:1; max-width:380px; }
+
+/* Sortable column header button. */
+.requests-sort-btn { display:inline-flex; align-items:center; gap:4px; background:none; border:none; padding:0; margin:0; font:inherit; color:inherit; text-transform:inherit; letter-spacing:inherit; cursor:pointer; }
+.requests-sort-btn:hover { color:var(--text); }
+.requests-sort-ind { font-size:10px; color:var(--blue-b, #0070f3); width:8px; }
+
+/* Pagination footer. */
+.requests-pagination { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:4px; }
+.requests-page-info { font-size:12px; color:var(--t2); }
+.requests-page-btns { display:flex; gap:6px; }

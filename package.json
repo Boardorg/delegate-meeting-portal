@@ -13,13 +13,14 @@
     },
     "dependencies": {
         "@neondatabase/serverless": "^1.1.0",
+        "@tanstack/react-table": "^8.21.3",
         "drizzle-orm": "^0.45.2",
+        "jose": "^6.2.3",
         "jsforce": "^3.10.15",
         "next": "16.2.6",
         "react": "19.2.4",
         "react-dom": "19.2.4",
-        "twilio": "^6.0.2",
-        "jose": "^6.2.3"
+        "twilio": "^6.0.2"
     },
     "devDependencies": {
         "@types/node": "^20",

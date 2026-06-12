@@ -2,7 +2,7 @@
 
 import "@/app/frontend.css";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Attendee, AttendeeProfile } from "@/types";
+import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
 import TopBar from "@/app/components/TopBar";
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -150,8 +150,8 @@ function DrawerItem({
 }: {
     d: Attendee;
     rank: number;
-    onRank: (id: string, r: number) => void;
-    onRemove: (id: string) => void;
+    onRank: (delegate: Attendee, r: number) => void;
+    onRemove: (delegate: Attendee) => void;
 }) {
     const [detailOpen, setDetailOpen] = useState(false);
     const p = d.profile;
@@ -167,7 +167,7 @@ function DrawerItem({
                 </div>
                 <button
                     className="d-remove"
-                    onClick={() => onRemove(d.id)}
+                    onClick={() => onRemove(d)}
                     title="Remove"
                 >
                     ✕
@@ -285,7 +285,7 @@ function DrawerItem({
                     <div
                         key={n}
                         className={`d-rank-pip ${n === rank ? "sel" : ""}`}
-                        onClick={() => onRank(d.id, n)}
+                        onClick={() => onRank(d, n)}
                     >
                         {n}
                     </div>
@@ -372,7 +372,9 @@ function FiltersPanel({
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
-    const [requests, setRequests] = useState<Record<string, number>>({});
+    // This sponsor's saved requests. Each links to its delegate via targetId
+    // (a Salesforce id), so the catalog never translates between id spaces.
+    const [requests, setRequests] = useState<MeetingRequest[]>([]);
     const [pickingId, setPickingId] = useState<string | null>(null);
     const [activeFilters, setActiveFilters] = useState<
         Record<string, string[]>
@@ -390,7 +392,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
     const catalogRef = useRef<HTMLDivElement>(null);
 
     const maxMeetings = currentSponsor.sponsorTier === "diamond" ? 8 : 5;
-    const reqCount = Object.keys(requests).length;
+    const reqCount = requests.length;
     const atCap = reqCount >= maxMeetings;
 
     // ── Filter config ──
@@ -526,47 +528,123 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
         return result;
     }, [delegates, searchQuery, activeFilters, sortField, sortDir]);
 
+    // ── Request lookups ──
+
+    // Requests indexed by the delegate they target (Salesforce id) for O(1)
+    // card lookups, and delegates indexed the same way so the drawer can map a
+    // request back to its delegate for display. Each just indexes a collection
+    // by a field it already has — no cross-id translation.
+    const requestByTarget = useMemo(() => {
+        const m = new Map<string, MeetingRequest>();
+        for (const r of requests) m.set(r.targetId, r);
+        return m;
+    }, [requests]);
+
+    const delegateBySf = useMemo(() => {
+        const m = new Map<string, Attendee>();
+        for (const d of delegates) m.set(d.salesforceId, d);
+        return m;
+    }, [delegates]);
+
     // ── Handlers ──
 
-    const postRequest = useCallback(
-        (targetId: string, rank: number) => {
+    // Load this sponsor's saved requests once.
+    useEffect(() => {
+        let active = true;
+        fetch("/api/requests")
+            .then((r) => (r.ok ? r.json() : { requests: [] }))
+            .then((data: { requests?: MeetingRequest[] }) => {
+                if (active) setRequests(data.requests ?? []);
+            })
+            .catch(console.error);
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    // Upsert a request for a delegate. `targetId` is the unique key per sponsor
+    // (one request per delegate), so a save replaces any existing entry for that
+    // target. New requests show optimistically; the server returns the saved row
+    // (with its real id) which then replaces the optimistic one. The requester
+    // is derived from the session server-side, so we only send the target id.
+    const saveRequest = useCallback(
+        async (target: Attendee, rank: number) => {
+            const isNew = !requestByTarget.has(target.salesforceId);
+            const replaceTarget =
+                (req: MeetingRequest) => (prev: MeetingRequest[]) => [
+                    ...prev.filter((r) => r.targetId !== target.salesforceId),
+                    req,
+                ];
+
+            // Optimistic add for brand-new requests (no id until the server
+            // responds). Re-ranks are left until the response so an error keeps
+            // the prior rank.
+            if (isNew) {
+                setRequests(
+                    replaceTarget({
+                        id: `temp:${target.salesforceId}`,
+                        requesterId: currentSponsor.salesforceId,
+                        targetId: target.salesforceId,
+                        rank,
+                    }),
+                );
+            }
+            try {
+                const res = await fetch("/api/requests", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        targetId: target.salesforceId,
+                        rank,
+                    }),
+                });
+                if (!res.ok) throw new Error(`save failed: ${res.status}`);
+                const { request } = (await res.json()) as {
+                    request: MeetingRequest;
+                };
+                setRequests(replaceTarget(request));
+            } catch (err) {
+                console.error(err);
+                // Roll back only the optimistic new entry; existing rows are
+                // untouched above, so there's nothing to restore for re-ranks.
+                if (isNew) {
+                    setRequests((prev) =>
+                        prev.filter(
+                            (r) => r.targetId !== target.salesforceId,
+                        ),
+                    );
+                }
+            }
+        },
+        [requestByTarget, currentSponsor.salesforceId],
+    );
+
+    // Remove a delegate's request: optimistically drop it, then tell the server.
+    const deleteRequest = useCallback(
+        (target: Attendee) => {
+            if (!requestByTarget.has(target.salesforceId)) return;
+            setRequests((prev) =>
+                prev.filter((r) => r.targetId !== target.salesforceId),
+            );
             fetch("/api/requests", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    requesterId: currentSponsor.id,
-                    targetId,
-                    rank,
+                    targetId: target.salesforceId,
+                    delete: true,
                 }),
             }).catch(console.error);
         },
-        [currentSponsor.id],
+        [requestByTarget],
     );
 
     const handleSelectRank = useCallback(
-        (delegateId: string, rank: number) => {
-            setRequests((prev) => ({ ...prev, [delegateId]: rank }));
+        (delegate: Attendee, rank: number) => {
             setPickingId(null);
-            postRequest(delegateId, rank);
+            saveRequest(delegate, rank);
         },
-        [postRequest],
+        [saveRequest],
     );
-
-    const handleDrawerRank = useCallback(
-        (delegateId: string, rank: number) => {
-            setRequests((prev) => ({ ...prev, [delegateId]: rank }));
-            postRequest(delegateId, rank);
-        },
-        [postRequest],
-    );
-
-    const handleRemoveRequest = useCallback((delegateId: string) => {
-        setRequests((prev) => {
-            const next = { ...prev };
-            delete next[delegateId];
-            return next;
-        });
-    }, []);
 
     const handleApplyFilter = useCallback(
         (
@@ -628,7 +706,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
     // ── Card action ──
 
     function renderCardAction(d: Attendee) {
-        const req = requests[d.id];
+        const req = requestByTarget.get(d.salesforceId);
         const isPicking = pickingId === d.id;
 
         if (req !== undefined && !isPicking) {
@@ -651,7 +729,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                 key={n}
                                 className="rank-pip"
                                 data-rank={n}
-                                onClick={() => handleSelectRank(d.id, n)}
+                                onClick={() => handleSelectRank(d, n)}
                             >
                                 {n}
                             </div>
@@ -686,7 +764,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
         return (
             <div className="card-grid">
                 {pool.map((d) => {
-                    const req = requests[d.id];
+                    const req = requestByTarget.get(d.salesforceId);
                     const capped = atCap && req === undefined;
                     const p = d.profile;
                     const rc = revClass(p.annualRevenue) || "rev-na";
@@ -773,7 +851,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                         ))}
                     </div>
                     {pool.map((d) => {
-                        const req = requests[d.id];
+                        const req = requestByTarget.get(d.salesforceId);
                         const isPicking = pickingId === d.id;
                         const capped = atCap && req === undefined;
                         const p = d.profile;
@@ -794,7 +872,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                             key={n}
                                             className="list-rank-pip"
                                             onClick={() =>
-                                                handleSelectRank(d.id, n)
+                                                handleSelectRank(d, n)
                                             }
                                         >
                                             {n}
@@ -896,7 +974,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
         return (
             <div className="hcard-list">
                 {pool.map((d) => {
-                    const req = requests[d.id];
+                    const req = requestByTarget.get(d.salesforceId);
                     const isPicking = pickingId === d.id;
                     const capped = atCap && req === undefined;
                     const p = d.profile;
@@ -921,7 +999,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                             key={n}
                                             className="hcard-rank-pip"
                                             onClick={() =>
-                                                handleSelectRank(d.id, n)
+                                                handleSelectRank(d, n)
                                             }
                                         >
                                             {n}
@@ -1044,9 +1122,9 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
 
     // ── Request drawer content ──
 
-    const drawerEntries = Object.entries(requests)
-        .map(([id, rank]) => ({ d: delegates.find((x) => x.id === id)!, rank }))
-        .filter((e) => e.d)
+    const drawerEntries = requests
+        .map((req) => ({ d: delegateBySf.get(req.targetId), rank: req.rank }))
+        .filter((e): e is { d: Attendee; rank: number } => Boolean(e.d))
         .sort((a, b) => b.rank - a.rank);
 
     const pkgLabel =
@@ -1287,8 +1365,8 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                 key={d.id}
                                 d={d}
                                 rank={rank}
-                                onRank={handleDrawerRank}
-                                onRemove={handleRemoveRequest}
+                                onRank={saveRequest}
+                                onRemove={deleteRequest}
                             />
                         ))
                     )}

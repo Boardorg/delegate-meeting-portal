@@ -23,6 +23,10 @@ export async function getEventCode(): Promise<string> {
     const session = await getSession();
     if (session?.eventCode) return session.eventCode;
 
+    // In mock mode there's no real Salesforce event; use a stable placeholder
+    // so code that keys off the event (e.g. saved requests) still works in dev.
+    if (process.env.USE_MOCK === "true") return "MOCK";
+
     throw new Error(
         "No event code available — set SF_EVENT_CODE or log in with an `?event=` query param.",
     );

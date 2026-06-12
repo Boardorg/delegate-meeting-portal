@@ -94,6 +94,7 @@ export const meetingRequests = pgTable(
         // Attendee.id of the delegate being requested.
         targetId: text("target_id").notNull(),
         rank: integer("rank").notNull(),
+        eventCode: text("event_code").notNull(),
         createdAt: timestamp("created_at", { withTimezone: true })
             .notNull()
             .defaultNow(),

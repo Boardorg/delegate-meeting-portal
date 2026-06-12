@@ -10,7 +10,7 @@ import { AttendeeSlot, MeetingRequest, ScheduledMeeting, Attendee } from '@/type
 export function pairKey(a: string, b: string): string {
 
 	// Sort the two IDs alphabetically so the key is the same regardless of which is passed first.
-	return [a, b].sort().join('+');
+	return [a, b].sort().join('|');
 }
 
 /**

@@ -125,3 +125,64 @@ describe('runScheduler — mutual pairs', () => {
         expect(schedule[0]).toMatchObject({ attendeeA: 's2', attendeeB: 'd1', mutual: true });
     });
 });
+
+describe('runScheduler — cap enforcement', () => {
+    test('does not schedule more than 7 meetings for a delegate across all passes', async () => {
+        // Generate 9 sponsors each requesting the same delegate at a unique time. d1 has 9 slots.
+        // Pass 2 (delegateCap: 3) + Pass 5 (delegateCap: 7) allow at most 7 total — the 9th is blocked.
+        const times     = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+        const sponsors  = times.map((t, i) =>
+            makeAttendee(`s${i + 1}`, `Co${i + 1}`, 'sponsor', [makeSlot(`s${i + 1}-d1-01`, 1, t)])
+        );
+        const d1        = makeAttendee('d1', 'Globex', 'delegate', times.map((t, i) =>
+            makeSlot(`d1-d1-${String(i + 1).padStart(2, '0')}`, 1, t)
+        ));
+        const requests  = sponsors.map(s => makeRequest(s.id, 'd1', 5));
+
+        const { schedule } = await runScheduler([...sponsors, d1], requests);
+
+        expect(schedule).toHaveLength(7);
+    });
+
+    test('schedules more meetings for a diamond sponsor than a standard sponsor', async () => {
+        // Diamond cap in Pass 5 is 10 and standard cap is 7.
+        // Each sponsor requests 10 unique delegates so the cap — not slot availability — is the constraint.
+
+        // Two sets of unique times: diamond slots are on the hour, standard on the half hour.
+        // Keeping them separate ensures the two sponsors never compete for the same delegate slots.
+        const diamondTimes  = Array.from({ length: 10 }, (_, i) => `${String(i + 9).padStart(2, '0')}:00`);
+        const standardTimes = Array.from({ length: 10 }, (_, i) => `${String(i + 9).padStart(2, '0')}:30`);
+
+        // Build the two sponsors with 10 slots each.
+        // The diamond sponsor's tier is overridden after makeAttendee since makeAttendee defaults to 'standard'.
+        const diamond  = { ...makeAttendee('sd', 'DiamondCo',  'sponsor', diamondTimes.map((t, i)  => makeSlot(`sd-d1-${String(i + 1).padStart(2, '0')}`, 1, t))), sponsorTier: 'diamond' as const };
+        const standard = makeAttendee('ss', 'StandardCo', 'sponsor', standardTimes.map((t, i) => makeSlot(`ss-d1-${String(i + 1).padStart(2, '0')}`, 1, t)));
+
+        // Each delegate has exactly one slot matching their sponsor's time,
+        // so each sponsor-delegate pair has exactly one possible meeting time.
+        const diamondDelegates  = diamondTimes.map((t, i) =>
+            makeAttendee(`dd${i + 1}`, `DDCo${i + 1}`, 'delegate', [makeSlot(`dd${i + 1}-d1-01`, 1, t)])
+        );
+        const standardDelegates = standardTimes.map((t, i) =>
+            makeAttendee(`ds${i + 1}`, `DSCo${i + 1}`, 'delegate', [makeSlot(`ds${i + 1}-d1-01`, 1, t)])
+        );
+
+        // Each sponsor requests all 10 of their delegates at rank 5.
+        const requests = [
+            ...diamondDelegates.map(d  => makeRequest('sd', d.id, 5)),
+            ...standardDelegates.map(d => makeRequest('ss', d.id, 5)),
+        ];
+
+        const { schedule } = await runScheduler(
+            [diamond, standard, ...diamondDelegates, ...standardDelegates],
+            requests
+        );
+
+        // Count how many meetings each sponsor ended up with and assert on the cap difference.
+        const diamondMeetings  = schedule.filter(m => m.attendeeA === 'sd').length;
+        const standardMeetings = schedule.filter(m => m.attendeeA === 'ss').length;
+
+        expect(diamondMeetings).toBe(10);
+        expect(standardMeetings).toBe(7);
+    });
+});

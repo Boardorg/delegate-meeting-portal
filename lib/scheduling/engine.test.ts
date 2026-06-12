@@ -53,6 +53,7 @@ function makeRequest(requesterId: string, targetId: string, rank: number): Meeti
 // Unit tests
 // ---------------------------------------------------------------------------
 
+// Meetings get scheduled when slots overlap and missing slots / requests produce nothing.
 describe('runScheduler — basic functionality', () => {
     test('schedules a meeting when a sponsor requests a delegate and they share an available slot', async () => {
         const sponsor   = makeAttendee('s1', 'Acme',   'sponsor',   [makeSlot('s1-d1-01', 1, '09:00')]);
@@ -85,6 +86,7 @@ describe('runScheduler — basic functionality', () => {
     });
 });
 
+// Mutual flag is set correctly and mutual pairs take priority over higher-ranked one-way requests.
 describe('runScheduler — mutual pairs', () => {
     test('marks a meeting as mutual when both parties requested each other', async () => {
         const sponsor   = makeAttendee('s1', 'Acme',   'sponsor',   [makeSlot('s1-d1-01', 1, '09:00')]);
@@ -126,6 +128,7 @@ describe('runScheduler — mutual pairs', () => {
     });
 });
 
+// Delegates are capped at 7 meetings total and diamond sponsors get a higher cap than standard.
 describe('runScheduler — cap enforcement', () => {
     test('does not schedule more than 7 meetings for a delegate across all passes', async () => {
         // Generate 9 sponsors each requesting the same delegate at a unique time. d1 has 9 slots.
@@ -184,5 +187,51 @@ describe('runScheduler — cap enforcement', () => {
 
         expect(diamondMeetings).toBe(10);
         expect(standardMeetings).toBe(7);
+    });
+});
+
+// Same-company cap blocks meetings once reached and sponsors from other companies are unaffected.
+describe('runScheduler — company diversity', () => {
+    test('blocks a third meeting when the delegate has already met the same-company cap', async () => {
+        // makeAttendee sets maxSameCompanyMeetings: 2, so the third Acme sponsor is blocked.
+        const s1 = makeAttendee('s1', 'Acme', 'sponsor', [makeSlot('s1-d1-01', 1, '09:00')]);
+        const s2 = makeAttendee('s2', 'Acme', 'sponsor', [makeSlot('s2-d1-01', 1, '10:00')]);
+        const s3 = makeAttendee('s3', 'Acme', 'sponsor', [makeSlot('s3-d1-01', 1, '11:00')]);
+        const d1 = makeAttendee('d1', 'Globex', 'delegate', [
+            makeSlot('d1-d1-01', 1, '09:00'),
+            makeSlot('d1-d1-02', 1, '10:00'),
+            makeSlot('d1-d1-03', 1, '11:00'),
+        ]);
+        const requests = [
+            makeRequest('s1', 'd1', 5),
+            makeRequest('s2', 'd1', 5),
+            makeRequest('s3', 'd1', 5),
+        ];
+
+        const { schedule } = await runScheduler([s1, s2, s3, d1], requests);
+
+        expect(schedule).toHaveLength(2);
+        expect(schedule.every(m => m.attendeeB === 'd1')).toBe(true);
+    });
+
+    test('does not block sponsors from different companies after the same-company cap is reached', async () => {
+        // s1 and s2 fill d1's Acme cap. s3 is from a different company and should still get through.
+        const s1 = makeAttendee('s1', 'Acme',   'sponsor', [makeSlot('s1-d1-01', 1, '09:00')]);
+        const s2 = makeAttendee('s2', 'Acme',   'sponsor', [makeSlot('s2-d1-01', 1, '10:00')]);
+        const s3 = makeAttendee('s3', 'Globex', 'sponsor', [makeSlot('s3-d1-01', 1, '11:00')]);
+        const d1 = makeAttendee('d1', 'Initech', 'delegate', [
+            makeSlot('d1-d1-01', 1, '09:00'),
+            makeSlot('d1-d1-02', 1, '10:00'),
+            makeSlot('d1-d1-03', 1, '11:00'),
+        ]);
+        const requests = [
+            makeRequest('s1', 'd1', 5),
+            makeRequest('s2', 'd1', 5),
+            makeRequest('s3', 'd1', 5),
+        ];
+
+        const { schedule } = await runScheduler([s1, s2, s3, d1], requests);
+
+        expect(schedule).toHaveLength(3);
     });
 });

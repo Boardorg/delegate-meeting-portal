@@ -153,8 +153,7 @@ export default function RequestsTable({
     );
 
     const onSortingChange: OnChangeFn<SortingState> = (updater) => {
-        const next =
-            typeof updater === "function" ? updater(sorting) : updater;
+        const next = typeof updater === "function" ? updater(sorting) : updater;
         const s = next[0] ?? { id: sortField, desc: true };
         router.push(
             hrefWith({
@@ -325,7 +324,7 @@ export default function RequestsTable({
                 <input
                     type="search"
                     className="users-input requests-search"
-                    placeholder="Search requester or target name…"
+                    placeholder="Search requester or target..."
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                 />
@@ -567,14 +566,30 @@ function RowFragment(props: RowFragmentProps) {
     return (
         <>
             <tr className="users-row">
-                <td>{r.requesterName}</td>
-                <td>{r.targetName}</td>
+                <td>
+                    <div className="req-party-name">{r.requesterName}</div>
+                    {r.requesterCompany && (
+                        <div className="req-party-company">
+                            {r.requesterCompany}
+                        </div>
+                    )}
+                </td>
+                <td>
+                    <div className="req-party-name">{r.targetName}</div>
+                    {r.targetCompany && (
+                        <div className="req-party-company">
+                            {r.targetCompany}
+                        </div>
+                    )}
+                </td>
                 <td>
                     {isEditing ? (
                         <select
                             className="users-input"
                             value={editRank}
-                            onChange={(e) => setEditRank(Number(e.target.value))}
+                            onChange={(e) =>
+                                setEditRank(Number(e.target.value))
+                            }
                             disabled={pending}
                         >
                             {RANKS.map((n) => (

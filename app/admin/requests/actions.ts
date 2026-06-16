@@ -45,7 +45,12 @@ function describeDbError(err: unknown): string {
  * Validates an interest level (rank). Returns null when valid, else a message.
  */
 function rankError(rank: unknown): string | null {
-    if (typeof rank !== "number" || !Number.isInteger(rank) || rank < 1 || rank > 5) {
+    if (
+        typeof rank !== "number" ||
+        !Number.isInteger(rank) ||
+        rank < 1 ||
+        rank > 5
+    ) {
         return "Error: interest level must be a whole number between 1 and 5";
     }
     return null;
@@ -78,7 +83,9 @@ export type RequestRow = {
     requesterId: string;
     targetId: string;
     requesterName: string;
+    requesterCompany: string;
     targetName: string;
+    targetCompany: string;
     rank: number;
     createdAt: Date;
     updatedAt: Date;
@@ -163,23 +170,31 @@ export async function listRequestsPage(
         attendeesBySalesforceId(params.eventCode),
     ]);
 
-    // Enrich with names (falling back to the raw id when unresolved).
-    let enriched: RequestRow[] = rows.map((r) => ({
-        id: r.id,
-        requesterId: r.requesterId,
-        targetId: r.targetId,
-        requesterName: attendees.get(r.requesterId)?.name || r.requesterId,
-        targetName: attendees.get(r.targetId)?.name || r.targetId,
-        rank: r.rank,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
-    }));
+    // Enrich with names + company (falling back to the raw id when unresolved).
+    let enriched: RequestRow[] = rows.map((r) => {
+        const requester = attendees.get(r.requesterId);
+        const target = attendees.get(r.targetId);
+        return {
+            id: r.id,
+            requesterId: r.requesterId,
+            targetId: r.targetId,
+            requesterName: requester?.name || r.requesterId,
+            requesterCompany: requester?.company ?? "",
+            targetName: target?.name || r.targetId,
+            targetCompany: target?.company ?? "",
+            rank: r.rank,
+            createdAt: r.createdAt,
+            updatedAt: r.updatedAt,
+        };
+    });
 
     if (q) {
         enriched = enriched.filter(
             (r) =>
                 r.requesterName.toLowerCase().includes(q) ||
-                r.targetName.toLowerCase().includes(q),
+                r.targetName.toLowerCase().includes(q) ||
+                r.requesterCompany.toLowerCase().includes(q) ||
+                r.targetCompany.toLowerCase().includes(q),
         );
     }
 

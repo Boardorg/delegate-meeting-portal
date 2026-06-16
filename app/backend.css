@@ -64,6 +64,10 @@
 .requests-sort-btn:hover { color:var(--text); }
 .requests-sort-ind { font-size:10px; color:var(--blue-b, #0070f3); width:8px; }
 
+/* Requester/target cell: name with company stacked beneath it. */
+.req-party-name { color:var(--text); }
+.req-party-company { font-size:11px; color:var(--t2); margin-top:1px; }
+
 /* Pagination footer. */
 .requests-pagination { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:4px; }
 .requests-page-info { font-size:12px; color:var(--t2); }

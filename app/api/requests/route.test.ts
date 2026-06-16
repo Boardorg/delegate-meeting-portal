@@ -27,6 +27,7 @@ import { POST, GET } from './route';
 import { getCurrentIdentity } from '@/lib/auth/currentUser';
 import { getEventCode } from '@/lib/helpers/getEventCode';
 import { db } from '@/lib/db/client';
+import { meetingRequests } from '@/lib/db/schema';
 
 // ---------------------------------------------------------------------------
 // Helpers for generating test data
@@ -94,6 +95,9 @@ describe('POST /api/requests — auth', () => {
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', rank: 3 }));
 
         expect(res.status).toBe(401);
+        expect(getEventCode).not.toHaveBeenCalled();
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(db.delete).not.toHaveBeenCalled();
     });
 
     test('returns 403 when the identity has no Salesforce id', async () => {
@@ -102,6 +106,9 @@ describe('POST /api/requests — auth', () => {
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', rank: 3 }));
 
         expect(res.status).toBe(403);
+        expect(getEventCode).not.toHaveBeenCalled();
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(db.delete).not.toHaveBeenCalled();
     });
 });
 
@@ -119,6 +126,9 @@ describe('POST /api/requests — body validation', () => {
 
         expect(res.status).toBe(400);
         expect(await res.json()).toMatchObject({ error: 'Invalid JSON body' });
+        expect(getEventCode).not.toHaveBeenCalled();
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(db.delete).not.toHaveBeenCalled();
     });
 
     test('returns 400 when targetId is missing', async () => {
@@ -128,6 +138,21 @@ describe('POST /api/requests — body validation', () => {
 
         expect(res.status).toBe(400);
         expect(await res.json()).toMatchObject({ error: expect.stringContaining('targetId') });
+        expect(getEventCode).not.toHaveBeenCalled();
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(db.delete).not.toHaveBeenCalled();
+    });
+
+    test('returns 400 when targetId is not a string', async () => {
+        // The route coerces non-string targetId to null and rejects it.
+        vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
+
+        const res = await POST(makePostRequest({ targetId: 123, rank: 3 }));
+
+        expect(res.status).toBe(400);
+        expect(getEventCode).not.toHaveBeenCalled();
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(db.delete).not.toHaveBeenCalled();
     });
 
     test('returns 400 when rank is missing for an upsert request', async () => {
@@ -137,6 +162,19 @@ describe('POST /api/requests — body validation', () => {
 
         expect(res.status).toBe(400);
         expect(await res.json()).toMatchObject({ error: expect.stringContaining('rank') });
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(db.delete).not.toHaveBeenCalled();
+    });
+
+    test('returns 400 when rank is a string instead of a number', async () => {
+        // Form-style or careless clients may send rank as "3" rather than 3.
+        vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
+
+        const res = await POST(makePostRequest({ targetId: 'sf-target-001', rank: '3' }));
+
+        expect(res.status).toBe(400);
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(db.delete).not.toHaveBeenCalled();
     });
 
     test('returns 400 when rank is below the minimum of 1', async () => {
@@ -145,6 +183,8 @@ describe('POST /api/requests — body validation', () => {
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', rank: 0 }));
 
         expect(res.status).toBe(400);
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(db.delete).not.toHaveBeenCalled();
     });
 
     test('returns 400 when rank is above the maximum of 5', async () => {
@@ -153,6 +193,8 @@ describe('POST /api/requests — body validation', () => {
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', rank: 6 }));
 
         expect(res.status).toBe(400);
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(db.delete).not.toHaveBeenCalled();
     });
 });
 
@@ -161,28 +203,25 @@ describe('POST /api/requests — DB operations', () => {
     test('deletes the row and returns { ok: true, deleted: true } when delete is true', async () => {
         vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
         // Delete chains: db.delete(table).where(condition)
-        // This mock gives db.delete(...) a fake .where(...) method that resolves successfully.
-        vi.mocked(db.delete).mockReturnValue({
-            where: vi.fn().mockResolvedValue(undefined),
-        } as any);
+        const whereMock = vi.fn().mockResolvedValue(undefined);
+        vi.mocked(db.delete).mockReturnValue({ where: whereMock } as any);
 
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', delete: true }));
 
         expect(res.status).toBe(200);
         expect(await res.json()).toEqual({ ok: true, deleted: true });
+        expect(vi.mocked(db.delete)).toHaveBeenCalledWith(meetingRequests);
+        expect(whereMock).toHaveBeenCalled();
     });
 
     test('upserts and returns the MeetingRequest on a valid request', async () => {
         vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
         // Upsert chains: db.insert(table).values({}).onConflictDoUpdate({}).returning()
-        // Each link returns the next link, and .returning() resolves with the row array.
-        vi.mocked(db.insert).mockReturnValue({
-            values: vi.fn().mockReturnValue({
-                onConflictDoUpdate: vi.fn().mockReturnValue({
-                    returning: vi.fn().mockResolvedValue([mockRow]),
-                }),
-            }),
-        } as any);
+        // Each step is named so we can assert on the arguments passed to it.
+        const returningMock = vi.fn().mockResolvedValue([mockRow]);
+        const onConflictDoUpdateMock = vi.fn().mockReturnValue({ returning: returningMock });
+        const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
+        vi.mocked(db.insert).mockReturnValue({ values: valuesMock } as any);
 
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', rank: 3 }));
         const json = await res.json();
@@ -193,6 +232,13 @@ describe('POST /api/requests — DB operations', () => {
             requesterId: 'sf-requester-001',
             targetId: 'sf-target-001',
             rank: 3,
+        });
+        expect(vi.mocked(db.insert)).toHaveBeenCalledWith(meetingRequests);
+        expect(valuesMock).toHaveBeenCalledWith({
+            requesterId: 'sf-requester-001',
+            targetId: 'sf-target-001',
+            rank: 3,
+            eventCode: 'PARTY1999',
         });
     });
 });
@@ -205,6 +251,8 @@ describe('GET /api/requests', () => {
         const res = await GET();
 
         expect(res.status).toBe(401);
+        expect(getEventCode).not.toHaveBeenCalled();
+        expect(db.select).not.toHaveBeenCalled();
     });
 
     test('returns an empty array when the identity has no Salesforce id', async () => {
@@ -217,17 +265,15 @@ describe('GET /api/requests', () => {
 
         expect(res.status).toBe(200);
         expect(json.requests).toEqual([]);
+        expect(db.select).not.toHaveBeenCalled();
     });
 
     test('returns the list of requests for the authenticated user', async () => {
         vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
         // Select chains: db.select().from(table).where(condition)
-        // Resolves with rows.
-        vi.mocked(db.select).mockReturnValue({
-            from: vi.fn().mockReturnValue({
-                where: vi.fn().mockResolvedValue([mockRow]),
-            }),
-        } as any);
+        const whereMock = vi.fn().mockResolvedValue([mockRow]);
+        const fromMock = vi.fn().mockReturnValue({ where: whereMock });
+        vi.mocked(db.select).mockReturnValue({ from: fromMock } as any);
 
         const res = await GET();
         const json = await res.json();
@@ -240,6 +286,7 @@ describe('GET /api/requests', () => {
             targetId: 'sf-target-001',
             rank: 3,
         });
+        expect(fromMock).toHaveBeenCalledWith(meetingRequests);
     });
 
     test('returns an empty array when the user has no requests yet', async () => {

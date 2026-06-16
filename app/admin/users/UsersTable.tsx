@@ -1,8 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+    flexRender,
+    getCoreRowModel,
+    useReactTable,
+    type ColumnDef,
+    type OnChangeFn,
+    type PaginationState,
+} from "@tanstack/react-table";
 import type { User } from "@/lib/db/schema";
-import { createUser, updateUser, deleteUser } from "./actions";
+import { createUser, updateUser, deleteUser, type UsersPage } from "./actions";
 
 // ---------------------------------------------------------------------------
 // UsersTable — interactive admin table.
@@ -17,7 +26,7 @@ import { createUser, updateUser, deleteUser } from "./actions";
 // ---------------------------------------------------------------------------
 
 type Props = {
-    users: User[];
+    data: UsersPage;
 };
 
 // Local form state for both the inline edit form and the new-user row. Kept
@@ -29,6 +38,8 @@ type EditDraft = {
     username: string;
     role: "admin" | "user" | "sponsor";
 };
+
+const COL_COUNT = 7;
 
 /**
  * Builds an EditDraft pre-filled from a row. Nulls become empty strings so
@@ -63,7 +74,7 @@ function fmtDate(d: Date | null): string {
     });
 }
 
-export default function UsersTable({ users }: Props) {
+export default function UsersTable({ data }: Props) {
     // ── Edit state ─────────────────────────────────────────────────────────
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
@@ -84,6 +95,52 @@ export default function UsersTable({ users }: Props) {
     // useTransition makes the server-action calls non-blocking for the UI
     // and exposes a `pending` flag for disabling inputs / showing spinners.
     const [pending, startTransition] = useTransition();
+
+    const router = useRouter();
+    const pathname = usePathname();
+
+    function hrefWith(overrides: { page?: number }): string {
+        const params = new URLSearchParams();
+        const page = overrides.page ?? data.page;
+        if (page > 1) params.set("page", String(page));
+        const qs = params.toString();
+        return qs ? `${pathname}?${qs}` : pathname;
+    }
+
+    // ── TanStack table (header rendering + manual pagination) ──────────────
+    const columns = useMemo<ColumnDef<User>[]>(
+        () => [
+            { id: "email", header: "Email" },
+            { id: "phone", header: "Phone" },
+            { id: "username", header: "Username" },
+            { id: "role", header: "Role" },
+            { id: "created", header: "Created" },
+            { id: "lastLogin", header: "Last login" },
+            { id: "actions", header: "Actions" },
+        ],
+        [],
+    );
+
+    const pagination = useMemo<PaginationState>(
+        () => ({ pageIndex: data.page - 1, pageSize: data.pageSize }),
+        [data.page, data.pageSize],
+    );
+
+    const onPaginationChange: OnChangeFn<PaginationState> = (updater) => {
+        const next =
+            typeof updater === "function" ? updater(pagination) : updater;
+        router.push(hrefWith({ page: next.pageIndex + 1 }));
+    };
+
+    const table = useReactTable({
+        data: data.rows,
+        columns,
+        getCoreRowModel: getCoreRowModel(),
+        manualPagination: true,
+        pageCount: data.pageCount,
+        state: { pagination },
+        onPaginationChange,
+    });
 
     // ── Handlers ───────────────────────────────────────────────────────────
 
@@ -254,15 +311,25 @@ export default function UsersTable({ users }: Props) {
 
             <table className="users-table">
                 <thead>
-                    <tr>
-                        <th>Email</th>
-                        <th>Phone</th>
-                        <th>Username</th>
-                        <th>Role</th>
-                        <th>Created</th>
-                        <th>Last login</th>
-                        <th className="users-actions-col">Actions</th>
-                    </tr>
+                    {table.getHeaderGroups().map((hg) => (
+                        <tr key={hg.id}>
+                            {hg.headers.map((header) => (
+                                <th
+                                    key={header.id}
+                                    className={
+                                        header.column.id === "actions"
+                                            ? "users-actions-col"
+                                            : undefined
+                                    }
+                                >
+                                    {flexRender(
+                                        header.column.columnDef.header,
+                                        header.getContext(),
+                                    )}
+                                </th>
+                            ))}
+                        </tr>
+                    ))}
                 </thead>
                 <tbody>
                     {creating && (
@@ -294,20 +361,20 @@ export default function UsersTable({ users }: Props) {
                             </tr>
                             {rowError?.id === "new" && (
                                 <tr className="users-row-error">
-                                    <td colSpan={7}>{rowError.message}</td>
+                                    <td colSpan={COL_COUNT}>{rowError.message}</td>
                                 </tr>
                             )}
                         </>
                     )}
 
-                    {users.length === 0 && !creating ? (
+                    {data.rows.length === 0 && !creating ? (
                         <tr>
-                            <td colSpan={7} className="users-empty">
+                            <td colSpan={COL_COUNT} className="users-empty">
                                 No users yet.
                             </td>
                         </tr>
                     ) : (
-                        users.map((u) => {
+                        data.rows.map((u) => {
                             const isEditing = editingId === u.id;
                             const isConfirming = confirmDeleteId === u.id;
                             return (
@@ -338,6 +405,31 @@ export default function UsersTable({ users }: Props) {
                     )}
                 </tbody>
             </table>
+
+            <div className="requests-pagination">
+                <span className="requests-page-info">
+                    {data.total} user{data.total !== 1 ? "s" : ""} · Page{" "}
+                    {data.page} of {data.pageCount}
+                </span>
+                <div className="requests-page-btns">
+                    <button
+                        type="button"
+                        className="users-btn"
+                        onClick={() => table.previousPage()}
+                        disabled={!table.getCanPreviousPage() || pending}
+                    >
+                        ← Prev
+                    </button>
+                    <button
+                        type="button"
+                        className="users-btn"
+                        onClick={() => table.nextPage()}
+                        disabled={!table.getCanNextPage() || pending}
+                    >
+                        Next →
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
@@ -470,7 +562,7 @@ function RowFragment(props: RowFragmentProps) {
             </tr>
             {rowError?.id === u.id && (
                 <tr className="users-row-error">
-                    <td colSpan={7}>{rowError.message}</td>
+                    <td colSpan={COL_COUNT}>{rowError.message}</td>
                 </tr>
             )}
         </>

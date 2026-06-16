@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, type User } from "@/lib/db/schema";
 import { normalizePhone } from "@/lib/auth/phone";
@@ -144,6 +144,43 @@ function describeDbError(err: unknown): string {
  */
 export async function listUsers(): Promise<User[]> {
     return db.select().from(users).orderBy(users.created);
+}
+
+/** A page of users plus the totals the table needs. */
+export type UsersPage = {
+    rows: User[];
+    total: number;
+    page: number;
+    pageSize: number;
+    pageCount: number;
+};
+
+/**
+ * Returns one page of users, oldest-first. `page` is 1-based.
+ *
+ * @param {{ page?: number; pageSize?: number }} params - Page number and size.
+ * @returns {Promise<UsersPage>} The page of rows plus totals.
+ */
+export async function listUsersPage(params: {
+    page?: number;
+    pageSize?: number;
+}): Promise<UsersPage> {
+    const pageSize = params.pageSize ?? 25;
+
+    const [{ total }] = await db.select({ total: count() }).from(users);
+
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(Math.max(1, params.page ?? 1), pageCount);
+    const offset = (page - 1) * pageSize;
+
+    const rows = await db
+        .select()
+        .from(users)
+        .orderBy(users.created)
+        .limit(pageSize)
+        .offset(offset);
+
+    return { rows, total, page, pageSize, pageCount };
 }
 
 // ---------------------------------------------------------------------------

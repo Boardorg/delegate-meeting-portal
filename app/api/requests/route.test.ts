@@ -202,7 +202,7 @@ describe('POST /api/requests — body validation', () => {
 describe('POST /api/requests — DB operations', () => {
     test('deletes the row and returns { ok: true, deleted: true } when delete is true', async () => {
         vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
-        // Delete chains: db.delete(table).where(condition)
+        // Build the mock delete chain: db.delete(table).where(condition)
         const whereMock = vi.fn().mockResolvedValue(undefined);
         vi.mocked(db.delete).mockReturnValue({ where: whereMock } as any);
 
@@ -216,7 +216,7 @@ describe('POST /api/requests — DB operations', () => {
 
     test('upserts and returns the MeetingRequest on a valid request', async () => {
         vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
-        // Upsert chains: db.insert(table).values({}).onConflictDoUpdate({}).returning()
+        // Build mock upsert chain: db.insert(table).values({}).onConflictDoUpdate({}).returning()
         // Each step is named so we can assert on the arguments passed to it.
         const returningMock = vi.fn().mockResolvedValue([mockRow]);
         const onConflictDoUpdateMock = vi.fn().mockReturnValue({ returning: returningMock });
@@ -270,7 +270,7 @@ describe('GET /api/requests', () => {
 
     test('returns the list of requests for the authenticated user', async () => {
         vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
-        // Select chains: db.select().from(table).where(condition)
+        // Build mock select chain: db.select().from(table).where(condition)
         const whereMock = vi.fn().mockResolvedValue([mockRow]);
         const fromMock = vi.fn().mockReturnValue({ where: whereMock });
         vi.mocked(db.select).mockReturnValue({ from: fromMock } as any);

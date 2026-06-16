@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-    flexRender,
     getCoreRowModel,
     useReactTable,
     type ColumnDef,
@@ -11,6 +10,10 @@ import {
     type PaginationState,
     type SortingState,
 } from "@tanstack/react-table";
+import { useDebounce } from "use-debounce";
+import { fmtDateTime } from "@/lib/format";
+import { SortableHeaders } from "../_components/SortableHeaders";
+import { TablePagination } from "../_components/TablePagination";
 import {
     createRequest,
     updateRequest,
@@ -26,8 +29,10 @@ import {
 // Event, search (q), sort, and page all live in the URL; the server renders
 // one page at a time. TanStack Table runs in manual mode (manualSorting +
 // manualPagination): it owns the header sort UI and pagination controls and
-// pushes every change to the URL, which re-runs the server query. The inline
-// create/edit/delete UI is the same pattern as /admin/users.
+// pushes every change to the URL, which re-runs the server query. The header
+// and footer come from the shared SortableHeaders / TablePagination
+// components; the inline create/edit/delete UI is the same pattern as
+// /admin/users.
 // ---------------------------------------------------------------------------
 
 type Props = {
@@ -51,35 +56,6 @@ const COL_COUNT = 6;
 
 function emptyDraft(): NewDraft {
     return { requesterId: "", targetId: "", rank: 5 };
-}
-
-/**
- * Formats a timestamp as `m/d/yyyy, h:mm AM`.
- */
-function fmtDateTime(d: Date): string {
-    return d.toLocaleString("en-US", {
-        month: "numeric",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-    });
-}
-
-/**
- * Debounces a value so the live search navigates only after typing pauses.
- *
- * @param {T} value - The value to debounce.
- * @param {number} delay - Quiet period in ms.
- * @returns {T} The debounced value.
- */
-function useDebounced<T>(value: T, delay: number): T {
-    const [debounced, setDebounced] = useState(value);
-    useEffect(() => {
-        const t = setTimeout(() => setDebounced(value), delay);
-        return () => clearTimeout(t);
-    }, [value, delay]);
-    return debounced;
 }
 
 export default function RequestsTable({
@@ -123,7 +99,7 @@ export default function RequestsTable({
     const [searchInput, setSearchInput] = useState(query);
     // Resync when the URL changes externally (back/forward, event switch).
     useEffect(() => setSearchInput(query), [query]);
-    const debouncedSearch = useDebounced(searchInput, 300);
+    const [debouncedSearch] = useDebounce(searchInput, 300);
     useEffect(() => {
         if (debouncedSearch.trim() === query.trim()) return;
         router.push(hrefWith({ q: debouncedSearch, page: 1 }));
@@ -283,12 +259,12 @@ export default function RequestsTable({
     // ── Render ─────────────────────────────────────────────────────────────────
 
     return (
-        <div className="users-page">
-            <div className="users-page-head">
-                <h1 className="users-page-title">Meeting requests</h1>
+        <div className="adm-page">
+            <div className="adm-page-head">
+                <h1 className="adm-page-title">Meeting requests</h1>
                 <button
                     type="button"
-                    className="users-new-btn"
+                    className="adm-new-btn"
                     onClick={beginCreate}
                     disabled={creating || pending || !selectedEvent}
                     title={
@@ -301,11 +277,11 @@ export default function RequestsTable({
                 </button>
             </div>
 
-            <div className="requests-toolbar">
-                <label className="requests-field">
-                    <span className="requests-field-label">Event</span>
+            <div className="adm-toolbar">
+                <label className="adm-field">
+                    <span className="adm-field-label">Event</span>
                     <select
-                        className="users-input requests-select"
+                        className="adm-input adm-select"
                         value={selectedEvent ?? ""}
                         onChange={(e) => changeEvent(e.target.value)}
                         disabled={eventCodes.length === 0}
@@ -323,68 +299,23 @@ export default function RequestsTable({
                 </label>
                 <input
                     type="search"
-                    className="users-input requests-search"
-                    placeholder="Search requester or target..."
+                    className="adm-input adm-search"
+                    placeholder="Search requester or target name / company…"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                 />
             </div>
 
-            <table className="users-table">
-                <thead>
-                    {table.getHeaderGroups().map((hg) => (
-                        <tr key={hg.id}>
-                            {hg.headers.map((header) => {
-                                const canSort = header.column.getCanSort();
-                                const sorted = header.column.getIsSorted();
-                                return (
-                                    <th
-                                        key={header.id}
-                                        className={
-                                            header.column.id === "actions"
-                                                ? "users-actions-col"
-                                                : undefined
-                                        }
-                                    >
-                                        {canSort ? (
-                                            <button
-                                                type="button"
-                                                className="requests-sort-btn"
-                                                onClick={header.column.getToggleSortingHandler()}
-                                            >
-                                                {flexRender(
-                                                    header.column.columnDef
-                                                        .header,
-                                                    header.getContext(),
-                                                )}
-                                                <span className="requests-sort-ind">
-                                                    {sorted === "asc"
-                                                        ? "↑"
-                                                        : sorted === "desc"
-                                                          ? "↓"
-                                                          : ""}
-                                                </span>
-                                            </button>
-                                        ) : (
-                                            flexRender(
-                                                header.column.columnDef.header,
-                                                header.getContext(),
-                                            )
-                                        )}
-                                    </th>
-                                );
-                            })}
-                        </tr>
-                    ))}
-                </thead>
+            <table className="adm-table">
+                <SortableHeaders table={table} />
                 <tbody>
                     {creating && (
                         <>
-                            <tr className="users-row users-row-new">
+                            <tr className="adm-row adm-row-new">
                                 <td>
                                     <input
                                         type="text"
-                                        className="users-input"
+                                        className="adm-input"
                                         value={newDraft.requesterId}
                                         onChange={(e) =>
                                             setNewDraft({
@@ -399,7 +330,7 @@ export default function RequestsTable({
                                 <td>
                                     <input
                                         type="text"
-                                        className="users-input"
+                                        className="adm-input"
                                         value={newDraft.targetId}
                                         onChange={(e) =>
                                             setNewDraft({
@@ -413,7 +344,7 @@ export default function RequestsTable({
                                 </td>
                                 <td>
                                     <select
-                                        className="users-input"
+                                        className="adm-input"
                                         value={newDraft.rank}
                                         onChange={(e) =>
                                             setNewDraft({
@@ -432,11 +363,11 @@ export default function RequestsTable({
                                 </td>
                                 <td>—</td>
                                 <td>—</td>
-                                <td className="users-actions-cell">
-                                    <div className="users-actions-inner">
+                                <td className="adm-actions-cell">
+                                    <div className="adm-actions-inner">
                                         <button
                                             type="button"
-                                            className="users-btn users-btn-primary"
+                                            className="adm-btn adm-btn-primary"
                                             onClick={saveCreate}
                                             disabled={pending}
                                         >
@@ -444,7 +375,7 @@ export default function RequestsTable({
                                         </button>
                                         <button
                                             type="button"
-                                            className="users-btn"
+                                            className="adm-btn"
                                             onClick={cancelCreate}
                                             disabled={pending}
                                         >
@@ -454,7 +385,7 @@ export default function RequestsTable({
                                 </td>
                             </tr>
                             {rowError?.id === "new" && (
-                                <tr className="users-row-error">
+                                <tr className="adm-row-error">
                                     <td colSpan={COL_COUNT}>
                                         {rowError.message}
                                     </td>
@@ -465,7 +396,7 @@ export default function RequestsTable({
 
                     {data.rows.length === 0 && !creating ? (
                         <tr>
-                            <td colSpan={COL_COUNT} className="users-empty">
+                            <td colSpan={COL_COUNT} className="adm-empty">
                                 {query
                                     ? "No requests match your search."
                                     : "No requests for this event."}
@@ -497,30 +428,12 @@ export default function RequestsTable({
                 </tbody>
             </table>
 
-            <div className="requests-pagination">
-                <span className="requests-page-info">
-                    {data.total} request{data.total !== 1 ? "s" : ""} · Page{" "}
-                    {data.page} of {data.pageCount}
-                </span>
-                <div className="requests-page-btns">
-                    <button
-                        type="button"
-                        className="users-btn"
-                        onClick={() => table.previousPage()}
-                        disabled={!table.getCanPreviousPage() || pending}
-                    >
-                        ← Prev
-                    </button>
-                    <button
-                        type="button"
-                        className="users-btn"
-                        onClick={() => table.nextPage()}
-                        disabled={!table.getCanNextPage() || pending}
-                    >
-                        Next →
-                    </button>
-                </div>
-            </div>
+            <TablePagination
+                table={table}
+                total={data.total}
+                noun="request"
+                busy={pending}
+            />
         </div>
     );
 }
@@ -565,19 +478,19 @@ function RowFragment(props: RowFragmentProps) {
 
     return (
         <>
-            <tr className="users-row">
+            <tr className="adm-row">
                 <td>
-                    <div className="req-party-name">{r.requesterName}</div>
+                    <div className="adm-party-name">{r.requesterName}</div>
                     {r.requesterCompany && (
-                        <div className="req-party-company">
+                        <div className="adm-party-company">
                             {r.requesterCompany}
                         </div>
                     )}
                 </td>
                 <td>
-                    <div className="req-party-name">{r.targetName}</div>
+                    <div className="adm-party-name">{r.targetName}</div>
                     {r.targetCompany && (
-                        <div className="req-party-company">
+                        <div className="adm-party-company">
                             {r.targetCompany}
                         </div>
                     )}
@@ -585,7 +498,7 @@ function RowFragment(props: RowFragmentProps) {
                 <td>
                     {isEditing ? (
                         <select
-                            className="users-input"
+                            className="adm-input"
                             value={editRank}
                             onChange={(e) =>
                                 setEditRank(Number(e.target.value))
@@ -604,13 +517,13 @@ function RowFragment(props: RowFragmentProps) {
                 </td>
                 <td>{fmtDateTime(r.createdAt)}</td>
                 <td>{fmtDateTime(r.updatedAt)}</td>
-                <td className="users-actions-cell">
-                    <div className="users-actions-inner">
+                <td className="adm-actions-cell">
+                    <div className="adm-actions-inner">
                         {isEditing ? (
                             <>
                                 <button
                                     type="button"
-                                    className="users-btn users-btn-primary"
+                                    className="adm-btn adm-btn-primary"
                                     onClick={saveEdit}
                                     disabled={pending}
                                 >
@@ -618,7 +531,7 @@ function RowFragment(props: RowFragmentProps) {
                                 </button>
                                 <button
                                     type="button"
-                                    className="users-btn"
+                                    className="adm-btn"
                                     onClick={cancelEdit}
                                     disabled={pending}
                                 >
@@ -627,12 +540,12 @@ function RowFragment(props: RowFragmentProps) {
                             </>
                         ) : isConfirming ? (
                             <>
-                                <span className="users-confirm-label">
+                                <span className="adm-confirm-label">
                                     Delete?
                                 </span>
                                 <button
                                     type="button"
-                                    className="users-btn users-btn-danger"
+                                    className="adm-btn adm-btn-danger"
                                     onClick={confirmDelete}
                                     disabled={pending}
                                 >
@@ -640,7 +553,7 @@ function RowFragment(props: RowFragmentProps) {
                                 </button>
                                 <button
                                     type="button"
-                                    className="users-btn"
+                                    className="adm-btn"
                                     onClick={cancelDelete}
                                     disabled={pending}
                                 >
@@ -651,7 +564,7 @@ function RowFragment(props: RowFragmentProps) {
                             <>
                                 <button
                                     type="button"
-                                    className="users-btn"
+                                    className="adm-btn"
                                     onClick={beginEdit}
                                     disabled={pending}
                                 >
@@ -659,7 +572,7 @@ function RowFragment(props: RowFragmentProps) {
                                 </button>
                                 <button
                                     type="button"
-                                    className="users-btn users-btn-danger"
+                                    className="adm-btn adm-btn-danger"
                                     onClick={askDelete}
                                     disabled={pending}
                                 >
@@ -671,7 +584,7 @@ function RowFragment(props: RowFragmentProps) {
                 </td>
             </tr>
             {rowError?.id === r.id && (
-                <tr className="users-row-error">
+                <tr className="adm-row-error">
                     <td colSpan={COL_COUNT}>{rowError.message}</td>
                 </tr>
             )}

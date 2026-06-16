@@ -1,6 +1,8 @@
+import { emptyPage } from "@/lib/admin/pagination";
 import {
     listRequestEventCodes,
     listRequestsPage,
+    type RequestRow,
     type RequestSortField,
     type RequestsPage,
 } from "./actions";
@@ -65,7 +67,7 @@ export default async function AdminRequestsPage({
               sortDir,
               page,
           })
-        : { rows: [], total: 0, page: 1, pageSize: 25, pageCount: 1 };
+        : emptyPage<RequestRow>();
 
     return (
         <RequestsTable

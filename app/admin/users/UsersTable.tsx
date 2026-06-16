@@ -3,7 +3,6 @@
 import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-    flexRender,
     getCoreRowModel,
     useReactTable,
     type ColumnDef,
@@ -11,7 +10,15 @@ import {
     type PaginationState,
 } from "@tanstack/react-table";
 import type { User } from "@/lib/db/schema";
-import { createUser, updateUser, deleteUser, type UsersPage } from "./actions";
+import { fmtDate } from "@/lib/format";
+import { SortableHeaders } from "../_components/SortableHeaders";
+import { TablePagination } from "../_components/TablePagination";
+import {
+    createUser,
+    updateUser,
+    deleteUser,
+    type UsersPage,
+} from "./actions";
 
 // ---------------------------------------------------------------------------
 // UsersTable — interactive admin table.
@@ -20,9 +27,10 @@ import { createUser, updateUser, deleteUser, type UsersPage } from "./actions";
 // component owns the per-row UI state (which row is editing, which row is
 // pending deletion confirmation, whether the new-user row is open).
 //
-// Mutations call the server actions through useTransition so the row can
-// disable inputs while the request is in flight; on success Next.js
-// re-renders the page via revalidatePath('/admin/users').
+// Pagination is URL-driven: TanStack runs in manual mode and pushes the new
+// page to the query string, which re-runs the page's server query. The
+// header and footer come from the shared SortableHeaders / TablePagination
+// components (also used by /admin/requests).
 // ---------------------------------------------------------------------------
 
 type Props = {
@@ -61,20 +69,10 @@ function emptyDraft(): EditDraft {
     return { email: "", phone: "", username: "", role: "admin" };
 }
 
-/**
- * Formats a timestamp column for display as m/d/yyyy. Returns "—" for null so
- * the never-logged-in case is obvious at a glance.
- */
-function fmtDate(d: Date | null): string {
-    if (!d) return "—";
-    return d.toLocaleDateString("en-US", {
-        month: "numeric",
-        day: "numeric",
-        year: "numeric",
-    });
-}
-
 export default function UsersTable({ data }: Props) {
+    const router = useRouter();
+    const pathname = usePathname();
+
     // ── Edit state ─────────────────────────────────────────────────────────
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
@@ -96,9 +94,7 @@ export default function UsersTable({ data }: Props) {
     // and exposes a `pending` flag for disabling inputs / showing spinners.
     const [pending, startTransition] = useTransition();
 
-    const router = useRouter();
-    const pathname = usePathname();
-
+    /** Builds a table URL carrying the page (the table's only URL state). */
     function hrefWith(overrides: { page?: number }): string {
         const params = new URLSearchParams();
         const page = overrides.page ?? data.page;
@@ -238,7 +234,7 @@ export default function UsersTable({ data }: Props) {
                 <td>
                     <input
                         type="email"
-                        className="users-input"
+                        className="adm-input"
                         value={draft.email}
                         onChange={(e) =>
                             setDraft({ ...draft, email: e.target.value })
@@ -250,7 +246,7 @@ export default function UsersTable({ data }: Props) {
                 <td>
                     <input
                         type="tel"
-                        className="users-input"
+                        className="adm-input"
                         value={draft.phone}
                         onChange={(e) =>
                             setDraft({ ...draft, phone: e.target.value })
@@ -263,7 +259,7 @@ export default function UsersTable({ data }: Props) {
                 <td>
                     <input
                         type="text"
-                        className="users-input"
+                        className="adm-input"
                         value={draft.username}
                         onChange={(e) =>
                             setDraft({ ...draft, username: e.target.value })
@@ -274,7 +270,7 @@ export default function UsersTable({ data }: Props) {
                 </td>
                 <td>
                     <select
-                        className="users-input"
+                        className="adm-input"
                         value={draft.role}
                         onChange={(e) =>
                             setDraft({
@@ -296,12 +292,12 @@ export default function UsersTable({ data }: Props) {
     // ── JSX ────────────────────────────────────────────────────────────────
 
     return (
-        <div className="users-page">
-            <div className="users-page-head">
-                <h1 className="users-page-title">Users</h1>
+        <div className="adm-page">
+            <div className="adm-page-head">
+                <h1 className="adm-page-title">Users</h1>
                 <button
                     type="button"
-                    className="users-new-btn"
+                    className="adm-new-btn"
                     onClick={beginCreate}
                     disabled={creating || pending}
                 >
@@ -309,40 +305,20 @@ export default function UsersTable({ data }: Props) {
                 </button>
             </div>
 
-            <table className="users-table">
-                <thead>
-                    {table.getHeaderGroups().map((hg) => (
-                        <tr key={hg.id}>
-                            {hg.headers.map((header) => (
-                                <th
-                                    key={header.id}
-                                    className={
-                                        header.column.id === "actions"
-                                            ? "users-actions-col"
-                                            : undefined
-                                    }
-                                >
-                                    {flexRender(
-                                        header.column.columnDef.header,
-                                        header.getContext(),
-                                    )}
-                                </th>
-                            ))}
-                        </tr>
-                    ))}
-                </thead>
+            <table className="adm-table">
+                <SortableHeaders table={table} />
                 <tbody>
                     {creating && (
                         <>
-                            <tr className="users-row users-row-new">
+                            <tr className="adm-row adm-row-new">
                                 {renderEditCells(newDraft, setNewDraft, true)}
                                 <td>—</td>
                                 <td>—</td>
-                                <td className="users-actions-cell">
-                                    <div className="users-actions-inner">
+                                <td className="adm-actions-cell">
+                                    <div className="adm-actions-inner">
                                         <button
                                             type="button"
-                                            className="users-btn users-btn-primary"
+                                            className="adm-btn adm-btn-primary"
                                             onClick={saveCreate}
                                             disabled={pending}
                                         >
@@ -350,7 +326,7 @@ export default function UsersTable({ data }: Props) {
                                         </button>
                                         <button
                                             type="button"
-                                            className="users-btn"
+                                            className="adm-btn"
                                             onClick={cancelCreate}
                                             disabled={pending}
                                         >
@@ -360,8 +336,10 @@ export default function UsersTable({ data }: Props) {
                                 </td>
                             </tr>
                             {rowError?.id === "new" && (
-                                <tr className="users-row-error">
-                                    <td colSpan={COL_COUNT}>{rowError.message}</td>
+                                <tr className="adm-row-error">
+                                    <td colSpan={COL_COUNT}>
+                                        {rowError.message}
+                                    </td>
                                 </tr>
                             )}
                         </>
@@ -369,7 +347,7 @@ export default function UsersTable({ data }: Props) {
 
                     {data.rows.length === 0 && !creating ? (
                         <tr>
-                            <td colSpan={COL_COUNT} className="users-empty">
+                            <td colSpan={COL_COUNT} className="adm-empty">
                                 No users yet.
                             </td>
                         </tr>
@@ -406,30 +384,12 @@ export default function UsersTable({ data }: Props) {
                 </tbody>
             </table>
 
-            <div className="requests-pagination">
-                <span className="requests-page-info">
-                    {data.total} user{data.total !== 1 ? "s" : ""} · Page{" "}
-                    {data.page} of {data.pageCount}
-                </span>
-                <div className="requests-page-btns">
-                    <button
-                        type="button"
-                        className="users-btn"
-                        onClick={() => table.previousPage()}
-                        disabled={!table.getCanPreviousPage() || pending}
-                    >
-                        ← Prev
-                    </button>
-                    <button
-                        type="button"
-                        className="users-btn"
-                        onClick={() => table.nextPage()}
-                        disabled={!table.getCanNextPage() || pending}
-                    >
-                        Next →
-                    </button>
-                </div>
-            </div>
+            <TablePagination
+                table={table}
+                total={data.total}
+                noun="user"
+                busy={pending}
+            />
         </div>
     );
 }
@@ -481,7 +441,7 @@ function RowFragment(props: RowFragmentProps) {
 
     return (
         <>
-            <tr className="users-row">
+            <tr className="adm-row">
                 {isEditing && editDraft ? (
                     renderEditCells(editDraft, setEditDraft, true)
                 ) : (
@@ -494,13 +454,13 @@ function RowFragment(props: RowFragmentProps) {
                 )}
                 <td>{fmtDate(u.created)}</td>
                 <td>{fmtDate(u.lastLogin)}</td>
-                <td className="users-actions-cell">
-                    <div className="users-actions-inner">
+                <td className="adm-actions-cell">
+                    <div className="adm-actions-inner">
                         {isEditing ? (
                             <>
                                 <button
                                     type="button"
-                                    className="users-btn users-btn-primary"
+                                    className="adm-btn adm-btn-primary"
                                     onClick={saveEdit}
                                     disabled={pending}
                                 >
@@ -508,7 +468,7 @@ function RowFragment(props: RowFragmentProps) {
                                 </button>
                                 <button
                                     type="button"
-                                    className="users-btn"
+                                    className="adm-btn"
                                     onClick={cancelEdit}
                                     disabled={pending}
                                 >
@@ -517,12 +477,12 @@ function RowFragment(props: RowFragmentProps) {
                             </>
                         ) : isConfirming ? (
                             <>
-                                <span className="users-confirm-label">
+                                <span className="adm-confirm-label">
                                     Delete?
                                 </span>
                                 <button
                                     type="button"
-                                    className="users-btn users-btn-danger"
+                                    className="adm-btn adm-btn-danger"
                                     onClick={confirmDelete}
                                     disabled={pending}
                                 >
@@ -530,7 +490,7 @@ function RowFragment(props: RowFragmentProps) {
                                 </button>
                                 <button
                                     type="button"
-                                    className="users-btn"
+                                    className="adm-btn"
                                     onClick={cancelDelete}
                                     disabled={pending}
                                 >
@@ -541,7 +501,7 @@ function RowFragment(props: RowFragmentProps) {
                             <>
                                 <button
                                     type="button"
-                                    className="users-btn"
+                                    className="adm-btn"
                                     onClick={beginEdit}
                                     disabled={pending}
                                 >
@@ -549,7 +509,7 @@ function RowFragment(props: RowFragmentProps) {
                                 </button>
                                 <button
                                     type="button"
-                                    className="users-btn users-btn-danger"
+                                    className="adm-btn adm-btn-danger"
                                     onClick={askDelete}
                                     disabled={pending}
                                 >
@@ -561,7 +521,7 @@ function RowFragment(props: RowFragmentProps) {
                 </td>
             </tr>
             {rowError?.id === u.id && (
-                <tr className="users-row-error">
+                <tr className="adm-row-error">
                     <td colSpan={COL_COUNT}>{rowError.message}</td>
                 </tr>
             )}

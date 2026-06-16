@@ -5,6 +5,8 @@ import { count, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, type User } from "@/lib/db/schema";
 import { normalizePhone } from "@/lib/auth/phone";
+import { describeDbError } from "@/lib/db/errors";
+import { paginate, type Page } from "@/lib/admin/pagination";
 
 // ---------------------------------------------------------------------------
 // Server actions for the /admin/users CRUD UI.
@@ -53,84 +55,10 @@ function trimToNull(v: unknown): string | null {
     return t === "" ? null : t;
 }
 
-/**
- * Shape of the Postgres-level error fields we care about. Both `pg` and
- * `@neondatabase/serverless` populate these. We only use a narrow subset
- * (code + constraint / detail) so the type stays minimal.
- */
-type PgError = {
-    code?: string;
-    constraint?: string;
-    detail?: string;
-    message?: string;
-};
-
-/**
- * Walks the .cause chain to find the underlying Postgres error. Drizzle
- * wraps query failures in a `DrizzleQueryError` whose `.cause` is the
- * driver-level error (NeonDbError, pg.DatabaseError, etc.), so the SQLSTATE
- * fields aren't on the top-level error object.
- *
- * @param {unknown} err - The thrown error from drizzle.
- * @returns {PgError | null} The first error in the chain with a SQLSTATE code, or null.
- */
-function findPgError(err: unknown): PgError | null {
-    let cur: unknown = err;
-    for (let depth = 0; cur && depth < 5; depth++) {
-        const e = cur as PgError & { cause?: unknown };
-        if (typeof e.code === "string") return e;
-        cur = e.cause;
-    }
-    return null;
-}
-
-/**
- * Maps a `users_<column>_unique` constraint name (drizzle's default for
- * `.unique()` columns) back to a human label. Falls back to the raw column
- * name if it doesn't match the convention.
- */
-function fieldFromConstraint(name: string | undefined): string | null {
-    if (!name) return null;
-    const m = /^users_(\w+)_unique$/.exec(name);
-    return m?.[1] ?? null;
-}
-
-/**
- * Maps a Postgres error into a friendly message for the admin UI. Handles
- * unique-violation (23505) and not-null-violation (23502) explicitly; other
- * codes fall through to a generic message so we never surface raw SQL
- * (`Failed query: insert into "users" …`) to the user.
- *
- * @param {unknown} err - The error thrown by drizzle/neon.
- * @returns {string} A message suitable for showing to the admin user.
- */
-function describeDbError(err: unknown): string {
-    const pg = findPgError(err);
-
-    if (pg?.code === "23505") {
-        // Prefer the constraint name (it's stable and column-specific);
-        // fall back to parsing "Key (col)=…" out of the detail string.
-        const field =
-            fieldFromConstraint(pg.constraint) ??
-            /Key \(([^)]+)\)/.exec(pg.detail ?? "")?.[1] ??
-            "value";
-        return `Error: duplicate ${field}`;
-    }
-
-    if (pg?.code === "23502") {
-        // Not-null violation. detail contains the column name.
-        const m = /column "([^"]+)"/.exec(pg.detail ?? pg.message ?? "");
-        return m ? `Error: missing ${m[1]}` : "Error: missing required field";
-    }
-
-    // Anything else: keep the underlying message but strip drizzle's
-    // "Failed query: <SQL> params: …" wrapper so the user sees something
-    // readable instead of a SQL dump.
-    const raw =
-        pg?.message ?? (err instanceof Error ? err.message : String(err));
-    const cleaned = raw.replace(/^Failed query:[\s\S]*/u, "").trim();
-    return cleaned ? `Error: ${cleaned}` : "Error: could not save user";
-}
+// User-table errors map through the shared describer; the table name lets it
+// parse the column out of a `users_<col>_unique` constraint, and `fallback`
+// keeps the wording user-specific for anything unrecognized.
+const USER_DB_ERROR = { table: "users", fallback: "Error: could not save user" };
 
 // ---------------------------------------------------------------------------
 // Read
@@ -147,13 +75,7 @@ export async function listUsers(): Promise<User[]> {
 }
 
 /** A page of users plus the totals the table needs. */
-export type UsersPage = {
-    rows: User[];
-    total: number;
-    page: number;
-    pageSize: number;
-    pageCount: number;
-};
+export type UsersPage = Page<User>;
 
 /**
  * Returns one page of users, oldest-first. `page` is 1-based.
@@ -165,13 +87,8 @@ export async function listUsersPage(params: {
     page?: number;
     pageSize?: number;
 }): Promise<UsersPage> {
-    const pageSize = params.pageSize ?? 25;
-
     const [{ total }] = await db.select({ total: count() }).from(users);
-
-    const pageCount = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(Math.max(1, params.page ?? 1), pageCount);
-    const offset = (page - 1) * pageSize;
+    const { page, pageSize, pageCount, offset } = paginate(total, params);
 
     const rows = await db
         .select()
@@ -224,7 +141,7 @@ export async function createUser(
         revalidatePath("/admin/users");
         return { ok: true, user };
     } catch (err) {
-        return { ok: false, error: describeDbError(err) };
+        return { ok: false, error: describeDbError(err, USER_DB_ERROR) };
     }
 }
 
@@ -286,7 +203,7 @@ export async function updateUser(
         revalidatePath("/admin/users");
         return { ok: true, user };
     } catch (err) {
-        return { ok: false, error: describeDbError(err) };
+        return { ok: false, error: describeDbError(err, USER_DB_ERROR) };
     }
 }
 
@@ -310,6 +227,6 @@ export async function deleteUser(
         revalidatePath("/admin/users");
         return { ok: true };
     } catch (err) {
-        return { ok: false, error: describeDbError(err) };
+        return { ok: false, error: describeDbError(err, USER_DB_ERROR) };
     }
 }

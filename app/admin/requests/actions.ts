@@ -5,6 +5,8 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { meetingRequests, type MeetingRequestRow } from "@/lib/db/schema";
 import { attendeesBySalesforceId } from "@/lib/attendees/byId";
+import { describeDbError } from "@/lib/db/errors";
+import { paginate, type Page } from "@/lib/admin/pagination";
 
 // ---------------------------------------------------------------------------
 // Server actions for the /admin/requests CRUD UI.
@@ -17,6 +19,16 @@ import { attendeesBySalesforceId } from "@/lib/attendees/byId";
 
 const PATH = "/admin/requests";
 
+// Meeting-request errors: the only unique constraint is the composite
+// (requester, target), so one tailored message reads better than naming a
+// column; everything else falls back to a request-specific wording.
+const REQUEST_DB_ERROR = {
+    table: "meeting_requests",
+    uniqueMessage:
+        "Error: a request for this requester and target already exists",
+    fallback: "Error: could not save request",
+};
+
 /**
  * Result shape for mutating actions: the saved row on success, or a
  * user-visible message on failure.
@@ -24,22 +36,6 @@ const PATH = "/admin/requests";
 export type RequestActionResult =
     | { ok: true; request: MeetingRequestRow }
     | { ok: false; error: string };
-
-/**
- * Maps a DB error to a friendly message, stripping drizzle's "Failed query:"
- * SQL dump and calling out the one unique constraint (requester + target).
- *
- * @param {unknown} err - The thrown error.
- * @returns {string} A message suitable for the admin UI.
- */
-function describeDbError(err: unknown): string {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/duplicate key|unique/i.test(msg)) {
-        return "Error: a request for this requester and target already exists";
-    }
-    const cleaned = msg.replace(/^Failed query:[\s\S]*/u, "").trim();
-    return cleaned ? `Error: ${cleaned}` : "Error: could not save request";
-}
 
 /**
  * Validates an interest level (rank). Returns null when valid, else a message.
@@ -110,13 +106,7 @@ export type ListRequestsParams = {
 };
 
 /** A page of enriched requests plus the totals the table needs. */
-export type RequestsPage = {
-    rows: RequestRow[];
-    total: number;
-    page: number;
-    pageSize: number;
-    pageCount: number;
-};
+export type RequestsPage = Page<RequestRow>;
 
 /**
  * Compares two enriched rows on the given field. Names use locale compare;
@@ -157,7 +147,6 @@ function compareRows(
 export async function listRequestsPage(
     params: ListRequestsParams,
 ): Promise<RequestsPage> {
-    const pageSize = params.pageSize ?? 25;
     const sortField = params.sortField ?? "updatedAt";
     const sortDir = params.sortDir ?? "desc";
     const q = (params.q ?? "").trim().toLowerCase();
@@ -201,13 +190,13 @@ export async function listRequestsPage(
     const dir = sortDir === "asc" ? 1 : -1;
     enriched.sort((a, b) => dir * compareRows(a, b, sortField));
 
+    // Names are resolved in memory (they live in Salesforce, not the DB), so
+    // paginate the already-filtered set rather than in SQL.
     const total = enriched.length;
-    const pageCount = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(Math.max(1, params.page ?? 1), pageCount);
-    const start = (page - 1) * pageSize;
+    const { page, pageSize, pageCount, offset } = paginate(total, params);
 
     return {
-        rows: enriched.slice(start, start + pageSize),
+        rows: enriched.slice(offset, offset + pageSize),
         total,
         page,
         pageSize,
@@ -260,7 +249,7 @@ export async function createRequest(
         revalidatePath(PATH);
         return { ok: true, request };
     } catch (err) {
-        return { ok: false, error: describeDbError(err) };
+        return { ok: false, error: describeDbError(err, REQUEST_DB_ERROR) };
     }
 }
 
@@ -303,7 +292,7 @@ export async function updateRequest(
         revalidatePath(PATH);
         return { ok: true, request };
     } catch (err) {
-        return { ok: false, error: describeDbError(err) };
+        return { ok: false, error: describeDbError(err, REQUEST_DB_ERROR) };
     }
 }
 
@@ -326,6 +315,6 @@ export async function deleteRequest(
         revalidatePath(PATH);
         return { ok: true };
     } catch (err) {
-        return { ok: false, error: describeDbError(err) };
+        return { ok: false, error: describeDbError(err, REQUEST_DB_ERROR) };
     }
 }

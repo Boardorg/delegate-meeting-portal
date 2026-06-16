@@ -20,55 +20,58 @@
 .admin-sidebar-children { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
 .admin-main { flex:1; padding:24px; overflow:auto; }
 
-/* ── Users admin table ── */
-.users-page { display:flex; flex-direction:column; gap:16px; }
-.users-page-head { display:flex; align-items:center; justify-content:space-between; }
-.users-page-title { font-family:var(--display); font-size:20px; font-weight:600; margin:0; }
-.users-new-btn { background:var(--s2); border:1px solid var(--border-up); border-radius:var(--r); padding:7px 14px; font-family:var(--body); font-size:13px; font-weight:500; color:var(--text); cursor:pointer; transition:background .15s; }
-.users-new-btn:hover:not(:disabled) { background:var(--s3); }
-.users-new-btn:disabled { opacity:.5; cursor:not-allowed; }
-.users-table { width:100%; border-collapse:collapse; font-size:13px; }
-.users-table th, .users-table td { padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle; }
-.users-table th { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--t2); font-weight:600; background:var(--surface); }
-.users-row td { color:var(--text); }
-.users-row-new td { background:rgba(0,112,243,0.04); }
-.users-actions-col { width:200px; text-align:right; }
+/* ── Admin data tables (shared by /admin/users, /admin/requests, …) ──
+   Neutral `adm-*` prefix: these styles back the shared table scaffolding
+   (SortableHeaders, TablePagination, useInlineCrud) and are reused by every
+   admin CRUD table, so they're no longer named per-feature. */
+.adm-page { display:flex; flex-direction:column; gap:16px; }
+.adm-page-head { display:flex; align-items:center; justify-content:space-between; }
+.adm-page-title { font-family:var(--display); font-size:20px; font-weight:600; margin:0; }
+.adm-new-btn { background:var(--s2); border:1px solid var(--border-up); border-radius:var(--r); padding:7px 14px; font-family:var(--body); font-size:13px; font-weight:500; color:var(--text); cursor:pointer; transition:background .15s; }
+.adm-new-btn:hover:not(:disabled) { background:var(--s3); }
+.adm-new-btn:disabled { opacity:.5; cursor:not-allowed; }
+.adm-table { width:100%; border-collapse:collapse; font-size:13px; }
+.adm-table th, .adm-table td { padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle; }
+.adm-table th { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--t2); font-weight:600; background:var(--surface); }
+.adm-row td { color:var(--text); }
+.adm-row-new td { background:rgba(0,112,243,0.04); }
+.adm-actions-col { width:200px; text-align:right; }
 /* Actions cell stays a regular table-cell (so it shares the row's auto height
    with every other cell). The flex layout lives on an inner wrapper so the
    buttons sit on one line with consistent spacing regardless of mode. */
-.users-actions-cell { vertical-align:middle; }
-.users-actions-inner { display:flex; gap:6px; justify-content:flex-end; align-items:center; min-height:28px; }
-.users-empty { text-align:center; color:var(--t3); padding:32px !important; }
-.users-input { width:100%; padding:5px 8px; font-size:12px; font-family:var(--body); background:var(--s2); border:1px solid var(--border); border-radius:4px; color:var(--text); }
-.users-input:focus { outline:none; border-color:var(--blue-b); }
-.users-input:disabled { opacity:.6; }
-.users-btn { background:var(--s2); border:1px solid var(--border); border-radius:4px; padding:4px 10px; font-family:var(--body); font-size:12px; color:var(--text); cursor:pointer; transition:background .12s; }
-.users-btn:hover:not(:disabled) { background:var(--s3); }
-.users-btn:disabled { opacity:.5; cursor:not-allowed; }
-.users-btn-primary { background:var(--blue, #0070f3); border-color:var(--blue, #0070f3); color:#fff; }
-.users-btn-primary:hover:not(:disabled) { filter:brightness(1.1); background:var(--blue, #0070f3); }
-.users-btn-danger { background:transparent; border-color:var(--red-b, #e8391e); color:var(--red, #e8391e); }
-.users-btn-danger:hover:not(:disabled) { background:rgba(232,57,30,0.1); }
-.users-confirm-label { font-size:12px; color:var(--t2); margin-right:4px; }
-.users-row-error td { background:rgba(232,57,30,0.07); color:var(--red, #e8391e); font-size:12px; padding:6px 12px; }
+.adm-actions-cell { vertical-align:middle; }
+.adm-actions-inner { display:flex; gap:6px; justify-content:flex-end; align-items:center; min-height:28px; }
+.adm-empty { text-align:center; color:var(--t3); padding:32px !important; }
+.adm-input { width:100%; padding:5px 8px; font-size:12px; font-family:var(--body); background:var(--s2); border:1px solid var(--border); border-radius:4px; color:var(--text); }
+.adm-input:focus { outline:none; border-color:var(--blue-b); }
+.adm-input:disabled { opacity:.6; }
+.adm-btn { background:var(--s2); border:1px solid var(--border); border-radius:4px; padding:4px 10px; font-family:var(--body); font-size:12px; color:var(--text); cursor:pointer; transition:background .12s; }
+.adm-btn:hover:not(:disabled) { background:var(--s3); }
+.adm-btn:disabled { opacity:.5; cursor:not-allowed; }
+.adm-btn-primary { background:var(--blue, #0070f3); border-color:var(--blue, #0070f3); color:#fff; }
+.adm-btn-primary:hover:not(:disabled) { filter:brightness(1.1); background:var(--blue, #0070f3); }
+.adm-btn-danger { background:transparent; border-color:var(--red-b, #e8391e); color:var(--red, #e8391e); }
+.adm-btn-danger:hover:not(:disabled) { background:rgba(232,57,30,0.1); }
+.adm-confirm-label { font-size:12px; color:var(--t2); margin-right:4px; }
+.adm-row-error td { background:rgba(232,57,30,0.07); color:var(--red, #e8391e); font-size:12px; padding:6px 12px; }
 
-/* Meeting-requests toolbar: event picker + live search above the table. */
-.requests-toolbar { display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; }
-.requests-field { display:flex; flex-direction:column; gap:4px; }
-.requests-field-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--t2); font-weight:600; }
-.requests-select { width:auto; min-width:120px; }
-.requests-search { width:auto; min-width:260px; flex:1; max-width:380px; }
+/* Toolbar above a table: filters (event picker) + live search. */
+.adm-toolbar { display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; }
+.adm-field { display:flex; flex-direction:column; gap:4px; }
+.adm-field-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--t2); font-weight:600; }
+.adm-select { width:auto; min-width:120px; }
+.adm-search { width:auto; min-width:260px; flex:1; max-width:380px; }
 
-/* Sortable column header button. */
-.requests-sort-btn { display:inline-flex; align-items:center; gap:4px; background:none; border:none; padding:0; margin:0; font:inherit; color:inherit; text-transform:inherit; letter-spacing:inherit; cursor:pointer; }
-.requests-sort-btn:hover { color:var(--text); }
-.requests-sort-ind { font-size:10px; color:var(--blue-b, #0070f3); width:8px; }
+/* Sortable column header button (SortableHeaders). */
+.adm-sort-btn { display:inline-flex; align-items:center; gap:4px; background:none; border:none; padding:0; margin:0; font:inherit; color:inherit; text-transform:inherit; letter-spacing:inherit; cursor:pointer; }
+.adm-sort-btn:hover { color:var(--text); }
+.adm-sort-ind { font-size:10px; color:var(--blue-b, #0070f3); width:8px; }
 
-/* Requester/target cell: name with company stacked beneath it. */
-.req-party-name { color:var(--text); }
-.req-party-company { font-size:11px; color:var(--t2); margin-top:1px; }
+/* Party cell: a name with company stacked beneath it. */
+.adm-party-name { color:var(--text); }
+.adm-party-company { font-size:11px; color:var(--t2); margin-top:1px; }
 
-/* Pagination footer. */
-.requests-pagination { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:4px; }
-.requests-page-info { font-size:12px; color:var(--t2); }
-.requests-page-btns { display:flex; gap:6px; }
+/* Pagination footer (TablePagination). */
+.adm-pagination { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:4px; }
+.adm-page-info { font-size:12px; color:var(--t2); }
+.adm-page-btns { display:flex; gap:6px; }

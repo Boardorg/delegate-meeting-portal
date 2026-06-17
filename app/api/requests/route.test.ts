@@ -203,7 +203,14 @@ describe('POST /api/requests — DB operations', () => {
     test('deletes the row and returns { ok: true, deleted: true } when delete is true', async () => {
         vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
         // Build the mock delete chain: db.delete(table).where(condition)
+        // vi.fn() creates a fake function that tracks every call made to it.
+        // mockResolvedValue makes it return a Promise. The route awaits .where(), so the mock must be async.
+        // whereMock is a replacement for the real DB .where() method.
         const whereMock = vi.fn().mockResolvedValue(undefined);
+        // vi.mocked() gives TypeScript type info so you can call .mockReturnValue on an already-mocked function.
+        // db.delete() is synchronous (it just starts the builder), so mockReturnValue is correct here.
+        // The fake only needs { where: whereMock } because that is the only method the route chains next.
+        // The `as any` cast bypasses drizzle's generic return type so our minimal fake compiles without error.
         vi.mocked(db.delete).mockReturnValue({ where: whereMock } as any);
 
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', delete: true }));
@@ -218,9 +225,19 @@ describe('POST /api/requests — DB operations', () => {
         vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
         // Build mock upsert chain: db.insert(table).values({}).onConflictDoUpdate({}).returning()
         // Each step is named so we can assert on the arguments passed to it.
+        // Steps are defined bottom-up so each one can reference the step that comes after it in the chain.
+        // .returning() is the terminal step. The route awaits it, so mockResolvedValue makes it return a Promise.
+        // returningMock is a replacement for the real DB .returning() method.
         const returningMock = vi.fn().mockResolvedValue([mockRow]);
+        // .onConflictDoUpdate() is a builder step. The route does not await it, so mockReturnValue (sync) is correct.
+        // It returns an object with .returning so the chain can reach the terminal step.
+        // onConflictDoUpdateMock is a replacement for the real DB .onConflictDoUpdate() method.
         const onConflictDoUpdateMock = vi.fn().mockReturnValue({ returning: returningMock });
+        // .values() is also a builder step. It returns an object with .onConflictDoUpdate so the chain can continue.
+        // valuesMock is a replacement for the real DB .values() method.
         const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
+        // db.insert() starts the chain. It is synchronous, so mockReturnValue is correct.
+        // The `as any` cast bypasses drizzle's generic return type so our minimal fake compiles without error.
         vi.mocked(db.insert).mockReturnValue({ values: valuesMock } as any);
 
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', rank: 3 }));
@@ -271,8 +288,16 @@ describe('GET /api/requests', () => {
     test('returns the list of requests for the authenticated user', async () => {
         vi.mocked(getCurrentIdentity).mockResolvedValue(mockIdentity);
         // Build mock select chain: db.select().from(table).where(condition)
+        // .where() is the terminal step. The route awaits it, so mockResolvedValue makes it return a Promise.
+        // whereMock is a replacement for the real DB .where() method.
+        // Drizzle selects always return an array, so the resolved value is [mockRow] not mockRow.
         const whereMock = vi.fn().mockResolvedValue([mockRow]);
+        // .from() is a builder step. The route does not await it, so mockReturnValue (sync) is correct.
+        // fromMock is a replacement for the real DB .from() method.
+        // It returns an object with .where so the chain can continue to the terminal step.
         const fromMock = vi.fn().mockReturnValue({ where: whereMock });
+        // db.select() starts the chain. It is synchronous, so mockReturnValue is correct.
+        // The `as any` cast bypasses drizzle's generic return type so our minimal fake compiles without error.
         vi.mocked(db.select).mockReturnValue({ from: fromMock } as any);
 
         const res = await GET();

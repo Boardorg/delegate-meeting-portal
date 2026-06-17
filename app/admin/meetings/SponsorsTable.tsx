@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
     getCoreRowModel,
@@ -13,6 +13,7 @@ import {
 import { useDebounce } from "use-debounce";
 import { SortableHeaders } from "../_components/SortableHeaders";
 import { TablePagination } from "../_components/TablePagination";
+import { runSchedulerForEvent } from "./actions";
 import type {
     SponsorRow,
     SponsorSortField,
@@ -48,6 +49,24 @@ export default function SponsorsTable({
 }: Props) {
     const router = useRouter();
     const pathname = usePathname();
+
+    const [showRunModal, setShowRunModal] = useState(false);
+    const [runError, setRunError] = useState<string | null>(null);
+    const [isPending, startTransition] = useTransition();
+
+    function handleRunEngine() {
+        if (!selectedEvent) return;
+        startTransition(async () => {
+            try {
+                setRunError(null);
+                await runSchedulerForEvent(selectedEvent);
+                setShowRunModal(false);
+                router.refresh();
+            } catch (e) {
+                setRunError(e instanceof Error ? e.message : "An unexpected error occurred.");
+            }
+        });
+    }
 
     function hrefWith(overrides: {
         event?: string | null;
@@ -178,7 +197,24 @@ export default function SponsorsTable({
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                 />
+                <button
+                    className="adm-new-btn"
+                    disabled={!selectedEvent}
+                    onClick={() => { setRunError(null); setShowRunModal(true); }}
+                >
+                    Run Scheduling Engine
+                </button>
             </div>
+
+            {showRunModal && selectedEvent && (
+                <RunEngineModal
+                    eventCode={selectedEvent}
+                    isPending={isPending}
+                    error={runError}
+                    onConfirm={handleRunEngine}
+                    onCancel={() => setShowRunModal(false)}
+                />
+            )}
 
             <table className="adm-table">
                 <SortableHeaders table={table} actionsColumnId="__none__" />
@@ -331,5 +367,106 @@ function TierPill({ tier }: { tier: "diamond" | "standard" }) {
         >
             {isDiamond ? "◆ Diamond" : "● Standard"}
         </span>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// RunEngineModal — confirmation dialog for the scheduling engine run.
+// ---------------------------------------------------------------------------
+
+function RunEngineModal({
+    eventCode,
+    isPending,
+    error,
+    onConfirm,
+    onCancel,
+}: {
+    eventCode: string;
+    isPending: boolean;
+    error: string | null;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <div
+            style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 50,
+                background: "rgba(0,0,0,0.45)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "16px",
+            }}
+        >
+            <div
+                style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--r-lg)",
+                    padding: "28px 32px",
+                    width: "100%",
+                    maxWidth: "460px",
+                }}
+            >
+                <div
+                    style={{
+                        fontFamily: "var(--display)",
+                        fontSize: "16px",
+                        fontWeight: 700,
+                        marginBottom: "10px",
+                    }}
+                >
+                    Run Scheduling Engine?
+                </div>
+                <p
+                    style={{
+                        fontSize: "13px",
+                        color: "var(--t2)",
+                        lineHeight: "1.55",
+                        margin: "0 0 20px",
+                    }}
+                >
+                    This will replace all un-pushed meetings for{" "}
+                    <strong style={{ color: "var(--text)" }}>{eventCode}</strong>{" "}
+                    with fresh engine output. Meetings already pushed to Cvent are
+                    preserved and count against per-sponsor caps.
+                </p>
+
+                {error && (
+                    <div
+                        style={{
+                            marginBottom: "16px",
+                            padding: "10px 14px",
+                            background: "rgba(232,57,30,0.08)",
+                            border: "1px solid var(--red-b, rgba(232,57,30,0.3))",
+                            borderRadius: "var(--r)",
+                            fontSize: "12px",
+                            color: "var(--red, #e8391e)",
+                        }}
+                    >
+                        {error}
+                    </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                    <button
+                        className="adm-btn"
+                        onClick={onCancel}
+                        disabled={isPending}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        className="adm-btn adm-btn-primary"
+                        onClick={onConfirm}
+                        disabled={isPending}
+                    >
+                        {isPending ? "Running…" : "Run Engine"}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }

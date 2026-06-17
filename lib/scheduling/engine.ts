@@ -140,12 +140,17 @@ function countMeetingsOnDay(
  *
  * @param {Attendee[]} attendees - All attendees to schedule meetings for.
  * @param {MeetingRequest[]} requests - All submitted meeting requests.
+ * @param {ScheduledMeeting[]} [preservedMeetings] - Already-pushed meetings that should
+ *   count against caps and have their slots blocked, but will not appear in the returned
+ *   schedule (they stay in the DB as-is).
  * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }>}
- *   Resolves to the flat list of all scheduled meetings and a per-attendee breakdown.
+ *   Resolves to the flat list of newly scheduled meetings and a per-attendee breakdown
+ *   that includes both new and preserved meetings.
  */
 export async function runScheduler(
 	attendees: Attendee[],
-	requests: MeetingRequest[]
+	requests: MeetingRequest[],
+	preservedMeetings: ScheduledMeeting[] = []
 ): Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }> {
 
 	// Index attendees by ID for lookup throughout the algorithm.
@@ -167,6 +172,27 @@ export async function runScheduler(
 
 	// Initialize the master list of all scheduled meetings.
 	const allMeetings: ScheduledMeeting[] = [];
+
+	// Seed state from preserved meetings (already pushed to Cvent). They count against
+	// caps and block slots, but are excluded from the returned schedule since they don't
+	// need to be re-inserted into the DB.
+	const preservedIds = new Set<string>();
+	for (const m of preservedMeetings) {
+		preservedIds.add(m.id);
+		scheduledPairs.add(pairKey(m.attendeeA, m.attendeeB));
+		allMeetings.push(m);
+
+		const slotsA = slotsByAttendee.get(m.attendeeA);
+		if (slotsA) {
+			const slot = slotsA.find(s => s.slotId === m.slotIdA);
+			if (slot) slot.status = 'blocked';
+		}
+		const slotsB = slotsByAttendee.get(m.attendeeB);
+		if (slotsB) {
+			const slot = slotsB.find(s => s.slotId === m.slotIdB);
+			if (slot) slot.status = 'blocked';
+		}
+	}
 
 	// Auto-increment counter for generating unique meeting IDs.
 	let meetingCounter = 1;
@@ -288,7 +314,7 @@ export async function runScheduler(
 		}
 	}
 
-	// Build a per-attendee view of the schedule by filtering the full meeting list.
+	// Build a per-attendee view from all meetings (preserved + new) for a complete picture.
 	const attendeeSchedules: AttendeeSchedule[] = attendees.map(a => ({
 		attendeeId: a.id,
 		name: a.name,
@@ -302,5 +328,7 @@ export async function runScheduler(
 			.sort((a, b) => a.startTime!.localeCompare(b.startTime!)),
 	}));
 
-	return { schedule: allMeetings, attendeeSchedules };
+	// Return only the meetings the engine newly produced (not the preserved ones, which
+	// already exist in the DB and should not be re-inserted).
+	return { schedule: allMeetings.filter(m => !preservedIds.has(m.id)), attendeeSchedules };
 }

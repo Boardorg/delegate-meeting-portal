@@ -198,6 +198,22 @@ export interface MeetingRequest {
 }
 
 /**
+ * How a scheduled meeting was created and which party's request drove the pairing.
+ * - `mutual`: both parties requested each other.
+ * - `sponsor_choice`: the sponsor's request drove the engine pairing.
+ * - `delegate_choice`: the delegate's request drove the engine pairing.
+ * - `admin`: created manually by an admin outside the engine.
+ */
+export type MeetingMatchKind = "mutual" | "sponsor_choice" | "delegate_choice" | "admin";
+
+/**
+ * Where a meeting originates. Portal-managed meetings are editable; Cvent-native meetings are read-only.
+ * - `portal`: created by the scheduling engine or an admin through this portal.
+ * - `cvent`: exists natively in Cvent (pulled in for display only).
+ */
+export type MeetingSource = "portal" | "cvent";
+
+/**
  * A single confirmed meeting produced by the scheduling engine.
  * startTime, endTime, and cventAppointmentId are null until the schedule is written to Cvent,
  * at which point slot times are mapped from AttendeeSlot and the Cvent appointment ID is populated.
@@ -224,14 +240,38 @@ export interface ScheduledMeeting {
     /**
      * Which algorithm pass produced this meeting (1–7).
      * Retained on output for auditing, spot-checking, and human review.
+     * 0 for admin-created meetings (no engine pass).
      */
     passNumber: number;
 
     /**
      * Whether both attendees requested each other.
      * Computed by the engine at runtime and stored on the output for transparency.
+     * Always false for admin-created meetings.
      */
     mutual: boolean;
+
+    /**
+     * How this meeting was created and which party's request drove the pairing.
+     * Set by the engine for engine-produced meetings; set to 'admin' for manually created meetings.
+     */
+    matchKind: MeetingMatchKind;
+
+    /**
+     * Interest level (1–5) assigned by the requester for this pairing.
+     * Sourced from the requester's MeetingRequest.rank at scheduling time.
+     * Null for admin-created meetings and Cvent-native meetings (no underlying request).
+     */
+    rank: number | null;
+
+    /**
+     * Where this meeting originates. Portal-managed meetings are editable in the admin UI;
+     * Cvent-native meetings are read-only.
+     */
+    source: MeetingSource;
+
+    /** Meeting location (e.g. "Table 3A", "Room 12"). Null until assigned by an admin. */
+    location: string | null;
 
     /**
      * ISO 8601 UTC start time of the meeting.
@@ -250,6 +290,19 @@ export interface ScheduledMeeting {
      * Null until the schedule has been written to Cvent.
      */
     cventAppointmentId: string | null;
+
+    /**
+     * ISO 8601 timestamp of the last admin edit to this meeting (slot, location, etc.).
+     * Null if the meeting has never been manually modified since it was created or last pushed.
+     */
+    lastModifiedAt: string | null;
+
+    /**
+     * ISO 8601 timestamp of when this meeting was last pushed to Cvent.
+     * Null if never pushed. A meeting is "modified since push" when
+     * lastModifiedAt !== null && lastModifiedAt > lastPushedAt.
+     */
+    lastPushedAt: string | null;
 }
 
 /**

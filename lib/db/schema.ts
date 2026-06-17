@@ -1,4 +1,5 @@
 import {
+    boolean,
     integer,
     pgEnum,
     pgTable,
@@ -33,6 +34,17 @@ import {
  * rejected at the DB layer. Add new roles here, then re-generate migrations.
  */
 export const userRole = pgEnum("user_role", ["admin", "user", "sponsor"]);
+
+/** How a scheduled meeting was created and which party's request drove it. */
+export const meetingMatchKind = pgEnum("meeting_match_kind", [
+    "mutual",
+    "sponsor_choice",
+    "delegate_choice",
+    "admin",
+]);
+
+/** Where a meeting originates. Cvent-native meetings are read-only in the portal. */
+export const meetingSource = pgEnum("meeting_source", ["portal", "cvent"]);
 
 // ---------------------------------------------------------------------------
 // Tables
@@ -112,3 +124,66 @@ export const meetingRequests = pgTable(
 
 export type MeetingRequestRow = typeof meetingRequests.$inferSelect;
 export type NewMeetingRequest = typeof meetingRequests.$inferInsert;
+
+/**
+ * Persisted scheduled meetings. One row per confirmed meeting, scoped to an event.
+ * Engine-produced rows are inserted in bulk after runScheduler; admin-created rows
+ * are inserted individually. Cvent-native rows (source='cvent') are read-only in
+ * the portal — no edit, remove, or push actions apply.
+ *
+ * Sync status is derived at read time:
+ *   - cventAppointmentId === null → not pushed
+ *   - lastModifiedAt > lastPushedAt → modified since last push
+ *   - otherwise → pushed/synced
+ */
+export const scheduledMeetings = pgTable("scheduled_meetings", {
+    // Engine generates 'mtg-001' style ids; admin-created rows use a UUID.
+    id: text("id").primaryKey(),
+
+    eventCode: text("event_code").notNull(),
+
+    // Attendee ids (Salesforce ids, matching MeetingRequest.requesterId/targetId).
+    attendeeA: text("attendee_a").notNull(),
+    attendeeB: text("attendee_b").notNull(),
+
+    // 1 = Day 1 (sponsor/delegate), 2 = Day 2 (delegate/delegate).
+    day: integer("day").notNull(),
+
+    // Slot ids from each attendee's AttendeeSlot[]. Used to look up start/end times.
+    slotIdA: text("slot_id_a").notNull(),
+    slotIdB: text("slot_id_b").notNull(),
+
+    // Engine pass that produced this meeting (1–7). 0 for admin-created.
+    passNumber: integer("pass_number").notNull(),
+
+    mutual: boolean("mutual").notNull(),
+    matchKind: meetingMatchKind("match_kind").notNull(),
+
+    // Requester's interest level at scheduling time. Null for admin/cvent-native rows.
+    rank: integer("rank"),
+
+    source: meetingSource("source").notNull().default("portal"),
+
+    // Admin-assigned location (e.g. "Table 3A"). Null until set.
+    location: text("location"),
+
+    // ISO 8601 strings matching the assigned AttendeeSlot times.
+    startTime: text("start_time"),
+    endTime: text("end_time"),
+
+    // Null until the meeting has been pushed to Cvent.
+    cventAppointmentId: text("cvent_appointment_id"),
+
+    // Null if never manually edited since creation or last push.
+    lastModifiedAt: timestamp("last_modified_at", { withTimezone: true }),
+
+    // Null if never pushed. Modified = lastModifiedAt > lastPushedAt.
+    lastPushedAt: timestamp("last_pushed_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+});
+
+export type ScheduledMeetingRow = typeof scheduledMeetings.$inferSelect;
+export type NewScheduledMeeting = typeof scheduledMeetings.$inferInsert;

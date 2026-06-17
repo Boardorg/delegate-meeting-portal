@@ -269,9 +269,15 @@ export async function runScheduler(
 				slotIdB: mutualSlot.slotB.slotId,
 				passNumber: pass.passNumber,
 				mutual: isMutual,
+				matchKind: isMutual ? 'mutual' : requester.role === 'sponsor' ? 'sponsor_choice' : 'delegate_choice',
+				rank: req.rank,
+				source: 'portal',
+				location: null,
 				startTime: mutualSlot.slotA.startTime,
 				endTime: mutualSlot.slotA.endTime,
 				cventAppointmentId: null,
+				lastModifiedAt: null,
+				lastPushedAt: null,
 			};
 
 			// Add the meeting to the master schedule.

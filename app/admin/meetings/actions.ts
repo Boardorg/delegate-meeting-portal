@@ -6,8 +6,9 @@ import { db } from "@/lib/db/client";
 import { meetingRequests, scheduledMeetings, type NewScheduledMeeting } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { runScheduler } from "@/lib/scheduling/engine";
+import { pairKey } from "@/lib/scheduling/helpers";
 import { paginate, type Page } from "@/lib/admin/pagination";
-import type { MeetingMatchKind, MeetingRequest, MeetingSource, ScheduledMeeting } from "@/types";
+import type { MeetingRequest } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Server actions for /admin/meetings — the sponsor list page.
@@ -203,31 +204,32 @@ export async function runSchedulerForEvent(
         rank: r.rank,
     }));
 
-    // Convert pushed DB rows to ScheduledMeeting objects with engine IDs so the engine
-    // can match them against attendees for cap-counting and slot-blocking.
-    const preservedMeetings: ScheduledMeeting[] = pushedRows.map((r) => ({
-        id: r.id,
-        attendeeA: sfToEngineId.get(r.attendeeA) ?? r.attendeeA,
-        attendeeB: sfToEngineId.get(r.attendeeB) ?? r.attendeeB,
-        day: r.day as 1 | 2,
-        slotIdA: r.slotIdA,
-        slotIdB: r.slotIdB,
-        passNumber: r.passNumber,
-        mutual: r.mutual,
-        matchKind: r.matchKind as MeetingMatchKind,
-        rank: r.rank,
-        source: r.source as MeetingSource,
-        location: r.location,
-        startTime: r.startTime,
-        endTime: r.endTime,
-        cventAppointmentId: r.cventAppointmentId,
-        lastModifiedAt: r.lastModifiedAt?.toISOString() ?? null,
-        lastPushedAt: r.lastPushedAt?.toISOString() ?? null,
-    }));
+    // Run the engine freely with no knowledge of pushed meetings. This keeps the output
+    // deterministic — pushed meetings influence it only via post-reconciliation below.
+    const { schedule } = await runScheduler(attendees, engineRequests);
 
-    const { schedule } = await runScheduler(attendees, engineRequests, preservedMeetings);
+    // Build reconciliation sets from pushed meetings (using engine IDs for comparison).
+    // A pushed meeting wins over any conflicting fresh meeting from the engine.
+    const pushedPairs = new Set<string>();
+    const blockedSlots = new Set<string>(); // "${attendeeId}:${slotId}"
+    for (const row of pushedRows) {
+        const a = sfToEngineId.get(row.attendeeA) ?? row.attendeeA;
+        const b = sfToEngineId.get(row.attendeeB) ?? row.attendeeB;
+        pushedPairs.add(pairKey(a, b));
+        blockedSlots.add(`${a}:${row.slotIdA}`);
+        blockedSlots.add(`${b}:${row.slotIdB}`);
+    }
 
-    // Replace all un-pushed portal meetings for this event with the fresh engine output.
+    // Drop any fresh meeting that duplicates a pushed pair or uses a slot already held
+    // by a pushed meeting. Everything else is safe to insert.
+    const reconciledSchedule = schedule.filter((m) => {
+        if (pushedPairs.has(pairKey(m.attendeeA, m.attendeeB))) return false;
+        if (blockedSlots.has(`${m.attendeeA}:${m.slotIdA}`)) return false;
+        if (blockedSlots.has(`${m.attendeeB}:${m.slotIdB}`)) return false;
+        return true;
+    });
+
+    // Replace all un-pushed portal meetings for this event with the reconciled output.
     await db.delete(scheduledMeetings).where(
         and(
             eq(scheduledMeetings.eventCode, eventCode),
@@ -236,8 +238,8 @@ export async function runSchedulerForEvent(
         ),
     );
 
-    if (schedule.length > 0) {
-        const toInsert: NewScheduledMeeting[] = schedule.map((m) => ({
+    if (reconciledSchedule.length > 0) {
+        const toInsert: NewScheduledMeeting[] = reconciledSchedule.map((m) => ({
             id: m.id,
             eventCode,
             // Convert engine IDs back to Salesforce IDs for storage.
@@ -262,7 +264,7 @@ export async function runSchedulerForEvent(
     }
 
     revalidatePath("/admin/meetings");
-    return { inserted: schedule.length };
+    return { inserted: reconciledSchedule.length };
 }
 
 /**

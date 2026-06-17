@@ -138,19 +138,18 @@ function countMeetingsOnDay(
  * those slots as blocked so they cannot be reused. Business rules (no duplicates,
  * no self-meetings, company diversity) are enforced on every candidate.
  *
+ * The engine runs freely with no knowledge of previously pushed meetings. Callers are
+ * responsible for post-reconciliation: drop any fresh meeting that duplicates or conflicts
+ * with a pushed meeting before inserting into the DB.
+ *
  * @param {Attendee[]} attendees - All attendees to schedule meetings for.
  * @param {MeetingRequest[]} requests - All submitted meeting requests.
- * @param {ScheduledMeeting[]} [preservedMeetings] - Already-pushed meetings that should
- *   count against caps and have their slots blocked, but will not appear in the returned
- *   schedule (they stay in the DB as-is).
  * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }>}
- *   Resolves to the flat list of newly scheduled meetings and a per-attendee breakdown
- *   that includes both new and preserved meetings.
+ *   Resolves to the flat list of newly scheduled meetings and a per-attendee breakdown.
  */
 export async function runScheduler(
 	attendees: Attendee[],
 	requests: MeetingRequest[],
-	preservedMeetings: ScheduledMeeting[] = []
 ): Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }> {
 
 	// Index attendees by ID for lookup throughout the algorithm.
@@ -172,27 +171,6 @@ export async function runScheduler(
 
 	// Initialize the master list of all scheduled meetings.
 	const allMeetings: ScheduledMeeting[] = [];
-
-	// Seed state from preserved meetings (already pushed to Cvent). They count against
-	// caps and block slots, but are excluded from the returned schedule since they don't
-	// need to be re-inserted into the DB.
-	const preservedIds = new Set<string>();
-	for (const m of preservedMeetings) {
-		preservedIds.add(m.id);
-		scheduledPairs.add(pairKey(m.attendeeA, m.attendeeB));
-		allMeetings.push(m);
-
-		const slotsA = slotsByAttendee.get(m.attendeeA);
-		if (slotsA) {
-			const slot = slotsA.find(s => s.slotId === m.slotIdA);
-			if (slot) slot.status = 'blocked';
-		}
-		const slotsB = slotsByAttendee.get(m.attendeeB);
-		if (slotsB) {
-			const slot = slotsB.find(s => s.slotId === m.slotIdB);
-			if (slot) slot.status = 'blocked';
-		}
-	}
 
 	// Auto-increment counter for generating unique meeting IDs.
 	let meetingCounter = 1;
@@ -328,7 +306,5 @@ export async function runScheduler(
 			.sort((a, b) => a.startTime!.localeCompare(b.startTime!)),
 	}));
 
-	// Return only the meetings the engine newly produced (not the preserved ones, which
-	// already exist in the DB and should not be re-inserted).
-	return { schedule: allMeetings.filter(m => !preservedIds.has(m.id)), attendeeSchedules };
+	return { schedule: allMeetings, attendeeSchedules };
 }

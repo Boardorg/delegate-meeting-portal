@@ -13,7 +13,7 @@ import {
 import { useDebounce } from "use-debounce";
 import { SortableHeaders } from "../_components/SortableHeaders";
 import { TablePagination } from "../_components/TablePagination";
-import { runSchedulerForEvent } from "./actions";
+import { pushAllForEvent, runSchedulerForEvent } from "./actions";
 import type {
     SponsorRow,
     SponsorSortField,
@@ -52,6 +52,8 @@ export default function SponsorsTable({
 
     const [showRunModal, setShowRunModal] = useState(false);
     const [runError, setRunError] = useState<string | null>(null);
+    const [showPushAllModal, setShowPushAllModal] = useState(false);
+    const [pushAllError, setPushAllError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
     function handleRunEngine() {
@@ -64,6 +66,20 @@ export default function SponsorsTable({
                 router.refresh();
             } catch (e) {
                 setRunError(e instanceof Error ? e.message : "An unexpected error occurred.");
+            }
+        });
+    }
+
+    function handlePushAll() {
+        if (!selectedEvent) return;
+        startTransition(async () => {
+            try {
+                setPushAllError(null);
+                await pushAllForEvent(selectedEvent);
+                setShowPushAllModal(false);
+                router.refresh();
+            } catch (e) {
+                setPushAllError(e instanceof Error ? e.message : "An unexpected error occurred.");
             }
         });
     }
@@ -204,6 +220,13 @@ export default function SponsorsTable({
                 >
                     Run Scheduling Engine
                 </button>
+                <button
+                    className="adm-new-btn"
+                    disabled={!selectedEvent}
+                    onClick={() => { setPushAllError(null); setShowPushAllModal(true); }}
+                >
+                    Push All to Cvent
+                </button>
             </div>
 
             {showRunModal && selectedEvent && (
@@ -213,6 +236,16 @@ export default function SponsorsTable({
                     error={runError}
                     onConfirm={handleRunEngine}
                     onCancel={() => setShowRunModal(false)}
+                />
+            )}
+
+            {showPushAllModal && selectedEvent && (
+                <PushAllModal
+                    eventCode={selectedEvent}
+                    isPending={isPending}
+                    error={pushAllError}
+                    onConfirm={handlePushAll}
+                    onCancel={() => setShowPushAllModal(false)}
                 />
             )}
 
@@ -367,6 +400,107 @@ function TierPill({ tier }: { tier: "diamond" | "standard" }) {
         >
             {isDiamond ? "◆ Diamond" : "● Standard"}
         </span>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// PushAllModal — confirmation dialog for the event-wide bulk push.
+// ---------------------------------------------------------------------------
+
+function PushAllModal({
+    eventCode,
+    isPending,
+    error,
+    onConfirm,
+    onCancel,
+}: {
+    eventCode: string;
+    isPending: boolean;
+    error: string | null;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <div
+            style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 50,
+                background: "rgba(0,0,0,0.45)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "16px",
+            }}
+        >
+            <div
+                style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--r-lg)",
+                    padding: "28px 32px",
+                    width: "100%",
+                    maxWidth: "460px",
+                }}
+            >
+                <div
+                    style={{
+                        fontFamily: "var(--display)",
+                        fontSize: "16px",
+                        fontWeight: 700,
+                        marginBottom: "10px",
+                    }}
+                >
+                    Push All to Cvent?
+                </div>
+                <p
+                    style={{
+                        fontSize: "13px",
+                        color: "var(--t2)",
+                        lineHeight: "1.55",
+                        margin: "0 0 20px",
+                    }}
+                >
+                    This will push all un-synced portal meetings for{" "}
+                    <strong style={{ color: "var(--text)" }}>{eventCode}</strong>{" "}
+                    to Cvent, including meetings that have been modified since their
+                    last push.
+                </p>
+
+                {error && (
+                    <div
+                        style={{
+                            marginBottom: "16px",
+                            padding: "10px 14px",
+                            background: "rgba(232,57,30,0.08)",
+                            border: "1px solid var(--red-b, rgba(232,57,30,0.3))",
+                            borderRadius: "var(--r)",
+                            fontSize: "12px",
+                            color: "var(--red, #e8391e)",
+                        }}
+                    >
+                        {error}
+                    </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                    <button
+                        className="adm-btn"
+                        onClick={onCancel}
+                        disabled={isPending}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        className="adm-btn adm-btn-primary"
+                        onClick={onConfirm}
+                        disabled={isPending}
+                    >
+                        {isPending ? "Pushing…" : "Push All"}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
 

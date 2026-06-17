@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { meetingRequests, scheduledMeetings, type NewScheduledMeeting } from "@/lib/db/schema";
@@ -259,4 +259,52 @@ export async function runSchedulerForEvent(
 
     revalidatePath("/admin/meetings");
     return { inserted: schedule.length };
+}
+
+/**
+ * Pushes all un-synced portal meetings for an entire event. Covers both
+ * not-yet-pushed meetings and meetings edited since their last push.
+ * Like pushMeeting, this writes stub Cvent IDs — replace with real API
+ * calls when the Cvent integration is wired up.
+ *
+ * @param {string} eventCode - The event to push meetings for.
+ * @returns {Promise<{ pushed: number }>} Count of meetings updated.
+ */
+export async function pushAllForEvent(
+    eventCode: string,
+): Promise<{ pushed: number }> {
+    const rows = await db
+        .select({ id: scheduledMeetings.id })
+        .from(scheduledMeetings)
+        .where(
+            and(
+                eq(scheduledMeetings.eventCode, eventCode),
+                eq(scheduledMeetings.source, "portal"),
+                or(
+                    isNull(scheduledMeetings.cventAppointmentId),
+                    and(
+                        isNotNull(scheduledMeetings.lastModifiedAt),
+                        isNotNull(scheduledMeetings.lastPushedAt),
+                        gt(scheduledMeetings.lastModifiedAt, scheduledMeetings.lastPushedAt),
+                    ),
+                ),
+            ),
+        );
+
+    const now = new Date();
+    for (const row of rows) {
+        // TODO: Replace this inner block with a real Cvent API call per meeting.
+        // Same as pushMeeting: create or update the Cvent appointment and write
+        // back the real appointment ID. Consider batching if the API supports it.
+        await db
+            .update(scheduledMeetings)
+            .set({
+                cventAppointmentId: `stub-${row.id}-${now.getTime()}`,
+                lastPushedAt: now,
+            })
+            .where(eq(scheduledMeetings.id, row.id));
+    }
+
+    revalidatePath("/admin/meetings");
+    return { pushed: rows.length };
 }

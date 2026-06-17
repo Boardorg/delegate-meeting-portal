@@ -171,6 +171,10 @@ export async function listSponsorsPage(params: {
 export async function runSchedulerForEvent(
     eventCode: string,
 ): Promise<{ inserted: number }> {
+    // TODO: Once the Cvent slot integration is wired up (see attendeeMapper.ts),
+    // attendees will carry real availability data and the engine will produce
+    // meetings. Until then, scheduling.slots is [] for all real attendees and
+    // the engine will always return an empty schedule with USE_MOCK=false.
     const [attendees, requestRows, pushedRows] = await Promise.all([
         loadAttendees(false, eventCode),
         db.select().from(meetingRequests).where(eq(meetingRequests.eventCode, eventCode)),

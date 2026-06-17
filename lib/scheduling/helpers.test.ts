@@ -58,7 +58,10 @@ function makeMeeting(attendeeA: string, attendeeB: string): ScheduledMeeting {
     return {
         id: `${attendeeA}-${attendeeB}`, attendeeA, attendeeB,
         day: 1, slotIdA: '', slotIdB: '', passNumber: 1,
-        mutual: false, startTime: null, endTime: null, cventAppointmentId: null,
+        mutual: false, matchKind: 'sponsor_choice', rank: null,
+        source: 'portal', location: null,
+        startTime: null, endTime: null, cventAppointmentId: null,
+        lastModifiedAt: null, lastPushedAt: null,
     };
 }
 

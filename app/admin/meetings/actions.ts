@@ -30,6 +30,11 @@ import type { MeetingRequest } from "@/types";
  * @returns {Promise<string[]>} Sorted list of event codes.
  */
 export async function listMeetingsEventCodes(): Promise<string[]> {
+    // In mock mode, return a fixed event code from the mock data.
+    if (process.env.USE_MOCK === "true") {
+        return ["PARTY1999"];
+    }
+
     // Get distinct event codes from both tables in parallel.
     const [fromRequests, fromMeetings] = await Promise.all([
         db.selectDistinct({ eventCode: meetingRequests.eventCode }).from(meetingRequests),

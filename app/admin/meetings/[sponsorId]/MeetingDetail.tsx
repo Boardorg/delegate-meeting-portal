@@ -149,11 +149,13 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
                         label="Scheduled"
                         value={`${sponsor.scheduledCount} / ${total}`}
                         valueColor={
-                            sponsor.scheduledCount >= total
-                                ? "var(--green)"
-                                : sponsor.scheduledCount > 0
-                                  ? "var(--text)"
-                                  : "var(--gold)"
+                            sponsor.scheduledCount > total
+                                ? "var(--red)"
+                                : sponsor.scheduledCount === total
+                                  ? "var(--green)"
+                                  : sponsor.scheduledCount > 0
+                                    ? "var(--text)"
+                                    : "var(--gold)"
                         }
                     />
                     <button

@@ -18,7 +18,7 @@ import type { Attendee, AttendeeSlot, MeetingRequest } from '@/types';
 function makeAttendee(id: string, company: string, role: 'sponsor' | 'delegate', slots: AttendeeSlot[]): Attendee {
     return {
         id, company, role,
-        cventContactId: '', salesforceId: '', name: id, email: '', phone: '',
+        cventContactId: '', salesforceId: id, name: id, email: '', phone: '',
         title: '', sponsorTier: role === 'sponsor' ? 'standard' : null,
         profile: { annualRevenue: null, budgetaryResponsibility: null, areasOfSpecialization: [], industrySectors: [], plannedSpend: null, companySize: null, regionsOverseen: [], strategicPriorities: [] },
         scheduling: { slots, maxSameCompanyMeetings: 2 },
@@ -148,7 +148,7 @@ describe('runScheduler — cap enforcement', () => {
     });
 
     test('schedules more meetings for a diamond sponsor than a standard sponsor', async () => {
-        // Diamond cap in Pass 5 is 10 and standard cap is 7.
+        // Diamond cumulative cap through Pass 5 is 8; standard is 5.
         // Each sponsor requests 10 unique delegates so the cap — not slot availability — is the constraint.
 
         // Two sets of unique times: diamond slots are on the hour, standard on the half hour.
@@ -185,8 +185,8 @@ describe('runScheduler — cap enforcement', () => {
         const diamondMeetings  = schedule.filter(m => m.attendeeA === 'sd').length;
         const standardMeetings = schedule.filter(m => m.attendeeA === 'ss').length;
 
-        expect(diamondMeetings).toBe(10);
-        expect(standardMeetings).toBe(7);
+        expect(diamondMeetings).toBe(8);
+        expect(standardMeetings).toBe(5);
     });
 });
 

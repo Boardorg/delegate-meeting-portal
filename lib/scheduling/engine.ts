@@ -165,8 +165,8 @@ export async function runScheduler(
 	requests: MeetingRequest[],
 ): Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }> {
 
-	// Index attendees by ID for lookup throughout the algorithm.
-	const attendeeMap = new Map(attendees.map(a => [a.id, a]));
+	// Index attendees by Salesforce ID for lookup throughout the algorithm.
+	const attendeeMap = new Map(attendees.map(a => [a.salesforceId, a]));
 
 	// Pre-compute all mutual pairs once so each pass can check mutuality cheaply.
 	const mutualPairs = computeMutualPairs(requests);
@@ -174,10 +174,10 @@ export async function runScheduler(
 	// Initialize a set to track which pairs have already been scheduled to prevent duplicates.
 	const scheduledPairs = new Set<string>();
 
-	// Create a mutable copy of each attendee's slots keyed by attendee ID.
+	// Create a mutable copy of each attendee's slots keyed by Salesforce ID.
 	const slotsByAttendee = new Map(
 		attendees.map(a => [
-			a.id,
+			a.salesforceId,
 			a.scheduling.slots.map(s => ({ ...s })),
 		])
 	);
@@ -305,17 +305,17 @@ export async function runScheduler(
 		}
 	}
 
-	// Build a per-attendee view from all meetings (preserved + new) for a complete picture.
+	// Build a per-attendee view from all meetings for a complete picture.
 	const attendeeSchedules: AttendeeSchedule[] = attendees.map(a => ({
-		attendeeId: a.id,
+		attendeeId: a.salesforceId,
 		name: a.name,
 		company: a.company,
 		role: a.role as AttendeeRole,
 		day1Meetings: allMeetings
-			.filter(m => m.day === 1 && (m.attendeeA === a.id || m.attendeeB === a.id))
+			.filter(m => m.day === 1 && (m.attendeeA === a.salesforceId || m.attendeeB === a.salesforceId))
 			.sort((a, b) => a.startTime!.localeCompare(b.startTime!)),
 		day2Meetings: allMeetings
-			.filter(m => m.day === 2 && (m.attendeeA === a.id || m.attendeeB === a.id))
+			.filter(m => m.day === 2 && (m.attendeeA === a.salesforceId || m.attendeeB === a.salesforceId))
 			.sort((a, b) => a.startTime!.localeCompare(b.startTime!)),
 	}));
 

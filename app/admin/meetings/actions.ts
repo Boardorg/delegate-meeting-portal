@@ -173,13 +173,12 @@ export async function listSponsorsPage(params: {
 
 /**
  * Runs the scheduling engine for an event and replaces all un-pushed portal meetings
- * with the fresh engine output. Meetings already pushed to Cvent are preserved: they
- * are passed to the engine so they count against per-attendee caps and have their slots
- * blocked, but they are not deleted or re-inserted.
+ * with the fresh engine output. Meetings already pushed to Cvent are preserved via
+ * post-reconciliation: the engine runs freely, then any fresh meeting that duplicates
+ * or conflicts with a pushed meeting is dropped before insert.
  *
- * ID translation: DB rows store Salesforce IDs; the engine uses Attendee.id (which may
- * differ in mock mode). Requests and preserved meetings are remapped to engine IDs before
- * the run, and newly scheduled meetings are remapped back to Salesforce IDs before insert.
+ * The engine uses Salesforce IDs throughout, matching what the DB stores, so no ID
+ * translation is needed in either mock or production mode.
  *
  * @param {string} eventCode - The event to schedule meetings for.
  * @returns {Promise<{ inserted: number }>} Count of newly scheduled meetings written to the DB.
@@ -195,10 +194,12 @@ export async function runSchedulerForEvent(
     const isMock = process.env.USE_MOCK === "true";
     const mockRequestsPath = `${process.cwd()}/data/mock/requests.json`;
 
-    // Load attendees and already-pushed meetings in parallel. Requests are loaded
-    // separately since their source depends on whether mock mode is active.
-    const [attendees, pushedRows] = await Promise.all([
+    // Load attendees, requests, and already-pushed meetings.
+    const [attendees, requestRows, pushedRows] = await Promise.all([
         loadAttendees(false, eventCode),
+        isMock
+            ? loadMockRequests(mockRequestsPath)
+            : db.select().from(meetingRequests).where(eq(meetingRequests.eventCode, eventCode)),
         db
             .select()
             .from(scheduledMeetings)
@@ -210,37 +211,25 @@ export async function runSchedulerForEvent(
             ),
     ]);
 
-    // Build bidirectional ID maps for mock-mode compatibility.
-    // When USE_MOCK=true, Attendee.id ("s1") !== Attendee.salesforceId (Salesforce record id).
-    // In production they are identical, so these maps are identity functions.
-    const sfToEngineId = new Map(attendees.map((a) => [a.salesforceId, a.id]));
-    const engineIdToSf = new Map(attendees.map((a) => [a.id, a.salesforceId]));
-
-    // In mock mode, requests come from the file (already in engine ID format).
-    // In production, requests come from the DB and are remapped from Salesforce IDs.
-    const engineRequests: MeetingRequest[] = isMock
-        ? await loadMockRequests(mockRequestsPath)
-        : (await db.select().from(meetingRequests).where(eq(meetingRequests.eventCode, eventCode))).map((r) => ({
-              id: String(r.id),
-              requesterId: sfToEngineId.get(r.requesterId) ?? r.requesterId,
-              targetId: sfToEngineId.get(r.targetId) ?? r.targetId,
-              rank: r.rank,
-          }));
+    const engineRequests: MeetingRequest[] = requestRows.map((r) => ({
+        id: String(r.id),
+        requesterId: r.requesterId,
+        targetId: r.targetId,
+        rank: r.rank,
+    }));
 
     // Run the engine freely with no knowledge of pushed meetings. This keeps the output
     // deterministic — pushed meetings influence it only via post-reconciliation below.
     const { schedule } = await runScheduler(attendees, engineRequests);
 
-    // Build reconciliation sets from pushed meetings (using engine IDs for comparison).
-    // A pushed meeting wins over any conflicting fresh meeting from the engine.
+    // Build reconciliation sets from pushed meetings. Salesforce IDs are used throughout
+    // so no conversion is needed here.
     const pushedPairs = new Set<string>();
     const blockedSlots = new Set<string>(); // "${attendeeId}:${slotId}"
     for (const row of pushedRows) {
-        const a = sfToEngineId.get(row.attendeeA) ?? row.attendeeA;
-        const b = sfToEngineId.get(row.attendeeB) ?? row.attendeeB;
-        pushedPairs.add(pairKey(a, b));
-        blockedSlots.add(`${a}:${row.slotIdA}`);
-        blockedSlots.add(`${b}:${row.slotIdB}`);
+        pushedPairs.add(pairKey(row.attendeeA, row.attendeeB));
+        blockedSlots.add(`${row.attendeeA}:${row.slotIdA}`);
+        blockedSlots.add(`${row.attendeeB}:${row.slotIdB}`);
     }
 
     // Drop any fresh meeting that duplicates a pushed pair or uses a slot already held
@@ -261,14 +250,12 @@ export async function runSchedulerForEvent(
         ),
     );
 
-    // Insert the reconciled schedule, mapping engine IDs back to Salesforce IDs for storage.
     if (reconciledSchedule.length > 0) {
         const toInsert: NewScheduledMeeting[] = reconciledSchedule.map((m) => ({
             id: m.id,
             eventCode,
-            // Convert engine IDs back to Salesforce IDs for storage.
-            attendeeA: engineIdToSf.get(m.attendeeA) ?? m.attendeeA,
-            attendeeB: engineIdToSf.get(m.attendeeB) ?? m.attendeeB,
+            attendeeA: m.attendeeA,
+            attendeeB: m.attendeeB,
             day: m.day,
             slotIdA: m.slotIdA,
             slotIdB: m.slotIdB,

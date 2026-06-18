@@ -5,10 +5,10 @@ import type { Attendee } from "@/types";
 // ---------------------------------------------------------------------------
 // Attendee lookup by Salesforce id.
 //
-// Meeting requests (and, later, schedules) reference attendees by their
-// Salesforce id. These helpers resolve those ids back to full Attendee objects
-// for display. Pass an explicit `eventCode` to resolve a specific event (e.g.
-// admin views a past event); omit it to use the request-resolved event.
+// Meeting requests and schedules reference attendees by Salesforce id. These
+// helpers resolve those ids back to full Attendee objects for display. Pass an
+// explicit eventCode to resolve a specific event; omit it to use the
+// request-resolved event.
 // ---------------------------------------------------------------------------
 
 /**

@@ -33,15 +33,20 @@ type RawMockRequest = {
 	updated_at: string;
 };
 
+export type MockMeetingRequest = MeetingRequest & {
+	createdAt: Date;
+	updatedAt: Date;
+};
+
 /**
- * Reads and parses `requests.json` at the given path into typed `MeetingRequest` records.
+ * Reads and parses `requests.json` at the given path into typed `MockMeetingRequest` records.
  * The file uses the same snake_case schema as the DB table; this function maps it to
- * the camelCase `MeetingRequest` shape the engine expects.
+ * the camelCase shape the rest of the app expects, including parsed date fields.
  *
  * @param {string} filePath - Absolute path to the meeting requests JSON file.
- * @returns {Promise<MeetingRequest[]>} Resolves to an array of parsed `MeetingRequest` objects.
+ * @returns {Promise<MockMeetingRequest[]>} Resolves to an array of parsed request objects.
  */
-export async function loadMockRequests(filePath: string): Promise<MeetingRequest[]> {
+export async function loadMockRequests(filePath: string): Promise<MockMeetingRequest[]> {
 	const raw = fs.readFileSync(path.resolve(filePath), 'utf-8');
 	const rows = JSON.parse(raw) as RawMockRequest[];
 	return rows.map((r) => ({
@@ -49,5 +54,7 @@ export async function loadMockRequests(filePath: string): Promise<MeetingRequest
 		requesterId: r.requester_id,
 		targetId: r.target_id,
 		rank: r.rank,
+		createdAt: new Date(r.created_at),
+		updatedAt: new Date(r.updated_at),
 	}));
 }

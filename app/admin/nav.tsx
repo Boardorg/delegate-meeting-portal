@@ -21,7 +21,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
         children: [],
     },
     {
-        label: "Meeting requests",
+        label: "Meeting Requests",
         href: "/admin/requests",
         icon: "🤝",
         children: [],

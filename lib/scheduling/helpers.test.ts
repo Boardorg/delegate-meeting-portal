@@ -40,7 +40,7 @@ function makeSlot(slotId: string, day: 1 | 2, startTime: string, status: 'availa
 function makeAttendee(id: string, company: string): Attendee {
     return {
         id, company,
-        cventContactId: '', salesforceId: '', name: '', email: '', phone: '',
+        cventContactId: '', salesforceId: id, name: '', email: '', phone: '',
         role: 'delegate', title: '', sponsorTier: null,
         profile: { annualRevenue: null, budgetaryResponsibility: null, areasOfSpecialization: [], industrySectors: [], plannedSpend: null, companySize: null, regionsOverseen: [], strategicPriorities: [] },
         scheduling: { slots: [], maxSameCompanyMeetings: null },

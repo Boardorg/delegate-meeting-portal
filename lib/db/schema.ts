@@ -101,9 +101,9 @@ export const meetingRequests = pgTable(
     "meeting_requests",
     {
         id: serial("id").primaryKey(),
-        // Attendee.id of the sponsor submitting the request.
+        // Salesforce ID of the sponsor submitting the request.
         requesterId: text("requester_id").notNull(),
-        // Attendee.id of the delegate being requested.
+        // Salesforce ID of the delegate being requested.
         targetId: text("target_id").notNull(),
         rank: integer("rank").notNull(),
         eventCode: text("event_code").notNull(),

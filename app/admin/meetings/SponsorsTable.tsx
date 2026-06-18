@@ -13,6 +13,7 @@ import {
 import { useDebounce } from "use-debounce";
 import { SortableHeaders } from "../_components/SortableHeaders";
 import { TablePagination } from "../_components/TablePagination";
+import { TierPill } from "./_components/TierPill";
 import { pushAllForEvent, runSchedulerForEvent } from "./actions";
 import type {
     SponsorRow,
@@ -56,6 +57,7 @@ export default function SponsorsTable({
     const [pushAllError, setPushAllError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
+    // Handler for running the scheduling engine for the selected event.
     function handleRunEngine() {
         if (!selectedEvent) return;
         startTransition(async () => {
@@ -70,6 +72,7 @@ export default function SponsorsTable({
         });
     }
 
+    // Handler for pushing all meetings for the selected event.
     function handlePushAll() {
         if (!selectedEvent) return;
         startTransition(async () => {
@@ -84,6 +87,7 @@ export default function SponsorsTable({
         });
     }
 
+    // Generates a URL with the given query parameter overrides.
     function hrefWith(overrides: {
         event?: string | null;
         q?: string;
@@ -91,40 +95,54 @@ export default function SponsorsTable({
         dir?: "asc" | "desc";
         page?: number;
     }): string {
+        // Get current parameters from the URL.
         const params = new URLSearchParams();
+
+        // Include the event parameter if it's defined.
         const event =
             overrides.event !== undefined ? overrides.event : selectedEvent;
         if (event) params.set("event", event);
+
+        // For search, only include the parameter if it's non-empty after trimming.
         const q = overrides.q !== undefined ? overrides.q : query;
         if (q.trim()) params.set("q", q.trim());
+
+        // Always include sort and dir since they have defaults.
         params.set("sort", overrides.sort ?? sortField);
         params.set("dir", overrides.dir ?? sortDir);
+
+        // Include the page parameter if it's greater than 1 since the default is 1.
         const page = overrides.page ?? data.page;
         if (page > 1) params.set("page", String(page));
+
+        // Construct the final URL with the updated query string.
         const qs = params.toString();
         return qs ? `${pathname}?${qs}` : pathname;
     }
 
-    // Live search → URL
+    // Turn live search input into a query parameter update.
     const [searchInput, setSearchInput] = useState(query);
     useEffect(() => setSearchInput(query), [query]);
-    const [debouncedSearch] = useDebounce(searchInput, 300);
+    const [debouncedSearch] = useDebounce(searchInput, 300); // Debounce to avoid spamming the URL on every keystroke.
     useEffect(() => {
         if (debouncedSearch.trim() === query.trim()) return;
         router.push(hrefWith({ q: debouncedSearch, page: 1 }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [debouncedSearch]);
 
-    // TanStack table (manual sorting + pagination)
+    // TanStack table manual sorting.
     const sorting = useMemo<SortingState>(
         () => [{ id: sortField, desc: sortDir === "desc" }],
         [sortField, sortDir],
     );
+
+    // TanskStack table manual pagination.
     const pagination = useMemo<PaginationState>(
         () => ({ pageIndex: data.page - 1, pageSize: data.pageSize }),
         [data.page, data.pageSize],
     );
 
+    // Set up the table columns.
     const columns = useMemo<ColumnDef<SponsorRow>[]>(
         () => [
             { id: "company", header: "Company" },
@@ -139,6 +157,7 @@ export default function SponsorsTable({
         [],
     );
 
+    // Handle sorting changes.
     const onSortingChange: OnChangeFn<SortingState> = (updater) => {
         const next = typeof updater === "function" ? updater(sorting) : updater;
         const s = next[0] ?? { id: sortField, desc: false };
@@ -151,12 +170,14 @@ export default function SponsorsTable({
         );
     };
 
+    // Handle pagination changes.
     const onPaginationChange: OnChangeFn<PaginationState> = (updater) => {
         const next =
             typeof updater === "function" ? updater(pagination) : updater;
         router.push(hrefWith({ page: next.pageIndex + 1 }));
     };
 
+    // Set up the table instance.
     const table = useReactTable({
         data: data.rows,
         columns,
@@ -170,16 +191,19 @@ export default function SponsorsTable({
         onPaginationChange,
     });
 
+    // Handler for changing the selected event.
     function changeEvent(code: string) {
         router.push(hrefWith({ event: code, page: 1 }));
     }
 
+    // Handler for navigating to a sponsor's detail page.
     function goToSponsor(salesforceId: string) {
         const base = `/admin/meetings/${encodeURIComponent(salesforceId)}`;
         const event = selectedEvent ? `?event=${encodeURIComponent(selectedEvent)}` : "";
         router.push(`${base}${event}`);
     }
 
+    // Render the table with toolbar and modals.
     return (
         <div className="adm-page">
             <div className="adm-page-head">
@@ -295,11 +319,13 @@ function SponsorRow({
     row: SponsorRow;
     onView: () => void;
 }) {
+    // Calculate the total meetings (contracted + bonus) and the percentage of scheduled meetings for the progress bar.
     const total = row.contracted + row.bonus;
-    const pct = total > 0 ? Math.round((row.scheduledCount / total) * 100) : 0;
+    const scheduledPercent = total > 0 ? Math.round((row.scheduledCount / total) * 100) : 0;
     const barColor =
-        pct >= 100 ? "var(--green)" : pct >= 85 ? "var(--gold)" : "var(--blue)";
+        scheduledPercent >= 100 ? "var(--green)" : scheduledPercent >= 85 ? "var(--gold)" : "var(--blue)";
 
+    // Render the sponsor row with company, contact, tier, contracted/bonus totals, request/scheduled counts, and a progress bar for scheduled meetings.
     return (
         <tr
             className="adm-row"
@@ -360,7 +386,7 @@ function SponsorRow({
                         <div
                             style={{
                                 height: "100%",
-                                width: `${Math.min(pct, 100)}%`,
+                                width: `${Math.min(scheduledPercent, 100)}%`,
                                 background: barColor,
                                 borderRadius: "2px",
                             }}
@@ -378,28 +404,6 @@ function SponsorRow({
                 </div>
             </td>
         </tr>
-    );
-}
-
-function TierPill({ tier }: { tier: "diamond" | "standard" }) {
-    const isDiamond = tier === "diamond";
-    return (
-        <span
-            style={{
-                fontSize: "10px",
-                padding: "2px 8px",
-                borderRadius: "100px",
-                fontWeight: 500,
-                background: isDiamond
-                    ? "rgba(155,114,245,0.12)"
-                    : "rgba(46,201,126,0.1)",
-                color: isDiamond ? "var(--purple)" : "var(--green)",
-                border: `1px solid ${isDiamond ? "rgba(155,114,245,0.25)" : "rgba(46,201,126,0.3)"}`,
-                whiteSpace: "nowrap",
-            }}
-        >
-            {isDiamond ? "◆ Diamond" : "● Standard"}
-        </span>
     );
 }
 

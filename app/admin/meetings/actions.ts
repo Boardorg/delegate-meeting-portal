@@ -29,14 +29,19 @@ import type { MeetingRequest } from "@/types";
  * @returns {Promise<string[]>} Sorted list of event codes.
  */
 export async function listMeetingsEventCodes(): Promise<string[]> {
+    // Get distinct event codes from both tables in parallel.
     const [fromRequests, fromMeetings] = await Promise.all([
         db.selectDistinct({ eventCode: meetingRequests.eventCode }).from(meetingRequests),
         db.selectDistinct({ eventCode: scheduledMeetings.eventCode }).from(scheduledMeetings),
     ]);
+
+    // Combine event codes from both sources into a single set to ensure uniqueness.
     const codes = new Set([
         ...fromRequests.map((r) => r.eventCode),
         ...fromMeetings.map((r) => r.eventCode),
     ]);
+
+    // Convert the set to an array and sort alphabetically.
     return [...codes].sort();
 }
 
@@ -79,6 +84,7 @@ export async function listSponsorsPage(params: {
     sortDir?: "asc" | "desc";
     page?: number;
 }): Promise<SponsorsPage> {
+    // Get all attendees, meeting requests, and scheduled meetings for this event in parallel.
     const [attendees, requestRows, meetingRows] = await Promise.all([
         loadAttendees(false, params.eventCode),
         db
@@ -94,19 +100,23 @@ export async function listSponsorsPage(params: {
             .where(eq(scheduledMeetings.eventCode, params.eventCode)),
     ]);
 
+    // Build a map of request counts keyed by attendee ID.
     const requestCountMap = new Map<string, number>();
     for (const r of requestRows) {
         requestCountMap.set(r.requesterId, (requestCountMap.get(r.requesterId) ?? 0) + 1);
     }
 
+    // Build a map of scheduled meeting counts keyed by attendee ID.
     const scheduledCountMap = new Map<string, number>();
     for (const m of meetingRows) {
         scheduledCountMap.set(m.attendeeA, (scheduledCountMap.get(m.attendeeA) ?? 0) + 1);
         scheduledCountMap.set(m.attendeeB, (scheduledCountMap.get(m.attendeeB) ?? 0) + 1);
     }
 
+    // Filter attendees to only include sponsors with a Salesforce ID.
     const sponsors = attendees.filter((a) => a.role === "sponsor" && a.salesforceId);
 
+    // Map sponsors to SponsorRow, attaching request and scheduled counts from the maps.
     let rows: SponsorRow[] = sponsors.map((s) => ({
         salesforceId: s.salesforceId,
         company: s.company,
@@ -119,6 +129,7 @@ export async function listSponsorsPage(params: {
         scheduledCount: scheduledCountMap.get(s.salesforceId) ?? 0,
     }));
 
+    // Apply search filter if q is provided. Search matches company or name, case-insensitive.
     const q = (params.q ?? "").trim().toLowerCase();
     if (q) {
         rows = rows.filter(
@@ -128,6 +139,7 @@ export async function listSponsorsPage(params: {
         );
     }
 
+    // Apply sorting if sortField is provided.
     const dir = params.sortDir === "asc" ? 1 : -1;
     rows.sort((a, b) => {
         switch (params.sortField) {
@@ -144,9 +156,11 @@ export async function listSponsorsPage(params: {
         }
     });
 
+    // Paginate the results.
     const total = rows.length;
     const { page, pageSize, pageCount, offset } = paginate(total, params);
 
+    // Return the paginated slice along with totals and metadata.
     return {
         rows: rows.slice(offset, offset + pageSize),
         total,
@@ -176,6 +190,8 @@ export async function runSchedulerForEvent(
     // attendees will carry real availability data and the engine will produce
     // meetings. Until then, scheduling.slots is [] for all real attendees and
     // the engine will always return an empty schedule with USE_MOCK=false.
+
+    // Load all attendees, meeting requests, and already-pushed meetings for this event in parallel.
     const [attendees, requestRows, pushedRows] = await Promise.all([
         loadAttendees(false, eventCode),
         db.select().from(meetingRequests).where(eq(meetingRequests.eventCode, eventCode)),
@@ -197,6 +213,7 @@ export async function runSchedulerForEvent(
     const engineIdToSf = new Map(attendees.map((a) => [a.id, a.salesforceId]));
 
     // Remap DB requests from Salesforce IDs → engine Attendee.id.
+    // This is because the engine uses its own internal IDs that are different from Salesforce IDs.
     const engineRequests: MeetingRequest[] = requestRows.map((r) => ({
         id: String(r.id),
         requesterId: sfToEngineId.get(r.requesterId) ?? r.requesterId,
@@ -238,6 +255,7 @@ export async function runSchedulerForEvent(
         ),
     );
 
+    // Insert the reconciled schedule, mapping engine IDs back to Salesforce IDs for storage.
     if (reconciledSchedule.length > 0) {
         const toInsert: NewScheduledMeeting[] = reconciledSchedule.map((m) => ({
             id: m.id,
@@ -263,6 +281,7 @@ export async function runSchedulerForEvent(
         await db.insert(scheduledMeetings).values(toInsert);
     }
 
+    // Revalidate the admin meetings page to reflect the new schedule.
     revalidatePath("/admin/meetings");
     return { inserted: reconciledSchedule.length };
 }
@@ -279,6 +298,7 @@ export async function runSchedulerForEvent(
 export async function pushAllForEvent(
     eventCode: string,
 ): Promise<{ pushed: number }> {
+    // Load all un-synced portal meetings for this event.
     const rows = await db
         .select({ id: scheduledMeetings.id })
         .from(scheduledMeetings)
@@ -297,7 +317,11 @@ export async function pushAllForEvent(
             ),
         );
 
+    // Set the current timestamp for creating stub Cvent appointment IDs and recording push time.
+    // TODO: Replace this block with a real Cvent API call per meeting.
     const now = new Date();
+
+    // Iterate through the meetings and update each with a stub Cvent appointment ID and lastPushedAt timestamp.
     for (const row of rows) {
         // TODO: Replace this inner block with a real Cvent API call per meeting.
         // Same as pushMeeting: create or update the Cvent appointment and write
@@ -311,6 +335,7 @@ export async function pushAllForEvent(
             .where(eq(scheduledMeetings.id, row.id));
     }
 
+    // Revalidate the admin meetings page to reflect the updated push status.
     revalidatePath("/admin/meetings");
     return { pushed: rows.length };
 }

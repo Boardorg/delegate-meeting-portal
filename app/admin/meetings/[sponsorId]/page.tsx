@@ -23,19 +23,26 @@ export default async function SponsorMeetingsPage({
     params: Promise<{ sponsorId: string }>;
     searchParams: Promise<{ event?: string }>;
 }) {
+    // Get the sponsorId from the route parameters and the event code from the query parameters.
     const { sponsorId } = await params;
     const { event } = await searchParams;
+
+    // Decode the sponsorId since it is URL-encoded in the route.
     const decodedId = decodeURIComponent(sponsorId);
 
+    // Validate the event code parameter. If it's missing or invalid, return a 404 page.
     if (!event) notFound();
 
+    // Fetch the meeting detail data for the sponsor and event.
     const detail = await getMeetingDetail({
         sponsorId: decodedId,
         eventCode: event,
     });
 
+    // If no meeting detail is found, return a 404 page.
     if (!detail) notFound();
 
+    // Render the meeting detail page with the fetched data.
     return (
         <MeetingDetail
             sponsor={detail.sponsor}

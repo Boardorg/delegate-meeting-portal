@@ -20,6 +20,7 @@ import {
     type SponsorDetail,
     type SyncStatus,
 } from "./actions";
+import { TierPill } from "../_components/TierPill";
 
 // ---------------------------------------------------------------------------
 // MeetingDetail — per-sponsor meeting table for /admin/meetings/[sponsorId].
@@ -51,6 +52,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
         return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([c]) => c));
     }, [meetings]);
 
+    // Handler for removing a meeting.
     function handleRemove(id: string) {
         startTransition(async () => {
             await removeMeeting({ id });
@@ -59,6 +61,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
         });
     }
 
+    // Handler for pushing a meeting.
     function handlePush(id: string) {
         startTransition(async () => {
             await pushMeeting({ id });
@@ -66,6 +69,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
         });
     }
 
+    // Handler for pushing all meetings for the sponsor.
     function handlePushAll() {
         startTransition(async () => {
             await pushAllForSponsor({ sponsorId: sponsor.salesforceId, eventCode });
@@ -73,6 +77,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
         });
     }
 
+    // Render the meeting detail page.
     return (
         <div className="adm-page">
             {/* Breadcrumb */}
@@ -484,10 +489,12 @@ function EditMeetingModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Helper to create a unique key for a slot option based on its IDs.
     function slotKey(o: SlotOption): string {
         return `${o.slotIdA}|${o.slotIdB}`;
     }
 
+    // Handler for saving the edited meeting.
     function handleSave() {
         const opt = options?.find((o) => slotKey(o) === selectedKey);
         if (!opt) return;
@@ -510,6 +517,7 @@ function EditMeetingModal({
         });
     }
 
+    // Render the edit meeting modal.
     return (
         <div
             style={{
@@ -661,6 +669,7 @@ function CreateMeetingModal({
     const [saveError, setSaveError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
+    // Load the list of delegates when the modal opens.
     useEffect(() => {
         listDelegates({ eventCode })
             .then(setDelegates)
@@ -668,10 +677,12 @@ function CreateMeetingModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Helper to create a unique key for a slot option based on its IDs.
     function slotKey(o: SlotOption): string {
         return `${o.slotIdA}|${o.slotIdB}`;
     }
 
+    // Handler for selecting a delegate.
     function selectDelegate(d: DelegateOption) {
         setSelected(d);
         setSlotOptions(null);
@@ -686,6 +697,7 @@ function CreateMeetingModal({
             .finally(() => setSlotsLoading(false));
     }
 
+    // Handler for creating a new meeting.
     function handleCreate() {
         const opt = slotOptions?.find((o) => slotKey(o) === selectedKey);
         if (!opt || !selected) return;
@@ -710,6 +722,7 @@ function CreateMeetingModal({
         });
     }
 
+    // Filter delegates based on search query.
     const filtered = delegates
         ? delegates.filter(
               (d) =>
@@ -719,6 +732,7 @@ function CreateMeetingModal({
           )
         : [];
 
+    // Render the create meeting modal.
     return (
         <div
             style={{
@@ -925,14 +939,20 @@ function CreateMeetingModal({
 // Chips + small display components
 // ---------------------------------------------------------------------------
 
+// MatchKindChip is a small badge that indicates the kind of match for a meeting (mutual, sponsor choice, delegate choice, or admin created).
 function MatchKindChip({ kind }: { kind: MeetingMatchKind }) {
+    // Define styles for each match kind.
     const styles: Record<MeetingMatchKind, { bg: string; color: string; border: string; label: string }> = {
         mutual:          { bg: "var(--green-s)",               color: "var(--green)",  border: "var(--green-b)",                   label: "Mutual" },
         sponsor_choice:  { bg: "var(--blue-s)",                color: "var(--blue)",   border: "var(--blue-b)",                    label: "Sponsor choice" },
         delegate_choice: { bg: "rgba(155,114,245,0.1)",        color: "var(--purple)", border: "rgba(155,114,245,0.25)",           label: "Delegate choice" },
         admin:           { bg: "rgba(240,160,32,0.1)",         color: "var(--gold)",   border: "rgba(240,160,32,0.3)",            label: "Admin created" },
     };
+
+    // Get the styles for the current match kind.
     const s = styles[kind];
+
+    // Render the chip with appropriate styles and label.
     return (
         <span
             style={{
@@ -951,13 +971,19 @@ function MatchKindChip({ kind }: { kind: MeetingMatchKind }) {
     );
 }
 
+// SyncChip is a small badge that indicates the sync status of a meeting.
 function SyncChip({ status }: { status: SyncStatus }) {
+    // Define styles for each sync status.
     const styles: Record<SyncStatus, { bg: string; color: string; border: string; label: string }> = {
         synced:     { bg: "var(--green-s)", color: "var(--green)", border: "var(--green-b)", label: "Synced" },
         modified:   { bg: "rgba(240,160,32,0.1)", color: "var(--gold)", border: "rgba(240,160,32,0.3)", label: "Modified" },
         not_pushed: { bg: "var(--s3)", color: "var(--t2)", border: "var(--border)", label: "Not pushed" },
     };
+
+    // Get the styles for the current sync status.
     const s = styles[status];
+
+    // Render the chip with appropriate styles and label.
     return (
         <span
             style={{
@@ -976,8 +1002,12 @@ function SyncChip({ status }: { status: SyncStatus }) {
     );
 }
 
+// SourceChip is a small badge that indicates whether a meeting was created from the portal or from Cvent.
 function SourceChip({ source }: { source: MeetingSource }) {
+    // Determine if the source is from the portal.
     const isPortal = source === "portal";
+
+    // Render the chip with appropriate styles and label based on the source.
     return (
         <span
             style={{
@@ -995,25 +1025,7 @@ function SourceChip({ source }: { source: MeetingSource }) {
     );
 }
 
-function TierPill({ tier }: { tier: "diamond" | "standard" }) {
-    const isDiamond = tier === "diamond";
-    return (
-        <span
-            style={{
-                fontSize: "10px",
-                padding: "2px 8px",
-                borderRadius: "100px",
-                fontWeight: 500,
-                background: isDiamond ? "rgba(155,114,245,0.12)" : "rgba(46,201,126,0.1)",
-                color: isDiamond ? "var(--purple)" : "var(--green)",
-                border: `1px solid ${isDiamond ? "rgba(155,114,245,0.25)" : "rgba(46,201,126,0.3)"}`,
-            }}
-        >
-            {isDiamond ? "◆ Diamond" : "● Standard"}
-        </span>
-    );
-}
-
+// StatChip is a small badge that displays a sponsor meeting statistic with a label and value.
 function StatChip({
     label,
     value,
@@ -1059,6 +1071,7 @@ function StatChip({
     );
 }
 
+// LegendItem is a small display component that shows a colored swatch and a label, used for legends in the UI.
 function LegendItem({
     swatch,
     label,

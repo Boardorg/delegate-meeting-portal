@@ -42,14 +42,17 @@ export default async function AdminMeetingsPage({
         page?: string;
     }>;
 }) {
+    // Get query parameters from the URL.
     const sp = await searchParams;
     const eventCodes = await listMeetingsEventCodes();
 
+    // Determine the selected event from the query parameters or default to the first event code.
     const selectedEvent =
         sp.event && eventCodes.includes(sp.event)
             ? sp.event
             : (eventCodes[0] ?? null);
 
+    // Validate and sanitize other query parameters for search, sort, and pagination.
     const sortField: SponsorSortField = SORT_FIELDS.includes(
         sp.sort as SponsorSortField,
     )
@@ -59,6 +62,7 @@ export default async function AdminMeetingsPage({
     const query = sp.q ?? "";
     const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
 
+    // Fetch the sponsor data for the selected event and query parameters.
     const data: SponsorsPage = selectedEvent
         ? await listSponsorsPage({
               eventCode: selectedEvent,
@@ -69,6 +73,7 @@ export default async function AdminMeetingsPage({
           })
         : emptyPage<SponsorRow>();
 
+    // Render the sponsor table with the fetched data and query parameters.
     return (
         <SponsorsTable
             eventCodes={eventCodes}

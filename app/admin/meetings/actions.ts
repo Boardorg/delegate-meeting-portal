@@ -7,6 +7,7 @@ import { meetingRequests, scheduledMeetings, type NewScheduledMeeting } from "@/
 import { loadAttendees } from "@/lib/attendees/loader";
 import { runScheduler } from "@/lib/scheduling/engine";
 import { pairKey } from "@/lib/scheduling/helpers";
+import { loadMockRequests } from "@/lib/scheduling/loader";
 import { paginate, type Page } from "@/lib/admin/pagination";
 import type { MeetingRequest } from "@/types";
 
@@ -191,10 +192,13 @@ export async function runSchedulerForEvent(
     // meetings. Until then, scheduling.slots is [] for all real attendees and
     // the engine will always return an empty schedule with USE_MOCK=false.
 
-    // Load all attendees, meeting requests, and already-pushed meetings for this event in parallel.
-    const [attendees, requestRows, pushedRows] = await Promise.all([
+    const isMock = process.env.USE_MOCK === "true";
+    const mockRequestsPath = `${process.cwd()}/data/mock/requests.json`;
+
+    // Load attendees and already-pushed meetings in parallel. Requests are loaded
+    // separately since their source depends on whether mock mode is active.
+    const [attendees, pushedRows] = await Promise.all([
         loadAttendees(false, eventCode),
-        db.select().from(meetingRequests).where(eq(meetingRequests.eventCode, eventCode)),
         db
             .select()
             .from(scheduledMeetings)
@@ -212,14 +216,16 @@ export async function runSchedulerForEvent(
     const sfToEngineId = new Map(attendees.map((a) => [a.salesforceId, a.id]));
     const engineIdToSf = new Map(attendees.map((a) => [a.id, a.salesforceId]));
 
-    // Remap DB requests from Salesforce IDs → engine Attendee.id.
-    // This is because the engine uses its own internal IDs that are different from Salesforce IDs.
-    const engineRequests: MeetingRequest[] = requestRows.map((r) => ({
-        id: String(r.id),
-        requesterId: sfToEngineId.get(r.requesterId) ?? r.requesterId,
-        targetId: sfToEngineId.get(r.targetId) ?? r.targetId,
-        rank: r.rank,
-    }));
+    // In mock mode, requests come from the file (already in engine ID format).
+    // In production, requests come from the DB and are remapped from Salesforce IDs.
+    const engineRequests: MeetingRequest[] = isMock
+        ? await loadMockRequests(mockRequestsPath)
+        : (await db.select().from(meetingRequests).where(eq(meetingRequests.eventCode, eventCode))).map((r) => ({
+              id: String(r.id),
+              requesterId: sfToEngineId.get(r.requesterId) ?? r.requesterId,
+              targetId: sfToEngineId.get(r.targetId) ?? r.targetId,
+              rank: r.rank,
+          }));
 
     // Run the engine freely with no knowledge of pushed meetings. This keeps the output
     // deterministic — pushed meetings influence it only via post-reconciliation below.

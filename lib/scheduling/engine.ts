@@ -22,8 +22,16 @@ interface PassConfig {
 	) => boolean;
 }
 
-// Cumulative meeting caps per sponsor tier at Pass 5.
-const SPONSOR_CAPS_PASS5: Record<string, number> = { diamond: 10, standard: 7 };
+// Cumulative meeting caps per sponsor tier, matched to contracted package counts.
+// Diamond: 8 contracted. Standard: 5 contracted.
+// These caps apply from pass 3 onward; earlier passes use lower shared ceilings.
+const SPONSOR_CAPS: Record<string, { pass3: number; pass4: number; pass5: number }> = {
+	diamond:  { pass3: 6, pass4: 8, pass5: 8 },
+	standard: { pass3: 5, pass4: 5, pass5: 5 },
+};
+
+const tierCap = (tier: SponsorTier, key: keyof typeof SPONSOR_CAPS['diamond']) =>
+	tier ? (SPONSOR_CAPS[tier]?.[key] ?? 5) : 5;
 
 // Defines the seven passes of the scheduling algorithm with their specific rules and caps.
 const PASSES: PassConfig[] = [
@@ -49,30 +57,35 @@ const PASSES: PassConfig[] = [
 	},
 	{
 		// Pass 3: High-interest delegate requests for sponsors (rank >= 4), regardless of mutuality.
+		// Cap is now tier-aware: standard sponsors are held to their contracted limit (5).
 		passNumber: 3,
 		day: 1,
 		delegateCap: 4,
-		sponsorCap: () => 6,
+		sponsorCap: (tier) => tierCap(tier, 'pass3'),
 		filter: (req, tgt, rank, _mutual) =>
 			req.role === 'delegate' && tgt.role === 'sponsor' && rank >= 4,
 	},
 	{
 		// Pass 4: Second pass on mutual sponsor <-> delegate requests. Raises caps to fill remaining slots.
+		// Cap is tier-aware: standard stays at 5, diamond rises to 8.
 		passNumber: 4,
 		day: 1,
 		delegateCap: 5,
-		sponsorCap: () => 8,
+		sponsorCap: (tier) => tierCap(tier, 'pass4'),
 		filter: (req, tgt, _rank, mutual) =>
 			mutual &&
 			((req.role === 'sponsor' && tgt.role === 'delegate') ||
 				(req.role === 'delegate' && tgt.role === 'sponsor')),
 	},
 	{
-		// Pass 5: All remaining sponsor requests, any rank. Caps raised to fulfill package meeting guarantees.
+		// Pass 5: All remaining sponsor requests, any rank. Final cap matches contracted package counts.
+		// TODO: Replace hardcoded pass5 caps with contracted + bonus once the bonus field is
+		// available from Salesforce. The tierCap lookup will need to accept a dynamic value
+		// per attendee rather than a fixed tier-based constant.
 		passNumber: 5,
 		day: 1,
 		delegateCap: 7,
-		sponsorCap: (tier) => (tier ? (SPONSOR_CAPS_PASS5[tier] ?? 7) : 7),
+		sponsorCap: (tier) => tierCap(tier, 'pass5'),
 		filter: (req, tgt, _rank, _mutual) =>
 			req.role === 'sponsor' && tgt.role === 'delegate',
 	},

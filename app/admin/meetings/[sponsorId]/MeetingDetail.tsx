@@ -269,6 +269,8 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
                 <CreateMeetingModal
                     sponsorId={sponsor.salesforceId}
                     eventCode={eventCode}
+                    scheduledCount={sponsor.scheduledCount}
+                    meetingTarget={total}
                     onClose={() => setShowCreate(false)}
                     onCreated={() => { setShowCreate(false); router.refresh(); }}
                 />
@@ -650,11 +652,15 @@ function EditMeetingModal({
 function CreateMeetingModal({
     sponsorId,
     eventCode,
+    scheduledCount,
+    meetingTarget,
     onClose,
     onCreated,
 }: {
     sponsorId: string;
     eventCode: string;
+    scheduledCount: number;
+    meetingTarget: number;
     onClose: () => void;
     onCreated: () => void;
 }) {
@@ -768,6 +774,30 @@ function CreateMeetingModal({
                 >
                     Create Meeting
                 </div>
+
+                {/* Warning if sponsor has reached or exceeded their meeting target. */}
+                {scheduledCount >= meetingTarget && (
+                    <div
+                        style={{
+                            fontSize: "12px",
+                            padding: "8px 12px",
+                            borderRadius: "var(--r)",
+                            background: scheduledCount > meetingTarget
+                                ? "rgba(232,57,30,0.08)"
+                                : "rgba(240,160,32,0.1)",
+                            color: scheduledCount > meetingTarget
+                                ? "var(--red)"
+                                : "var(--gold)",
+                            border: `1px solid ${scheduledCount > meetingTarget
+                                ? "rgba(232,57,30,0.25)"
+                                : "rgba(240,160,32,0.3)"}`,
+                        }}
+                    >
+                        {scheduledCount > meetingTarget
+                            ? `This sponsor is over target (${scheduledCount} of ${meetingTarget} scheduled).`
+                            : `This sponsor has reached their meeting target (${scheduledCount} of ${meetingTarget}).`}
+                    </div>
+                )}
 
                 {/* Delegate picker */}
                 <div>

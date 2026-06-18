@@ -322,8 +322,16 @@ function SponsorRow({
     // Calculate the total meetings (contracted + bonus) and the percentage of scheduled meetings for the progress bar.
     const total = row.contracted + row.bonus;
     const scheduledPercent = total > 0 ? Math.round((row.scheduledCount / total) * 100) : 0;
-    const barColor =
-        scheduledPercent >= 100 ? "var(--green)" : scheduledPercent >= 85 ? "var(--gold)" : "var(--blue)";
+
+    // Check if the sponsor is over their meeting target.
+    const isOver = row.scheduledCount > total;
+    const barColor = isOver
+        ? "var(--red)"
+        : scheduledPercent >= 100
+          ? "var(--green)"
+          : scheduledPercent >= 85
+            ? "var(--gold)"
+            : "var(--blue)";
 
     // Render the sponsor row with company, contact, tier, contracted/bonus totals, request/scheduled counts, and a progress bar for scheduled meetings.
     return (

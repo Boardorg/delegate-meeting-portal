@@ -1,4 +1,4 @@
-import type { User } from "@/lib/db/schema";
+import type { User, MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 
 export type CachedAuth = {
     accessToken: string;
@@ -26,6 +26,7 @@ export type AttendeeRole = "delegate" | "sponsor";
  * - `null`: Not applicable (delegates).
  */
 export type SponsorTier = "diamond" | "standard" | null;
+
 
 /**
  * Status of a single time slot in an attendee's schedule.
@@ -178,6 +179,19 @@ export interface Attendee {
 }
 
 /**
+ * An Attendee extended with computed per-event stats for the admin detail view.
+ * Used as the sponsor prop on the per-sponsor meeting detail page.
+ * sponsorTier is narrowed to non-null because only sponsor attendees reach that page.
+ */
+export type SponsorDetail = Attendee & {
+    sponsorTier: "diamond" | "standard";
+    contracted: number;
+    bonus: number;
+    requestCount: number;
+    scheduledCount: number;
+};
+
+/**
  * A single meeting request submitted by an attendee to meet another attendee.
  */
 export interface MeetingRequest {
@@ -196,22 +210,6 @@ export interface MeetingRequest {
      */
     rank: number;
 }
-
-/**
- * How a scheduled meeting was created and which party's request drove the pairing.
- * - `mutual`: both parties requested each other.
- * - `sponsor_choice`: the sponsor's request drove the engine pairing.
- * - `delegate_choice`: the delegate's request drove the engine pairing.
- * - `admin`: created manually by an admin outside the engine.
- */
-export type MeetingMatchKind = "mutual" | "sponsor_choice" | "delegate_choice" | "admin";
-
-/**
- * Where a meeting originates. Portal-managed meetings are editable; Cvent-native meetings are read-only.
- * - `portal`: created by the scheduling engine or an admin through this portal.
- * - `cvent`: exists natively in Cvent (pulled in for display only).
- */
-export type MeetingSource = "portal" | "cvent";
 
 /**
  * A single confirmed meeting produced by the scheduling engine.

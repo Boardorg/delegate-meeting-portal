@@ -335,11 +335,7 @@ function SponsorRow({
 
     // Render the sponsor row with company, contact, tier, contracted/bonus totals, request/scheduled counts, and a progress bar for scheduled meetings.
     return (
-        <tr
-            className="adm-row"
-            style={{ cursor: "pointer" }}
-            onClick={onView}
-        >
+        <tr className="adm-row adm-row-clickable" onClick={onView}>
             <td>
                 <div className="adm-party-name">{row.company}</div>
             </td>
@@ -350,65 +346,19 @@ function SponsorRow({
             <td>
                 <TierPill tier={row.sponsorTier} />
             </td>
-            <td style={{ fontFamily: "var(--mono)", fontSize: "12px" }}>
-                {row.contracted}
-            </td>
-            <td
-                style={{
-                    fontFamily: "var(--mono)",
-                    fontSize: "12px",
-                    color: "var(--t2)",
-                }}
-            >
-                {row.bonus > 0 ? `+${row.bonus}` : "—"}
-            </td>
-            <td style={{ fontFamily: "var(--mono)", fontSize: "12px" }}>
-                {total}
-            </td>
-            <td
-                style={{
-                    fontFamily: "var(--mono)",
-                    fontSize: "12px",
-                    color: "var(--t2)",
-                }}
-            >
-                {row.requestCount}
-            </td>
+            <td className="adm-mono">{row.contracted}</td>
+            <td className="adm-mono-dim">{row.bonus > 0 ? `+${row.bonus}` : "—"}</td>
+            <td className="adm-mono">{total}</td>
+            <td className="adm-mono-dim">{row.requestCount}</td>
             <td>
-                <div
-                    style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "4px",
-                    }}
-                >
-                    <div
-                        style={{
-                            width: "80px",
-                            height: "4px",
-                            background: "var(--s3)",
-                            borderRadius: "2px",
-                            overflow: "hidden",
-                        }}
-                    >
+                <div className="adm-progress">
+                    <div className="adm-progress-track">
                         <div
-                            style={{
-                                height: "100%",
-                                width: `${Math.min(scheduledPercent, 100)}%`,
-                                background: barColor,
-                                borderRadius: "2px",
-                            }}
+                            className="adm-progress-bar"
+                            style={{ width: `${Math.min(scheduledPercent, 100)}%`, background: barColor }}
                         />
                     </div>
-                    <span
-                        style={{
-                            fontFamily: "var(--mono)",
-                            fontSize: "11px",
-                            color: "var(--t2)",
-                        }}
-                    >
-                        {row.scheduledCount} / {total}
-                    </span>
+                    <span className="adm-progress-label">{row.scheduledCount} / {total}</span>
                 </div>
             </td>
         </tr>
@@ -433,81 +383,19 @@ function PushAllModal({
     onCancel: () => void;
 }) {
     return (
-        <div
-            style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 50,
-                background: "rgba(0,0,0,0.45)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "16px",
-            }}
-        >
-            <div
-                style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--r-lg)",
-                    padding: "28px 32px",
-                    width: "100%",
-                    maxWidth: "460px",
-                }}
-            >
-                <div
-                    style={{
-                        fontFamily: "var(--display)",
-                        fontSize: "16px",
-                        fontWeight: 700,
-                        marginBottom: "10px",
-                    }}
-                >
-                    Push All to Cvent?
-                </div>
-                <p
-                    style={{
-                        fontSize: "13px",
-                        color: "var(--t2)",
-                        lineHeight: "1.55",
-                        margin: "0 0 20px",
-                    }}
-                >
+        <div className="adm-modal-overlay">
+            <div className="adm-modal adm-modal-md">
+                <div className="adm-modal-title">Push All to Cvent?</div>
+                <p className="adm-modal-body">
                     This will push all un-synced portal meetings for{" "}
-                    <strong style={{ color: "var(--text)" }}>{eventCode}</strong>{" "}
+                    <strong>{eventCode}</strong>{" "}
                     to Cvent, including meetings that have been modified since their
                     last push.
                 </p>
-
-                {error && (
-                    <div
-                        style={{
-                            marginBottom: "16px",
-                            padding: "10px 14px",
-                            background: "rgba(232,57,30,0.08)",
-                            border: "1px solid var(--red-b, rgba(232,57,30,0.3))",
-                            borderRadius: "var(--r)",
-                            fontSize: "12px",
-                            color: "var(--red, #e8391e)",
-                        }}
-                    >
-                        {error}
-                    </div>
-                )}
-
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                    <button
-                        className="adm-btn"
-                        onClick={onCancel}
-                        disabled={isPending}
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        className="adm-btn adm-btn-primary"
-                        onClick={onConfirm}
-                        disabled={isPending}
-                    >
+                {error && <div className="adm-modal-error">{error}</div>}
+                <div className="adm-modal-actions">
+                    <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
+                    <button className="adm-btn adm-btn-primary" onClick={onConfirm} disabled={isPending}>
                         {isPending ? "Pushing…" : "Push All"}
                     </button>
                 </div>
@@ -534,81 +422,19 @@ function RunEngineModal({
     onCancel: () => void;
 }) {
     return (
-        <div
-            style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 50,
-                background: "rgba(0,0,0,0.45)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "16px",
-            }}
-        >
-            <div
-                style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--r-lg)",
-                    padding: "28px 32px",
-                    width: "100%",
-                    maxWidth: "460px",
-                }}
-            >
-                <div
-                    style={{
-                        fontFamily: "var(--display)",
-                        fontSize: "16px",
-                        fontWeight: 700,
-                        marginBottom: "10px",
-                    }}
-                >
-                    Run Scheduling Engine?
-                </div>
-                <p
-                    style={{
-                        fontSize: "13px",
-                        color: "var(--t2)",
-                        lineHeight: "1.55",
-                        margin: "0 0 20px",
-                    }}
-                >
+        <div className="adm-modal-overlay">
+            <div className="adm-modal adm-modal-md">
+                <div className="adm-modal-title">Run Scheduling Engine?</div>
+                <p className="adm-modal-body">
                     This will replace all un-pushed meetings for{" "}
-                    <strong style={{ color: "var(--text)" }}>{eventCode}</strong>{" "}
+                    <strong>{eventCode}</strong>{" "}
                     with fresh engine output. Meetings already pushed to Cvent are
                     preserved and count against per-sponsor caps.
                 </p>
-
-                {error && (
-                    <div
-                        style={{
-                            marginBottom: "16px",
-                            padding: "10px 14px",
-                            background: "rgba(232,57,30,0.08)",
-                            border: "1px solid var(--red-b, rgba(232,57,30,0.3))",
-                            borderRadius: "var(--r)",
-                            fontSize: "12px",
-                            color: "var(--red, #e8391e)",
-                        }}
-                    >
-                        {error}
-                    </div>
-                )}
-
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                    <button
-                        className="adm-btn"
-                        onClick={onCancel}
-                        disabled={isPending}
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        className="adm-btn adm-btn-primary"
-                        onClick={onConfirm}
-                        disabled={isPending}
-                    >
+                {error && <div className="adm-modal-error">{error}</div>}
+                <div className="adm-modal-actions">
+                    <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
+                    <button className="adm-btn adm-btn-primary" onClick={onConfirm} disabled={isPending}>
                         {isPending ? "Running…" : "Run Engine"}
                     </button>
                 </div>

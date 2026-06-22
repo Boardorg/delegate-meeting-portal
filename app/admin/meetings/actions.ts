@@ -9,6 +9,7 @@ import { runScheduler } from "@/lib/scheduling/engine";
 import { pairKey } from "@/lib/scheduling/helpers";
 import { loadMockRequests } from "@/lib/scheduling/loader";
 import { paginate, type Page } from "@/lib/admin/pagination";
+import { contractedMeetings } from "@/lib/attendees/caps";
 import type { MeetingRequest } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -129,7 +130,7 @@ export async function listSponsorsPage(params: {
         name: s.name,
         title: s.title,
         sponsorTier: s.sponsorTier === "diamond" ? "diamond" : "standard",
-        contracted: s.sponsorTier === "diamond" ? 8 : 5,
+        contracted: contractedMeetings(s.sponsorTier),
         bonus: 0,
         requestCount: requestCountMap.get(s.salesforceId) ?? 0,
         scheduledCount: scheduledCountMap.get(s.salesforceId) ?? 0,

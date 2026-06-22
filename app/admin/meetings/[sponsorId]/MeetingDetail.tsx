@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { fmtTime } from "@/lib/format";
-import type { MeetingMatchKind, MeetingSource } from "@/types";
+import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
+import type { SponsorDetail } from "@/types";
 import {
     createMeeting,
     editMeeting,
@@ -17,7 +18,6 @@ import {
     type DelegateOption,
     type MeetingRow,
     type SlotOption,
-    type SponsorDetail,
     type SyncStatus,
 } from "./actions";
 import { TierPill } from "../_components/TierPill";
@@ -81,55 +81,18 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
     return (
         <div className="adm-page">
             {/* Breadcrumb */}
-            <nav style={{ fontSize: "12px", color: "var(--t3)", marginBottom: "4px" }}>
-                <Link
-                    href={listHref}
-                    style={{ color: "var(--t2)", textDecoration: "none" }}
-                >
-                    Manage Meetings
-                </Link>
-                <span style={{ margin: "0 6px" }}>›</span>
+            <nav className="adm-breadcrumb">
+                <Link href={listHref}>Manage Meetings</Link>
+                <span className="adm-breadcrumb-sep">›</span>
                 <span>{sponsor.company}</span>
             </nav>
 
             {/* Sponsor header */}
-            <div
-                style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--r-lg)",
-                    padding: "20px 24px",
-                    marginBottom: "20px",
-                }}
-            >
-                <div
-                    style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        justifyContent: "space-between",
-                        gap: "16px",
-                        marginBottom: "16px",
-                        flexWrap: "wrap",
-                    }}
-                >
+            <div className="adm-card">
+                <div className="adm-card-head">
                     <div>
-                        <div
-                            style={{
-                                fontFamily: "var(--display)",
-                                fontSize: "20px",
-                                fontWeight: 700,
-                                letterSpacing: "-0.02em",
-                            }}
-                        >
-                            {sponsor.company}
-                        </div>
-                        <div
-                            style={{
-                                fontSize: "13px",
-                                color: "var(--t2)",
-                                marginTop: "3px",
-                            }}
-                        >
+                        <div className="adm-card-title">{sponsor.company}</div>
+                        <div className="adm-card-sub">
                             {sponsor.name} · {sponsor.title} ·{" "}
                             <TierPill tier={sponsor.sponsorTier} />
                         </div>
@@ -137,7 +100,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
                 </div>
 
                 {/* Stat chips + push all */}
-                <div style={{ display: "flex", alignItems: "flex-end", gap: "10px", flexWrap: "wrap" }}>
+                <div className="adm-card-row">
                     <StatChip label="Contracted" value={String(sponsor.contracted)} />
                     <StatChip
                         label="Bonus"
@@ -160,10 +123,9 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
                     />
                     <button
                         type="button"
-                        className="adm-new-btn"
+                        className="adm-new-btn adm-ml-auto"
                         disabled={isPending}
                         onClick={handlePushAll}
-                        style={{ marginLeft: "auto" }}
                     >
                         Push All to Cvent
                     </button>
@@ -171,26 +133,8 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
             </div>
 
             {/* Legend + create button */}
-            <div
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "12px",
-                    marginBottom: "14px",
-                    flexWrap: "wrap",
-                }}
-            >
-                <div
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "16px",
-                        fontSize: "11px",
-                        color: "var(--t2)",
-                        flexWrap: "wrap",
-                    }}
-                >
+            <div className="adm-table-toolbar">
+                <div className="adm-legend">
                     <LegendItem
                         swatch={{ width: 12, height: 12, borderRadius: 2, background: "var(--blue-s)", border: "1px solid var(--blue-b)" }}
                         label="Portal-managed"
@@ -215,15 +159,12 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
 
             {/* Meeting table */}
             {meetings.length === 0 ? (
-                <div className="adm-empty" style={{ padding: "48px 24px" }}>
+                <div className="adm-empty adm-empty-lg">
                     No meetings scheduled yet.
                 </div>
             ) : (
-                <div style={{ overflowX: "auto" }}>
-                    <table
-                        className="adm-table"
-                        style={{ minWidth: "980px" }}
-                    >
+                <div className="adm-table-scroll">
+                    <table className="adm-table adm-table-wide">
                         <thead>
                             <tr>
                                 <th>Delegate</th>
@@ -310,32 +251,18 @@ function MeetingTableRow({
     const showPush = !isCvent && m.syncStatus !== "synced";
 
     return (
-        <tr
-            className="adm-row"
-            style={{
-                borderLeft: hasConflict ? "3px solid var(--gold)" : undefined,
-                opacity: isCvent ? 0.7 : 1,
-            }}
-        >
+        <tr className={`adm-row${hasConflict ? " adm-row-conflict" : ""}${isCvent ? " adm-row-muted" : ""}`}>
             {/* Delegate */}
             <td>
                 <div className="adm-party-name">{m.delegateName}</div>
-                <div style={{ marginTop: "4px" }}>
+                <div className="adm-chip-mt">
                     <MatchKindChip kind={m.matchKind} />
                 </div>
             </td>
 
             {/* Company */}
             <td>
-                <div
-                    className="adm-party-company"
-                    style={{
-                        color: hasConflict ? "var(--gold)" : undefined,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                    }}
-                >
+                <div className={`adm-party-company adm-party-company-row${hasConflict ? " adm-party-conflict" : ""}`}>
                     {hasConflict && <span title="Duplicate company">⚠</span>}
                     {m.delegateCompany || "—"}
                 </div>
@@ -344,49 +271,22 @@ function MeetingTableRow({
             {/* Rank */}
             <td>
                 {m.rank != null ? (
-                    <span
-                        style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: "50%",
-                            background: "var(--s3)",
-                            border: "1px solid var(--border)",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "10px",
-                            fontFamily: "var(--mono)",
-                            color: "var(--t2)",
-                        }}
-                    >
-                        {m.rank}
-                    </span>
+                    <span className="adm-rank-badge">{m.rank}</span>
                 ) : (
-                    <span style={{ color: "var(--t3)", fontSize: "12px" }}>—</span>
+                    <span className="adm-dim">—</span>
                 )}
             </td>
 
             {/* Time slot */}
             <td>
-                <span
-                    style={{
-                        fontFamily: "var(--mono)",
-                        fontSize: "11px",
-                        color: m.startTime ? "var(--text)" : "var(--t3)",
-                    }}
-                >
+                <span className={m.startTime ? "adm-mono-sm" : "adm-mono-sm adm-dim"}>
                     {fmtTime(m.startTime)}
                 </span>
             </td>
 
             {/* Location */}
             <td>
-                <span
-                    style={{
-                        fontSize: "11px",
-                        color: m.location ? "var(--t2)" : "var(--t3)",
-                    }}
-                >
+                <span className={m.location ? "adm-text-sm-muted" : "adm-text-sm-dim"}>
                     {m.location || "—"}
                 </span>
             </td>
@@ -523,64 +423,24 @@ function EditMeetingModal({
 
     // Render the edit meeting modal.
     return (
-        <div
-            style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 50,
-                background: "rgba(0,0,0,0.45)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "16px",
-            }}
-        >
-            <div
-                style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--r-lg)",
-                    padding: "28px 32px",
-                    width: "100%",
-                    maxWidth: "440px",
-                }}
-            >
-                <div
-                    style={{
-                        fontFamily: "var(--display)",
-                        fontSize: "16px",
-                        fontWeight: 700,
-                        marginBottom: "4px",
-                    }}
-                >
-                    Edit Meeting
-                </div>
-                <div
-                    style={{
-                        fontSize: "12px",
-                        color: "var(--t2)",
-                        marginBottom: "20px",
-                    }}
-                >
+        <div className="adm-modal-overlay">
+            <div className="adm-modal adm-modal-sm">
+                <div className="adm-modal-title-sm">Edit Meeting</div>
+                <div className="adm-modal-sub">
                     {meeting.delegateName}
                     {meeting.delegateCompany ? ` · ${meeting.delegateCompany}` : ""}
                 </div>
 
                 {loadError ? (
-                    <div style={{ fontSize: "12px", color: "var(--red, #e8391e)", marginBottom: "16px" }}>
-                        {loadError}
-                    </div>
+                    <div className="adm-modal-load-error">{loadError}</div>
                 ) : options === null ? (
-                    <div style={{ fontSize: "12px", color: "var(--t3)", marginBottom: "16px" }}>
-                        Loading slots…
-                    </div>
+                    <div className="adm-modal-loading">Loading slots…</div>
                 ) : (
                     <>
-                        <label className="adm-field" style={{ marginBottom: "14px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <label className="adm-field adm-field-mb">
                             <span className="adm-field-label">Time Slot</span>
                             <select
                                 className="adm-input adm-select"
-                                style={{ width: "100%" }}
                                 value={selectedKey}
                                 onChange={(e) => setSelectedKey(e.target.value)}
                                 disabled={isPending}
@@ -593,12 +453,11 @@ function EditMeetingModal({
                             </select>
                         </label>
 
-                        <label className="adm-field" style={{ marginBottom: "20px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <label className="adm-field adm-field-mb-lg">
                             <span className="adm-field-label">Location</span>
                             <input
                                 type="text"
                                 className="adm-input"
-                                style={{ width: "100%" }}
                                 placeholder="e.g. Table 3A"
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
@@ -608,29 +467,10 @@ function EditMeetingModal({
                     </>
                 )}
 
-                {saveError && (
-                    <div
-                        style={{
-                            marginBottom: "16px",
-                            padding: "10px 14px",
-                            background: "rgba(232,57,30,0.08)",
-                            border: "1px solid var(--red-b, rgba(232,57,30,0.3))",
-                            borderRadius: "var(--r)",
-                            fontSize: "12px",
-                            color: "var(--red, #e8391e)",
-                        }}
-                    >
-                        {saveError}
-                    </div>
-                )}
+                {saveError && <div className="adm-modal-error">{saveError}</div>}
 
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                    <button
-                        type="button"
-                        className="adm-btn"
-                        onClick={onClose}
-                        disabled={isPending}
-                    >
+                <div className="adm-modal-actions">
+                    <button type="button" className="adm-btn" onClick={onClose} disabled={isPending}>
                         Cancel
                     </button>
                     <button
@@ -742,59 +582,13 @@ function CreateMeetingModal({
 
     // Render the create meeting modal.
     return (
-        <div
-            style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 50,
-                background: "rgba(0,0,0,0.45)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "16px",
-            }}
-        >
-            <div
-                style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--r-lg)",
-                    padding: "28px 32px",
-                    width: "100%",
-                    maxWidth: "500px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "16px",
-                }}
-            >
-                <div
-                    style={{
-                        fontFamily: "var(--display)",
-                        fontSize: "16px",
-                        fontWeight: 700,
-                    }}
-                >
-                    Create Meeting
-                </div>
+        <div className="adm-modal-overlay">
+            <div className="adm-modal adm-modal-lg">
+                <div className="adm-modal-title">Create Meeting</div>
 
                 {/* Warning if sponsor has reached or exceeded their meeting target. */}
                 {scheduledCount >= meetingTarget && (
-                    <div
-                        style={{
-                            fontSize: "12px",
-                            padding: "8px 12px",
-                            borderRadius: "var(--r)",
-                            background: scheduledCount > meetingTarget
-                                ? "rgba(232,57,30,0.08)"
-                                : "rgba(240,160,32,0.1)",
-                            color: scheduledCount > meetingTarget
-                                ? "var(--red)"
-                                : "var(--gold)",
-                            border: `1px solid ${scheduledCount > meetingTarget
-                                ? "rgba(232,57,30,0.25)"
-                                : "rgba(240,160,32,0.3)"}`,
-                        }}
-                    >
+                    <div className={scheduledCount > meetingTarget ? "adm-modal-warn-over" : "adm-modal-warn-at"}>
                         {scheduledCount > meetingTarget
                             ? `This sponsor is over target (${scheduledCount} of ${meetingTarget} scheduled).`
                             : `This sponsor has reached their meeting target (${scheduledCount} of ${meetingTarget}).`}
@@ -803,24 +597,17 @@ function CreateMeetingModal({
 
                 {/* Delegate picker */}
                 <div>
-                    <div className="adm-field-label" style={{ marginBottom: "6px" }}>
+                    <div className="adm-field-label adm-field-mb-sm">
                         {selected ? (
                             <span>
                                 Delegate:{" "}
-                                <strong style={{ color: "var(--text)" }}>
+                                <strong>
                                     {selected.name}
                                     {selected.company ? ` · ${selected.company}` : ""}
                                 </strong>{" "}
                                 <button
                                     type="button"
-                                    style={{
-                                        background: "none",
-                                        border: "none",
-                                        color: "var(--blue)",
-                                        cursor: "pointer",
-                                        fontSize: "11px",
-                                        padding: 0,
-                                    }}
+                                    className="adm-link-btn"
                                     onClick={() => { setSelected(null); setSlotOptions(null); setSelectedKey(""); }}
                                 >
                                     Change
@@ -835,52 +622,30 @@ function CreateMeetingModal({
                         <>
                             <input
                                 type="search"
-                                className="adm-input"
+                                className="adm-input adm-delegate-search"
                                 placeholder="Search by name or company…"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                style={{ marginBottom: "6px" }}
                             />
                             {loadError ? (
-                                <div style={{ fontSize: "12px", color: "var(--red, #e8391e)" }}>{loadError}</div>
+                                <div className="adm-modal-load-error">{loadError}</div>
                             ) : delegates === null ? (
-                                <div style={{ fontSize: "12px", color: "var(--t3)" }}>Loading…</div>
+                                <div className="adm-dim">Loading…</div>
                             ) : (
-                                <div
-                                    style={{
-                                        border: "1px solid var(--border)",
-                                        borderRadius: "var(--r)",
-                                        maxHeight: "180px",
-                                        overflowY: "auto",
-                                    }}
-                                >
+                                <div className="adm-delegate-list">
                                     {filtered.length === 0 ? (
-                                        <div style={{ padding: "12px", fontSize: "12px", color: "var(--t3)", textAlign: "center" }}>
-                                            No delegates found.
-                                        </div>
+                                        <div className="adm-delegate-empty">No delegates found.</div>
                                     ) : (
                                         filtered.map((d) => (
                                             <button
                                                 key={d.salesforceId}
                                                 type="button"
+                                                className="adm-delegate-option"
                                                 onClick={() => selectDelegate(d)}
-                                                style={{
-                                                    display: "block",
-                                                    width: "100%",
-                                                    textAlign: "left",
-                                                    background: "none",
-                                                    border: "none",
-                                                    borderBottom: "1px solid var(--border)",
-                                                    padding: "8px 12px",
-                                                    cursor: "pointer",
-                                                    fontSize: "13px",
-                                                }}
                                             >
-                                                <span style={{ color: "var(--text)" }}>{d.name}</span>
+                                                <span>{d.name}</span>
                                                 {d.company && (
-                                                    <span style={{ marginLeft: "6px", fontSize: "11px", color: "var(--t2)" }}>
-                                                        {d.company}
-                                                    </span>
+                                                    <span className="adm-delegate-company">{d.company}</span>
                                                 )}
                                             </button>
                                         ))
@@ -894,18 +659,17 @@ function CreateMeetingModal({
                 {/* Slot + location (shown after delegate selected) */}
                 {selected && (
                     <>
-                        <label className="adm-field" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <label className="adm-field">
                             <span className="adm-field-label">Time Slot</span>
                             {slotsLoading ? (
-                                <span style={{ fontSize: "12px", color: "var(--t3)" }}>Loading slots…</span>
+                                <span className="adm-dim">Loading slots…</span>
                             ) : slotOptions && slotOptions.length === 0 ? (
-                                <span style={{ fontSize: "12px", color: "var(--gold)" }}>
+                                <span className="adm-gold-sm">
                                     No mutual available slots for this pair.
                                 </span>
                             ) : (
                                 <select
                                     className="adm-input adm-select"
-                                    style={{ width: "100%" }}
                                     value={selectedKey}
                                     onChange={(e) => setSelectedKey(e.target.value)}
                                     disabled={isPending || !slotOptions}
@@ -919,12 +683,11 @@ function CreateMeetingModal({
                             )}
                         </label>
 
-                        <label className="adm-field" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <label className="adm-field">
                             <span className="adm-field-label">Location</span>
                             <input
                                 type="text"
                                 className="adm-input"
-                                style={{ width: "100%" }}
                                 placeholder="e.g. Table 3A"
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
@@ -934,22 +697,9 @@ function CreateMeetingModal({
                     </>
                 )}
 
-                {saveError && (
-                    <div
-                        style={{
-                            padding: "10px 14px",
-                            background: "rgba(232,57,30,0.08)",
-                            border: "1px solid var(--red-b, rgba(232,57,30,0.3))",
-                            borderRadius: "var(--r)",
-                            fontSize: "12px",
-                            color: "var(--red, #e8391e)",
-                        }}
-                    >
-                        {saveError}
-                    </div>
-                )}
+                {saveError && <div className="adm-modal-error">{saveError}</div>}
 
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <div className="adm-modal-actions">
                     <button type="button" className="adm-btn" onClick={onClose} disabled={isPending}>
                         Cancel
                     </button>
@@ -971,149 +721,59 @@ function CreateMeetingModal({
 // Chips + small display components
 // ---------------------------------------------------------------------------
 
-// MatchKindChip is a small badge that indicates the kind of match for a meeting (mutual, sponsor choice, delegate choice, or admin created).
 function MatchKindChip({ kind }: { kind: MeetingMatchKind }) {
-    // Define styles for each match kind.
-    const styles: Record<MeetingMatchKind, { bg: string; color: string; border: string; label: string }> = {
-        mutual:          { bg: "var(--green-s)",               color: "var(--green)",  border: "var(--green-b)",                   label: "Mutual" },
-        sponsor_choice:  { bg: "var(--blue-s)",                color: "var(--blue)",   border: "var(--blue-b)",                    label: "Sponsor choice" },
-        delegate_choice: { bg: "rgba(155,114,245,0.1)",        color: "var(--purple)", border: "rgba(155,114,245,0.25)",           label: "Delegate choice" },
-        admin:           { bg: "rgba(240,160,32,0.1)",         color: "var(--gold)",   border: "rgba(240,160,32,0.3)",            label: "Admin created" },
+    const classMap: Record<MeetingMatchKind, string> = {
+        mutual:          "adm-chip-mutual",
+        sponsor_choice:  "adm-chip-sponsor-choice",
+        delegate_choice: "adm-chip-delegate-choice",
+        admin:           "adm-chip-admin",
     };
-
-    // Get the styles for the current match kind.
-    const s = styles[kind];
-
-    // Render the chip with appropriate styles and label.
-    return (
-        <span
-            style={{
-                fontSize: "10px",
-                padding: "2px 7px",
-                borderRadius: "100px",
-                fontWeight: 500,
-                background: s.bg,
-                color: s.color,
-                border: `1px solid ${s.border}`,
-                whiteSpace: "nowrap",
-            }}
-        >
-            {s.label}
-        </span>
-    );
+    const labelMap: Record<MeetingMatchKind, string> = {
+        mutual:          "Mutual",
+        sponsor_choice:  "Sponsor choice",
+        delegate_choice: "Delegate choice",
+        admin:           "Admin created",
+    };
+    return <span className={`adm-chip ${classMap[kind]}`}>{labelMap[kind]}</span>;
 }
 
-// SyncChip is a small badge that indicates the sync status of a meeting.
 function SyncChip({ status }: { status: SyncStatus }) {
-    // Define styles for each sync status.
-    const styles: Record<SyncStatus, { bg: string; color: string; border: string; label: string }> = {
-        synced:     { bg: "var(--green-s)", color: "var(--green)", border: "var(--green-b)", label: "Synced" },
-        modified:   { bg: "rgba(240,160,32,0.1)", color: "var(--gold)", border: "rgba(240,160,32,0.3)", label: "Modified" },
-        not_pushed: { bg: "var(--s3)", color: "var(--t2)", border: "var(--border)", label: "Not pushed" },
+    const classMap: Record<SyncStatus, string> = {
+        synced:     "adm-chip-synced",
+        modified:   "adm-chip-modified",
+        not_pushed: "adm-chip-not-pushed",
     };
-
-    // Get the styles for the current sync status.
-    const s = styles[status];
-
-    // Render the chip with appropriate styles and label.
-    return (
-        <span
-            style={{
-                fontSize: "10px",
-                padding: "2px 7px",
-                borderRadius: "100px",
-                fontWeight: 500,
-                background: s.bg,
-                color: s.color,
-                border: `1px solid ${s.border}`,
-                whiteSpace: "nowrap",
-            }}
-        >
-            {s.label}
-        </span>
-    );
+    const labelMap: Record<SyncStatus, string> = {
+        synced:     "Synced",
+        modified:   "Modified",
+        not_pushed: "Not pushed",
+    };
+    return <span className={`adm-chip ${classMap[status]}`}>{labelMap[status]}</span>;
 }
 
-// SourceChip is a small badge that indicates whether a meeting was created from the portal or from Cvent.
 function SourceChip({ source }: { source: MeetingSource }) {
-    // Determine if the source is from the portal.
-    const isPortal = source === "portal";
-
-    // Render the chip with appropriate styles and label based on the source.
     return (
-        <span
-            style={{
-                fontSize: "10px",
-                padding: "2px 7px",
-                borderRadius: "100px",
-                background: isPortal ? "var(--blue-s)" : "var(--s3)",
-                color: isPortal ? "var(--blue)" : "var(--t3)",
-                border: `1px solid ${isPortal ? "var(--blue-b)" : "var(--border)"}`,
-                whiteSpace: "nowrap",
-            }}
-        >
-            {isPortal ? "Portal" : "Cvent"}
+        <span className={`adm-chip ${source === "portal" ? "adm-chip-portal" : "adm-chip-cvent"}`}>
+            {source === "portal" ? "Portal" : "Cvent"}
         </span>
     );
 }
 
-// StatChip is a small badge that displays a sponsor meeting statistic with a label and value.
-function StatChip({
-    label,
-    value,
-    valueColor,
-}: {
-    label: string;
-    value: string;
-    valueColor?: string;
-}) {
+function StatChip({ label, value, valueColor }: { label: string; value: string; valueColor?: string; }) {
     return (
-        <div
-            style={{
-                background: "var(--s2)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--r)",
-                padding: "8px 14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "1px",
-            }}
-        >
-            <span
-                style={{
-                    fontSize: "10px",
-                    textTransform: "uppercase",
-                    letterSpacing: ".07em",
-                    color: "var(--t3)",
-                }}
-            >
-                {label}
-            </span>
-            <span
-                style={{
-                    fontFamily: "var(--mono)",
-                    fontSize: "15px",
-                    fontWeight: 500,
-                    color: valueColor ?? "var(--text)",
-                }}
-            >
+        <div className="adm-stat-chip">
+            <span className="adm-stat-label">{label}</span>
+            <span className="adm-stat-value" style={valueColor ? { color: valueColor } : undefined}>
                 {value}
             </span>
         </div>
     );
 }
 
-// LegendItem is a small display component that shows a colored swatch and a label, used for legends in the UI.
-function LegendItem({
-    swatch,
-    label,
-}: {
-    swatch: React.CSSProperties;
-    label: string;
-}) {
+function LegendItem({ swatch, label }: { swatch: React.CSSProperties; label: string; }) {
     return (
-        <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            <span style={{ display: "inline-block", flexShrink: 0, ...swatch }} />
+        <span className="adm-legend-item">
+            <span className="adm-legend-swatch" style={swatch} />
             {label}
         </span>
     );

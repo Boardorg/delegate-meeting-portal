@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { meetingRequests, scheduledMeetings, type ScheduledMeetingRow } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
-import type { MeetingMatchKind, MeetingSource } from "@/types";
+import { contractedMeetings } from "@/lib/attendees/caps";
+import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
+import type { SponsorDetail } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Server actions for /admin/meetings/[sponsorId] — the per-sponsor meeting
@@ -15,19 +17,6 @@ import type { MeetingMatchKind, MeetingSource } from "@/types";
 // and their scheduled meetings for the event, resolving delegate names from
 // the attendee data source.
 // ---------------------------------------------------------------------------
-
-/** Header data for the sponsor detail panel. */
-export type SponsorDetail = {
-    salesforceId: string;
-    company: string;
-    name: string;
-    title: string;
-    sponsorTier: "diamond" | "standard";
-    contracted: number;
-    bonus: number;
-    requestCount: number;
-    scheduledCount: number;
-};
 
 /** Derived Cvent sync status for a single meeting row. */
 export type SyncStatus = "synced" | "modified" | "not_pushed";
@@ -112,7 +101,7 @@ export async function getMeetingDetail(params: {
 
     const attendeeMap = new Map(attendees.map((a) => [a.salesforceId, a]));
 
-    const contracted = sponsor.sponsorTier === "diamond" ? 8 : 5;
+    const contracted = contractedMeetings(sponsor.sponsorTier);
     const bonus = 0;
 
     const meetings: MeetingRow[] = meetingRows
@@ -145,10 +134,7 @@ export async function getMeetingDetail(params: {
 
     return {
         sponsor: {
-            salesforceId: sponsor.salesforceId,
-            company: sponsor.company,
-            name: sponsor.name,
-            title: sponsor.title,
+            ...sponsor,
             sponsorTier: sponsor.sponsorTier === "diamond" ? "diamond" : "standard",
             contracted,
             bonus,

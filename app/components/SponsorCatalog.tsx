@@ -2,6 +2,7 @@
 
 import "@/app/frontend.css";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { contractedMeetings } from "@/lib/attendees/caps";
 import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
 import TopBar from "@/app/components/TopBar";
 
@@ -391,7 +392,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
     const [catalogWidth, setCatalogWidth] = useState(999);
     const catalogRef = useRef<HTMLDivElement>(null);
 
-    const maxMeetings = currentSponsor.sponsorTier === "diamond" ? 8 : 5;
+    const maxMeetings = contractedMeetings(currentSponsor.sponsorTier);
     const reqCount = requests.length;
     const atCap = reqCount >= maxMeetings;
 

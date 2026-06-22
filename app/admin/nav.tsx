@@ -21,9 +21,15 @@ export const ADMIN_NAV: AdminNavItem[] = [
         children: [],
     },
     {
-        label: "Meeting requests",
+        label: "Meeting Requests",
         href: "/admin/requests",
         icon: "🤝",
+        children: [],
+    },
+    {
+        label: "Manage Meetings",
+        href: "/admin/meetings",
+        icon: "📅",
         children: [],
     },
 ];

@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { meetingRequests, type MeetingRequestRow } from "@/lib/db/schema";
 import { attendeesBySalesforceId } from "@/lib/attendees/byId";
+import { loadMockRequests } from "@/lib/scheduling/loader";
 import { describeDbError } from "@/lib/db/errors";
 import { paginate, type Page } from "@/lib/admin/pagination";
 
@@ -63,6 +64,9 @@ function rankError(rank: unknown): string | null {
  * @returns {Promise<string[]>} Unique event codes.
  */
 export async function listRequestEventCodes(): Promise<string[]> {
+    if (process.env.USE_MOCK === "true") {
+        return ["PARTY1999"];
+    }
     const rows = await db
         .selectDistinct({ eventCode: meetingRequests.eventCode })
         .from(meetingRequests)
@@ -151,11 +155,14 @@ export async function listRequestsPage(
     const sortDir = params.sortDir ?? "desc";
     const q = (params.q ?? "").trim().toLowerCase();
 
+    // Check if we're in mock mode and get the requests from the JSON file.
+    const isMock = process.env.USE_MOCK === "true";
+    const mockPath = `${process.cwd()}/data/mock/requests.json`;
+
     const [rows, attendees] = await Promise.all([
-        db
-            .select()
-            .from(meetingRequests)
-            .where(eq(meetingRequests.eventCode, params.eventCode)),
+        isMock
+            ? loadMockRequests(mockPath)
+            : db.select().from(meetingRequests).where(eq(meetingRequests.eventCode, params.eventCode)),
         attendeesBySalesforceId(params.eventCode),
     ]);
 
@@ -164,7 +171,7 @@ export async function listRequestsPage(
         const requester = attendees.get(r.requesterId);
         const target = attendees.get(r.targetId);
         return {
-            id: r.id,
+            id: Number(r.id),
             requesterId: r.requesterId,
             targetId: r.targetId,
             requesterName: requester?.name || r.requesterId,

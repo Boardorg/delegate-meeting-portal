@@ -226,8 +226,19 @@ export const attendeeFieldMappers: AttendeeFieldMappers = {
     // Delegated to profileMapper to keep this object readable.
     profile: profileMapper,
 
-    // Scheduling has no SF source — when placeholders are on we generate slots
-    // and a default same-company cap; otherwise we return an empty shell.
+    // TODO: Slot availability comes from Cvent, not Salesforce.
+    // When the Cvent integration is ready:
+    // 1. Fetch the event's appointment schedule from the Cvent API (attendee
+    //    availability / time blocks) keyed by Cvent contact ID.
+    // 2. Add a `cventSlots` parameter to MappingContext so each record's
+    //    availability array can be passed in here.
+    // 3. Map each Cvent time block to an AttendeeSlot: { slotId, day, startTime,
+    //    endTime, status: 'available' | 'blocked' }.
+    // 4. Remove the placeholder branch below once real data is in place.
+    //
+    // Until then, placeholders generate synthetic slots so the engine can run
+    // in dev/staging. With USE_MOCK=false and no placeholder flag, slots are
+    // empty and the engine will produce zero meetings.
     scheduling: (_record, ctx) => {
         if (!ctx.usePlaceholders) {
             return { slots: [], maxSameCompanyMeetings: null };

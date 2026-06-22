@@ -13,6 +13,7 @@
         "db:studio": "drizzle-kit studio"
     },
     "dependencies": {
+        "@cvent/sdk": "^1.4.0",
         "@neondatabase/serverless": "^1.1.0",
         "@tanstack/react-table": "^8.21.3",
         "drizzle-orm": "^0.45.2",

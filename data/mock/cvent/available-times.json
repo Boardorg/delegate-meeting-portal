@@ -1,0 +1,100 @@
+{
+  "paging": {
+    "previousToken": "1a2b3c4d5e6f7g8h9i10j11k",
+    "nextToken": "1a2b3c4d5e6f7g8h9i10j11k",
+    "currentToken": "1a2b3c4d5e6f7g8h9i10j11k",
+    "limit": 100,
+    "totalCount": 6,
+    "_links": {
+      "next": {
+        "href": "?token=90c5f062-76ad-4ea4-aa53-00eb698d9262"
+      },
+      "self": {
+        "href": "?token=90c5f062-76ad-4ea4-aa53-00eb698d9262"
+      },
+      "prev": {
+        "href": "?token=90c5f062-76ad-4ea4-aa53-00eb698d9262"
+      }
+    }
+  },
+  "data": [
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000001",
+      "startTime": "2026-09-14T15:00:00.000Z",
+      "endTime": "2026-09-14T15:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "22222222-0000-4000-8000-000000000002"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000002",
+      "startTime": "2026-09-14T15:30:00.000Z",
+      "endTime": "2026-09-14T16:00:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "22222222-0000-4000-8000-000000000002"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000003",
+      "startTime": "2026-09-14T15:00:00.000Z",
+      "endTime": "2026-09-14T15:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "22222222-0000-4000-8000-000000000003"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000004",
+      "startTime": "2026-09-15T15:00:00.000Z",
+      "endTime": "2026-09-15T15:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "33333333-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 5
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000005",
+      "startTime": "2026-09-15T15:30:00.000Z",
+      "endTime": "2026-09-15T16:00:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "33333333-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 5
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000006",
+      "startTime": "2026-09-15T16:00:00.000Z",
+      "endTime": "2026-09-15T16:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "33333333-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 5
+    }
+  ]
+}

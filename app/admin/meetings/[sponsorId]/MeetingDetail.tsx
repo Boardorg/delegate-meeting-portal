@@ -18,6 +18,7 @@ import {
     type DelegateOption,
     type LocationOption,
     type MeetingRow,
+    type PushSummary,
     type SlotOption,
     type SyncStatus,
 } from "./actions";
@@ -41,6 +42,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
     const [editTarget, setEditTarget] = useState<MeetingRow | null>(null);
     const [showCreate, setShowCreate] = useState(false);
     const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+    const [pushResult, setPushResult] = useState<PushSummary | null>(null);
     const [isPending, startTransition] = useTransition();
 
     // Detect duplicate delegate companies within this sponsor's meetings.
@@ -62,10 +64,11 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
         });
     }
 
-    // Handler for pushing a meeting.
+    // Handler for pushing a single meeting.
     function handlePush(id: string) {
         startTransition(async () => {
-            await pushMeeting({ id });
+            const result = await pushMeeting({ id, eventCode });
+            setPushResult(result);
             router.refresh();
         });
     }
@@ -73,7 +76,8 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
     // Handler for pushing all meetings for the sponsor.
     function handlePushAll() {
         startTransition(async () => {
-            await pushAllForSponsor({ sponsorId: sponsor.salesforceId, eventCode });
+            const result = await pushAllForSponsor({ sponsorId: sponsor.salesforceId, eventCode });
+            setPushResult(result);
             router.refresh();
         });
     }
@@ -132,6 +136,14 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
                     </button>
                 </div>
             </div>
+
+            {/* Push-to-Cvent result banner */}
+            {pushResult && (
+                <PushResultBanner
+                    result={pushResult}
+                    onDismiss={() => setPushResult(null)}
+                />
+            )}
 
             {/* Legend + create button */}
             <div className="adm-table-toolbar">
@@ -219,6 +231,64 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
                     onCreated={() => { setShowCreate(false); router.refresh(); }}
                 />
             )}
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// PushResultBanner — shows the outcome of a push to Cvent.
+// ---------------------------------------------------------------------------
+
+function PushResultBanner({
+    result,
+    onDismiss,
+}: {
+    result: PushSummary;
+    onDismiss: () => void;
+}) {
+    const allOk = result.failed === 0 && result.total > 0;
+    const nothing = result.total === 0;
+    const failures = result.results.filter((r) => !r.ok);
+
+    // Accent color: green (all pushed), red (any failed), muted (nothing to push).
+    const accent = nothing ? "var(--border)" : allOk ? "var(--green)" : "var(--red)";
+
+    return (
+        <div
+            className="adm-card"
+            style={{ borderLeft: `3px solid ${accent}`, marginBottom: 12 }}
+            role="status"
+        >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600 }}>
+                        {nothing
+                            ? "Nothing to push — all meetings are already synced."
+                            : `${allOk ? "✓" : "⚠"} Pushed ${result.pushed} of ${result.total} to Cvent` +
+                              (result.failed > 0 ? ` · ${result.failed} failed` : "")}
+                    </div>
+
+                    {failures.length > 0 && (
+                        <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                            {failures.map((f) => (
+                                <li
+                                    key={f.meetingId}
+                                    style={{ fontSize: 13, marginBottom: 4, color: "var(--red)" }}
+                                >
+                                    <span style={{ color: "var(--text)", fontWeight: 500 }}>
+                                        {f.label}:
+                                    </span>{" "}
+                                    {f.error ?? "Unknown error"}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+
+                <button type="button" className="adm-link-btn" onClick={onDismiss}>
+                    Dismiss
+                </button>
+            </div>
         </div>
     );
 }

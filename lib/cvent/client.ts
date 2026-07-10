@@ -242,6 +242,15 @@ function toUuidList(ids: string[]): Array<{ id: string }> {
 }
 
 /**
+ * Whether to suppress Cvent notifications (invite/update emails) when pushing
+ * appointments. Controlled by CVENT_SUPPRESS_NOTIFICATIONS; defaults to false
+ * (notifications sent as configured in Cvent).
+ */
+function suppressNotifications(): boolean {
+    return process.env.CVENT_SUPPRESS_NOTIFICATIONS === "true";
+}
+
+/**
  * Creates a Cvent appointment for a scheduled meeting and returns its Cvent
  * appointment id. In mock mode returns a synthetic id without any network call.
  *
@@ -261,6 +270,7 @@ export async function createAppointment(
 
     const res = await getClient().appointments.createAppointment({
         id,
+        suppressNotifications: suppressNotifications(),
         createAppointmentRequest: {
             subject: input.subject,
             startTime: input.startTime,
@@ -300,6 +310,7 @@ export async function updateAppointment(
     const res = await getClient().appointments.updateAppointment({
         id,
         apptId,
+        suppressNotifications: suppressNotifications(),
         updateAppointmentRequest: {
             id: apptId,
             subject: input.subject,

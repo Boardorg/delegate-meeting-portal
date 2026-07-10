@@ -6,9 +6,14 @@ import { db } from "@/lib/db/client";
 import { meetingRequests, scheduledMeetings, type ScheduledMeetingRow } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
+import { pushMeetingRows } from "@/lib/cvent/push";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail } from "@/types";
+
+// Re-exported so client components (MeetingDetail) can type the push result
+// without importing the server-only push module directly.
+export type { PushResult, PushSummary } from "@/lib/cvent/push";
 
 // ---------------------------------------------------------------------------
 // Server actions for /admin/meetings/[sponsorId] — the per-sponsor meeting
@@ -335,42 +340,46 @@ export async function removeMeeting(params: { id: string }): Promise<void> {
 }
 
 /**
- * Stub that marks a meeting as pushed to Cvent by writing a placeholder
- * appointment ID and recording the push time. Replace the body of this
- * function with the real Cvent API call when that integration is ready.
+ * Pushes a single portal meeting to Cvent (create, or update if already synced)
+ * and returns the structured result so the UI can report success/failure.
  *
- * @param {{ id: string }} params
+ * @param {{ id: string; eventCode: string }} params
+ * @returns {Promise<PushSummary>} The push outcome (a single-meeting summary).
  */
-export async function pushMeeting(params: { id: string }): Promise<void> {
-    // TODO: Replace this block with a real Cvent API call.
-    // Call the Cvent Appointments API to create or update the appointment,
-    // then write the returned appointment ID to cventAppointmentId below.
-    // If the meeting already has a cventAppointmentId, this is an update (re-push).
-    await db
-        .update(scheduledMeetings)
-        .set({
-            cventAppointmentId: `stub-${params.id}-${Date.now()}`,
-            lastPushedAt: new Date(),
-        })
-        .where(eq(scheduledMeetings.id, params.id));
+export async function pushMeeting(params: {
+    id: string;
+    eventCode: string;
+}): Promise<import("@/lib/cvent/push").PushSummary> {
+    const rows = await db
+        .select()
+        .from(scheduledMeetings)
+        .where(
+            and(
+                eq(scheduledMeetings.id, params.id),
+                eq(scheduledMeetings.source, "portal"),
+            ),
+        );
+
+    const summary = await pushMeetingRows(params.eventCode, rows);
     revalidatePath("/admin/meetings", "layout");
+    return summary;
 }
 
 /**
- * Pushes all un-synced portal meetings for a single sponsor. Covers both
- * not-yet-pushed meetings and meetings edited since their last push.
- * Like pushMeeting, this writes stub Cvent IDs — replace with real API
- * calls when the Cvent integration is wired up.
+ * Pushes all un-synced portal meetings for a single sponsor to Cvent. Covers
+ * both not-yet-pushed meetings (create) and meetings edited since their last
+ * push (update). Returns the structured result so the UI can report how many
+ * succeeded and detail any failures.
  *
  * @param {{ sponsorId: string; eventCode: string }} params
- * @returns {Promise<{ pushed: number }>} Count of meetings updated.
+ * @returns {Promise<PushSummary>} Aggregate counts plus per-meeting results.
  */
 export async function pushAllForSponsor(params: {
     sponsorId: string;
     eventCode: string;
-}): Promise<{ pushed: number }> {
+}): Promise<import("@/lib/cvent/push").PushSummary> {
     const rows = await db
-        .select({ id: scheduledMeetings.id })
+        .select()
         .from(scheduledMeetings)
         .where(
             and(
@@ -391,22 +400,9 @@ export async function pushAllForSponsor(params: {
             ),
         );
 
-    const now = new Date();
-    for (const row of rows) {
-        // TODO: Replace this inner block with a real Cvent API call per meeting.
-        // Same as pushMeeting: create or update the Cvent appointment and write
-        // back the real appointment ID. Consider batching if the API supports it.
-        await db
-            .update(scheduledMeetings)
-            .set({
-                cventAppointmentId: `stub-${row.id}-${now.getTime()}`,
-                lastPushedAt: now,
-            })
-            .where(eq(scheduledMeetings.id, row.id));
-    }
-
+    const summary = await pushMeetingRows(params.eventCode, rows);
     revalidatePath("/admin/meetings", "layout");
-    return { pushed: rows.length };
+    return summary;
 }
 
 /** One selectable delegate in the create meeting modal. */

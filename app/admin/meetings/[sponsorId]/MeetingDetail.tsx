@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { fmtTime } from "@/lib/format";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail } from "@/types";
+import type { PushSummary } from "@/lib/cvent/push";
 import {
     createMeeting,
     editMeeting,
@@ -18,7 +19,6 @@ import {
     type DelegateOption,
     type LocationOption,
     type MeetingRow,
-    type PushSummary,
     type SlotOption,
     type SyncStatus,
 } from "./actions";

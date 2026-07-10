@@ -16,10 +16,6 @@ import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail, Timeslot, Location } from "@/types";
 import type { PushResult, PushSummary } from "@/lib/cvent/push";
 
-// Re-exported so client components (MeetingDetail) can type the push result
-// without importing the server-only push module directly.
-export type { PushResult, PushSummary };
-
 // ---------------------------------------------------------------------------
 // Server actions for /admin/meetings/[sponsorId] — the per-sponsor meeting
 // detail page.

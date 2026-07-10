@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { meetingRequests, scheduledMeetings, type NewScheduledMeeting } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
+import { loadEventScheduleData } from "@/lib/cvent/mapper";
+import { createAppointment, updateAppointment } from "@/lib/cvent/client";
 import { runScheduler } from "@/lib/scheduling/engine";
 import { pairKey } from "@/lib/scheduling/helpers";
 import { loadMockRequests } from "@/lib/scheduling/loader";
@@ -192,20 +194,16 @@ export async function listSponsorsPage(params: {
 export async function runSchedulerForEvent(
     eventCode: string,
 ): Promise<{ inserted: number }> {
-    // TODO: Once the Cvent slot integration is wired up (see attendeeMapper.ts),
-    // attendees will carry real availability data and the engine will produce
-    // meetings. Until then, scheduling.slots is [] for all real attendees and
-    // the engine will always return an empty schedule with USE_MOCK=false.
-
     const isMock = process.env.USE_MOCK === "true";
     const mockRequestsPath = `${process.cwd()}/data/mock/requests.json`;
 
-    // Load attendees, requests, and already-pushed meetings.
-    const [attendees, requestRows, pushedRows] = await Promise.all([
+    // Load attendees, requests, the event's Cvent availability, and already-pushed meetings.
+    const [attendees, requestRows, scheduleData, pushedRows] = await Promise.all([
         loadAttendees(false, eventCode),
         isMock
             ? loadMockRequests(mockRequestsPath)
             : db.select().from(meetingRequests).where(eq(meetingRequests.eventCode, eventCode)),
+        loadEventScheduleData(eventCode),
         db
             .select()
             .from(scheduledMeetings)
@@ -226,24 +224,29 @@ export async function runSchedulerForEvent(
 
     // Run the engine freely with no knowledge of pushed meetings. This keeps the output
     // deterministic — pushed meetings influence it only via post-reconciliation below.
-    const { schedule } = await runScheduler(attendees, engineRequests);
+    const { schedule } = await runScheduler(
+        attendees,
+        engineRequests,
+        scheduleData.timeslots,
+        scheduleData.locations,
+    );
 
     // Build reconciliation sets from pushed meetings. Salesforce IDs are used throughout
     // so no conversion is needed here.
     const pushedPairs = new Set<string>();
-    const blockedSlots = new Set<string>(); // "${attendeeId}:${slotId}"
+    const blockedSlots = new Set<string>(); // "${attendeeId}:${timeslotId}"
     for (const row of pushedRows) {
         pushedPairs.add(pairKey(row.attendeeA, row.attendeeB));
-        blockedSlots.add(`${row.attendeeA}:${row.slotIdA}`);
-        blockedSlots.add(`${row.attendeeB}:${row.slotIdB}`);
+        blockedSlots.add(`${row.attendeeA}:${row.timeslotId}`);
+        blockedSlots.add(`${row.attendeeB}:${row.timeslotId}`);
     }
 
-    // Drop any fresh meeting that duplicates a pushed pair or uses a slot already held
-    // by a pushed meeting. Everything else is safe to insert.
+    // Drop any fresh meeting that duplicates a pushed pair or reuses a timeslot already
+    // held by a pushed meeting for either attendee. Everything else is safe to insert.
     const reconciledSchedule = schedule.filter((m) => {
         if (pushedPairs.has(pairKey(m.attendeeA, m.attendeeB))) return false;
-        if (blockedSlots.has(`${m.attendeeA}:${m.slotIdA}`)) return false;
-        if (blockedSlots.has(`${m.attendeeB}:${m.slotIdB}`)) return false;
+        if (blockedSlots.has(`${m.attendeeA}:${m.timeslotId}`)) return false;
+        if (blockedSlots.has(`${m.attendeeB}:${m.timeslotId}`)) return false;
         return true;
     });
 
@@ -263,16 +266,13 @@ export async function runSchedulerForEvent(
             attendeeA: m.attendeeA,
             attendeeB: m.attendeeB,
             day: m.day,
-            slotIdA: m.slotIdA,
-            slotIdB: m.slotIdB,
+            timeslotId: m.timeslotId,
             passNumber: m.passNumber,
             mutual: m.mutual,
             matchKind: m.matchKind,
             rank: m.rank,
             source: m.source,
-            location: m.location,
-            startTime: m.startTime,
-            endTime: m.endTime,
+            locationId: m.locationId,
             cventAppointmentId: null,
             lastModifiedAt: null,
             lastPushedAt: null,
@@ -286,20 +286,23 @@ export async function runSchedulerForEvent(
 }
 
 /**
- * Pushes all un-synced portal meetings for an entire event. Covers both
- * not-yet-pushed meetings and meetings edited since their last push.
- * Like pushMeeting, this writes stub Cvent IDs — replace with real API
- * calls when the Cvent integration is wired up.
+ * Pushes all un-synced portal meetings for an entire event to Cvent. Covers
+ * both not-yet-pushed meetings (createAppointment) and meetings edited since
+ * their last push (updateAppointment). Each meeting's time is resolved from its
+ * Cvent timeslot, and participants are mapped from Salesforce ids to Cvent
+ * contact ids. Per-meeting failures are logged and skipped so one bad row
+ * doesn't abort the whole push.
  *
  * @param {string} eventCode - The event to push meetings for.
- * @returns {Promise<{ pushed: number }>} Count of meetings updated.
+ * @returns {Promise<{ pushed: number }>} Count of meetings successfully pushed.
  */
 export async function pushAllForEvent(
     eventCode: string,
 ): Promise<{ pushed: number }> {
-    // Load all un-synced portal meetings for this event.
+    // Load all un-synced portal meetings for this event (full rows — we need the
+    // participants, timeslot, and location to build the Cvent appointment).
     const rows = await db
-        .select({ id: scheduledMeetings.id })
+        .select()
         .from(scheduledMeetings)
         .where(
             and(
@@ -316,25 +319,61 @@ export async function pushAllForEvent(
             ),
         );
 
-    // Set the current timestamp for creating stub Cvent appointment IDs and recording push time.
-    // TODO: Replace this block with a real Cvent API call per meeting.
-    const now = new Date();
+    if (rows.length === 0) return { pushed: 0 };
 
-    // Iterate through the meetings and update each with a stub Cvent appointment ID and lastPushedAt timestamp.
+    // Resolve timeslot times and attendee Cvent contact ids for the whole batch.
+    const [scheduleData, attendees] = await Promise.all([
+        loadEventScheduleData(eventCode),
+        loadAttendees(false, eventCode),
+    ]);
+    const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
+
+    let pushed = 0;
     for (const row of rows) {
-        // TODO: Replace this inner block with a real Cvent API call per meeting.
-        // Same as pushMeeting: create or update the Cvent appointment and write
-        // back the real appointment ID. Consider batching if the API supports it.
-        await db
-            .update(scheduledMeetings)
-            .set({
-                cventAppointmentId: `stub-${row.id}-${now.getTime()}`,
-                lastPushedAt: now,
-            })
-            .where(eq(scheduledMeetings.id, row.id));
+        // A meeting can't be pushed without a resolvable time block.
+        const timeslot = scheduleData.timeslotById.get(row.timeslotId);
+        if (!timeslot) {
+            console.warn(
+                `pushAllForEvent: meeting ${row.id} references unknown timeslot ${row.timeslotId}; skipping.`,
+            );
+            continue;
+        }
+
+        const a = attendeeById.get(row.attendeeA);
+        const b = attendeeById.get(row.attendeeB);
+        const attendeeContactIds = [a?.cventContactId, b?.cventContactId].filter(
+            (id): id is string => !!id,
+        );
+
+        const input = {
+            subject: `${a?.name ?? row.attendeeA} & ${b?.name ?? row.attendeeB}`,
+            startTime: new Date(timeslot.startTime),
+            endTime: new Date(timeslot.endTime),
+            locationId: row.locationId,
+            attendeeContactIds,
+            code: row.id,
+        };
+
+        try {
+            // Update in place when already pushed; otherwise create a new appointment.
+            const cventAppointmentId = row.cventAppointmentId
+                ? await updateAppointment(eventCode, row.cventAppointmentId, input)
+                : await createAppointment(eventCode, input);
+
+            await db
+                .update(scheduledMeetings)
+                .set({ cventAppointmentId, lastPushedAt: new Date() })
+                .where(eq(scheduledMeetings.id, row.id));
+            pushed++;
+        } catch (err) {
+            console.error(
+                `pushAllForEvent: failed to push meeting ${row.id}: ` +
+                    `${err instanceof Error ? err.message : String(err)}`,
+            );
+        }
     }
 
     // Revalidate the admin meetings page to reflect the updated push status.
     revalidatePath("/admin/meetings");
-    return { pushed: rows.length };
+    return { pushed };
 }

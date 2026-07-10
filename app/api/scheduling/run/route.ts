@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runScheduler } from '@/lib/scheduling/engine';
-import { Attendee, MeetingRequest } from '@/types';
+import { Attendee, Location, MeetingRequest, Timeslot } from '@/types';
 
 // Define the expected shape of the request body for scheduling.
 type SchedulingRequestBody = {
 	attendees: Attendee[];
 	requests: MeetingRequest[];
+	timeslots: Timeslot[];
+	locations: Location[];
 };
 
 /**
@@ -21,7 +23,12 @@ export async function POST(request: NextRequest) {
 		const body = await request.json() as SchedulingRequestBody;
 
 		// Run the scheduler with the provided data.
-		const result = await runScheduler(body.attendees ?? [], body.requests ?? []);
+		const result = await runScheduler(
+			body.attendees ?? [],
+			body.requests ?? [],
+			body.timeslots ?? [],
+			body.locations ?? [],
+		);
 
 		// Return the generated schedule and attendee schedules.
 		return NextResponse.json(result);

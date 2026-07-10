@@ -1,4 +1,4 @@
-import { AttendeeSlot, MeetingRequest, ScheduledMeeting, Attendee } from '@/types';
+import { Timeslot, MeetingRequest, ScheduledMeeting, Attendee } from '@/types';
 
 /**
  * Produces a canonical, order-independent key for a pair of attendee IDs (e.g. `"d1|s2"`).
@@ -41,38 +41,39 @@ export function computeMutualPairs(requests: MeetingRequest[]): Set<string> {
 }
 
 /**
- * Finds the first pair of matching available slots between two attendees on a given day.
- * A valid pair requires both attendees to have an available slot at the same start time.
+ * Finds the first event-global timeslot on a given day that can host a meeting
+ * between two attendees: both attendees must be free at that start time and the
+ * timeslot must have remaining capacity. Timeslots are scanned in array order,
+ * so callers control priority by ordering the input.
  *
- * @param {AttendeeSlot[]} slotsA - Slot array for the first attendee.
- * @param {AttendeeSlot[]} slotsB - Slot array for the second attendee.
+ * @param {Timeslot[]} timeslots - The event's global timeslots.
  * @param {1 | 2} day - The event day to search within.
- * @returns {{ slotA: AttendeeSlot; slotB: AttendeeSlot } | null} The matched slot pair, or null if none found.
+ * @param {Set<string>} busyA - Start times the first attendee is already booked at.
+ * @param {Set<string>} busyB - Start times the second attendee is already booked at.
+ * @param {Map<string, number>} remaining - Remaining capacity by timeslot id.
+ * @returns {Timeslot | null} The first bookable timeslot, or null if none.
  */
-export function findMutualSlot(
-	slotsA: AttendeeSlot[],
-	slotsB: AttendeeSlot[],
-	day: 1 | 2
-): { slotA: AttendeeSlot; slotB: AttendeeSlot } | null {
+export function findAvailableTimeslot(
+	timeslots: Timeslot[],
+	day: 1 | 2,
+	busyA: Set<string>,
+	busyB: Set<string>,
+	remaining: Map<string, number>
+): Timeslot | null {
 
-	// Filter each attendee's slots down to only available slots on the target day.
-	const availableA = slotsA.filter(s => s.day === day && s.status === 'available');
-	const availableB = slotsB.filter(s => s.day === day && s.status === 'available');
+	for (const ts of timeslots) {
 
-	// Build a map of startTime -> slot key-value pairs for attendee B.
-	const mapB = new Map(availableB.map(s => [s.startTime, s]));
+		// Wrong day, or no capacity left in this timeslot.
+		if (ts.day !== day) continue;
+		if ((remaining.get(ts.id) ?? 0) <= 0) continue;
 
-	// Loop through attendee A's available slots and return the first one that matches a B slot.
-	for (const slotA of availableA) {
+		// Either attendee already has a meeting at this start time.
+		if (busyA.has(ts.startTime) || busyB.has(ts.startTime)) continue;
 
-		// Try to get the corresponding slot from B that has the same start time.
-		const slotB = mapB.get(slotA.startTime);
-
-		// If a matching slot exists, return both slots as a pair.
-		if (slotB) return { slotA, slotB };
+		return ts;
 	}
 
-	// No overlapping available slot found.
+	// No timeslot on this day works for both attendees.
 	return null;
 }
 

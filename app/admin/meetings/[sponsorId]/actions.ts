@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { meetingRequests, scheduledMeetings, type ScheduledMeetingRow } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
+import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail } from "@/types";
@@ -29,10 +30,13 @@ export type MeetingRow = {
     delegateCompany: string;
     matchKind: MeetingMatchKind;
     rank: number | null;
+    timeslotId: string;
+    locationId: string | null;
+    /** Resolved from the event's Cvent timeslot at read time. Null if the timeslot is unknown. */
     startTime: string | null;
+    /** Resolved from the event's Cvent timeslot at read time. Null if the timeslot is unknown. */
     endTime: string | null;
-    slotIdA: string;
-    slotIdB: string;
+    /** Resolved location name from the event's Cvent locations at read time. Null if unassigned/unknown. */
     location: string | null;
     syncStatus: SyncStatus;
     source: MeetingSource;
@@ -69,7 +73,7 @@ export async function getMeetingDetail(params: {
     sponsorId: string;
     eventCode: string;
 }): Promise<{ sponsor: SponsorDetail; meetings: MeetingRow[] } | null> {
-    const [attendees, meetingRows, requestRows] = await Promise.all([
+    const [attendees, meetingRows, requestRows, scheduleData] = await Promise.all([
         loadAttendees(false, params.eventCode),
         db
             .select()
@@ -92,6 +96,7 @@ export async function getMeetingDetail(params: {
                     eq(meetingRequests.requesterId, params.sponsorId),
                 ),
             ),
+        loadEventScheduleData(params.eventCode),
     ]);
 
     const sponsor = attendees.find(
@@ -109,6 +114,11 @@ export async function getMeetingDetail(params: {
             const delegateId =
                 m.attendeeA === params.sponsorId ? m.attendeeB : m.attendeeA;
             const delegate = attendeeMap.get(delegateId);
+            // Resolve display values from the event's Cvent timeslots/locations.
+            const timeslot = scheduleData.timeslotById.get(m.timeslotId);
+            const location = m.locationId
+                ? scheduleData.locationById.get(m.locationId)
+                : undefined;
             return {
                 id: m.id,
                 delegateSalesforceId: delegateId,
@@ -116,11 +126,11 @@ export async function getMeetingDetail(params: {
                 delegateCompany: delegate?.company ?? "",
                 matchKind: m.matchKind as MeetingMatchKind,
                 rank: m.rank,
-                startTime: m.startTime,
-                endTime: m.endTime,
-                slotIdA: m.slotIdA,
-                slotIdB: m.slotIdB,
-                location: m.location,
+                timeslotId: m.timeslotId,
+                locationId: m.locationId,
+                startTime: timeslot?.startTime ?? null,
+                endTime: timeslot?.endTime ?? null,
+                location: location?.name ?? null,
                 syncStatus: getSyncStatus(m),
                 source: m.source as MeetingSource,
                 cventAppointmentId: m.cventAppointmentId,
@@ -145,32 +155,91 @@ export async function getMeetingDetail(params: {
     };
 }
 
-/** One option in the slot picker inside the edit meeting modal. */
+/** One option in the timeslot picker inside the edit/create meeting modals. */
 export type SlotOption = {
-    slotIdA: string;
-    slotIdB: string;
+    timeslotId: string;
     day: 1 | 2;
     startTime: string;
     endTime: string;
+    /** The timeslot's native Cvent location, used as the default when booking. */
+    locationId: string | null;
+    locationName: string | null;
+};
+
+/** One option in the location picker. */
+export type LocationOption = {
+    id: string;
+    name: string;
 };
 
 /**
- * Returns the available mutual slot pairs for a meeting edit, along with the
- * meeting's current slot assignment. Used to populate the slot dropdown in the
- * edit modal.
+ * Builds the set of timeslot ids an attendee is already booked into, from a list
+ * of meetings (excluding the meeting being edited, if any).
+ */
+function bookedTimeslotIds(
+    meetings: { attendeeA: string; attendeeB: string; timeslotId: string }[],
+    attendeeId: string,
+): Set<string> {
+    const booked = new Set<string>();
+    for (const m of meetings) {
+        if (m.attendeeA === attendeeId || m.attendeeB === attendeeId) {
+            booked.add(m.timeslotId);
+        }
+    }
+    return booked;
+}
+
+/**
+ * Builds the list of timeslot options available to BOTH attendees: timeslots
+ * neither attendee is already booked into. (Capacity is enforced by the engine;
+ * the admin picker keeps it simple by treating a timeslot as taken once either
+ * attendee holds it.) Sorted by day then start time.
+ */
+function buildSlotOptions(
+    timeslots: import("@/types").Timeslot[],
+    locationById: Map<string, import("@/types").Location>,
+    bookedA: Set<string>,
+    bookedB: Set<string>,
+): SlotOption[] {
+    return timeslots
+        .filter((t) => (t.day === 1 || t.day === 2) && !bookedA.has(t.id) && !bookedB.has(t.id))
+        .map((t) => ({
+            timeslotId: t.id,
+            day: t.day,
+            startTime: t.startTime,
+            endTime: t.endTime,
+            locationId: t.locationId,
+            locationName: t.locationId ? locationById.get(t.locationId)?.name ?? null : null,
+        }))
+        .sort((a, b) => a.day - b.day || a.startTime.localeCompare(b.startTime));
+}
+
+/** Maps the event's locations into picker options, sorted by name. */
+function toLocationOptions(
+    locations: import("@/types").Location[],
+): LocationOption[] {
+    return locations
+        .map((l) => ({ id: l.id, name: l.name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Returns the available timeslot options for a meeting edit, the meeting's
+ * current assignment, and the event's location options. Used to populate the
+ * dropdowns in the edit modal.
  *
- * Slots already taken by other meetings for either attendee are excluded.
- * The current meeting's own slots are always included so the admin can
- * save without changing the time.
+ * Timeslots already taken by other meetings for either attendee are excluded.
+ * The current meeting's own timeslot is always included so the admin can save
+ * without changing the time.
  *
  * @param {{ meetingId: string; eventCode: string }} params
- * @returns {Promise<{ current: SlotOption | null; options: SlotOption[] }>}
+ * @returns {Promise<{ current: SlotOption | null; options: SlotOption[]; locations: LocationOption[] }>}
  */
 export async function getSlotOptions(params: {
     meetingId: string;
     eventCode: string;
-}): Promise<{ current: SlotOption | null; options: SlotOption[] }> {
-    const [meetingRows, otherMeetings, attendees] = await Promise.all([
+}): Promise<{ current: SlotOption | null; options: SlotOption[]; locations: LocationOption[] }> {
+    const [meetingRows, otherMeetings, scheduleData] = await Promise.all([
         db
             .select()
             .from(scheduledMeetings)
@@ -185,86 +254,57 @@ export async function getSlotOptions(params: {
                     ne(scheduledMeetings.id, params.meetingId),
                 ),
             ),
-        loadAttendees(false, params.eventCode),
+        loadEventScheduleData(params.eventCode),
     ]);
 
     const meeting = meetingRows[0];
-    if (!meeting) return { current: null, options: [] };
+    if (!meeting) return { current: null, options: [], locations: [] };
 
-    const attA = attendees.find((a) => a.salesforceId === meeting.attendeeA);
-    const attB = attendees.find((a) => a.salesforceId === meeting.attendeeB);
-    if (!attA || !attB) return { current: null, options: [] };
+    const { timeslots, locations, timeslotById, locationById } = scheduleData;
+    const locationOptions = toLocationOptions(locations);
 
-    // Build sets of slot IDs blocked by other meetings for each attendee.
-    const blockedA = new Set<string>();
-    const blockedB = new Set<string>();
-    for (const m of otherMeetings) {
-        if (m.attendeeA === meeting.attendeeA) blockedA.add(m.slotIdA);
-        if (m.attendeeB === meeting.attendeeA) blockedA.add(m.slotIdB);
-        if (m.attendeeA === meeting.attendeeB) blockedB.add(m.slotIdA);
-        if (m.attendeeB === meeting.attendeeB) blockedB.add(m.slotIdB);
-    }
+    const bookedA = bookedTimeslotIds(otherMeetings, meeting.attendeeA);
+    const bookedB = bookedTimeslotIds(otherMeetings, meeting.attendeeB);
+    const options = buildSlotOptions(timeslots, locationById, bookedA, bookedB);
 
-    // Find mutually available slot pairs by matching startTime on the same day.
-    const options: SlotOption[] = [];
-    for (const sa of attA.scheduling.slots) {
-        if (sa.status !== "available" || blockedA.has(sa.slotId)) continue;
-        for (const sb of attB.scheduling.slots) {
-            if (sb.status !== "available" || blockedB.has(sb.slotId)) continue;
-            if (sa.day === sb.day && sa.startTime === sb.startTime) {
-                options.push({
-                    slotIdA: sa.slotId,
-                    slotIdB: sb.slotId,
-                    day: sa.day,
-                    startTime: sa.startTime,
-                    endTime: sa.endTime,
-                });
-            }
-        }
-    }
-
-    options.sort((a, b) => a.day - b.day || a.startTime.localeCompare(b.startTime));
-
+    // The current timeslot, resolved for display. Always included so the admin
+    // can save without changing the time even if it's otherwise filtered out.
+    const currentTs = timeslotById.get(meeting.timeslotId);
     const current: SlotOption = {
-        slotIdA: meeting.slotIdA,
-        slotIdB: meeting.slotIdB,
-        day: meeting.day as 1 | 2,
-        startTime: meeting.startTime ?? "",
-        endTime: meeting.endTime ?? "",
+        timeslotId: meeting.timeslotId,
+        day: (currentTs?.day ?? (meeting.day as 1 | 2)),
+        startTime: currentTs?.startTime ?? "",
+        endTime: currentTs?.endTime ?? "",
+        locationId: meeting.locationId,
+        locationName: meeting.locationId ? locationById.get(meeting.locationId)?.name ?? null : null,
     };
 
-    // Always include the current slot so the admin can save without changing the time.
-    if (!options.some((o) => o.slotIdA === current.slotIdA && o.slotIdB === current.slotIdB)) {
+    if (!options.some((o) => o.timeslotId === current.timeslotId)) {
         options.unshift(current);
     }
 
-    return { current, options };
+    return { current, options, locations: locationOptions };
 }
 
 /**
- * Updates a portal meeting's slot assignment and location, recording the
- * edit time for sync status tracking.
+ * Updates a portal meeting's timeslot and location assignment, recording the
+ * edit time for sync status tracking. `day` comes from the chosen timeslot's
+ * SlotOption so the stored day stays consistent with the timeslot.
  *
- * @param {{ id: string; slotIdA: string; slotIdB: string; day: 1 | 2; startTime: string; endTime: string; location: string | null }} params
+ * @param {{ id: string; timeslotId: string; day: 1 | 2; locationId: string | null }} params
  */
 export async function editMeeting(params: {
     id: string;
-    slotIdA: string;
-    slotIdB: string;
+    timeslotId: string;
     day: 1 | 2;
-    startTime: string;
-    endTime: string;
-    location: string | null;
+    locationId: string | null;
 }): Promise<void> {
     await db
         .update(scheduledMeetings)
         .set({
-            slotIdA: params.slotIdA,
-            slotIdB: params.slotIdB,
+            timeslotId: params.timeslotId,
             day: params.day,
-            startTime: params.startTime,
-            endTime: params.endTime,
-            location: params.location?.trim() || null,
+            locationId: params.locationId,
             lastModifiedAt: new Date(),
         })
         .where(
@@ -398,57 +438,34 @@ export async function listDelegates(params: {
 }
 
 /**
- * Returns mutually available slot pairs for a new sponsor-delegate meeting.
- * Slots already taken by either attendee's existing meetings are excluded.
- * slotIdA belongs to the sponsor, slotIdB to the delegate.
+ * Returns the available timeslot options for a new sponsor-delegate meeting,
+ * plus the event's location options. Timeslots already taken by either
+ * attendee's existing meetings are excluded.
  *
  * @param {{ sponsorId: string; delegateId: string; eventCode: string }} params
- * @returns {Promise<SlotOption[]>}
+ * @returns {Promise<{ options: SlotOption[]; locations: LocationOption[] }>}
  */
 export async function getNewMeetingSlots(params: {
     sponsorId: string;
     delegateId: string;
     eventCode: string;
-}): Promise<SlotOption[]> {
-    const [allMeetings, attendees] = await Promise.all([
+}): Promise<{ options: SlotOption[]; locations: LocationOption[] }> {
+    const [allMeetings, scheduleData] = await Promise.all([
         db
             .select()
             .from(scheduledMeetings)
             .where(eq(scheduledMeetings.eventCode, params.eventCode)),
-        loadAttendees(false, params.eventCode),
+        loadEventScheduleData(params.eventCode),
     ]);
 
-    const sponsor = attendees.find((a) => a.salesforceId === params.sponsorId);
-    const delegate = attendees.find((a) => a.salesforceId === params.delegateId);
-    if (!sponsor || !delegate) return [];
+    const { timeslots, locations, locationById } = scheduleData;
+    const bookedSponsor = bookedTimeslotIds(allMeetings, params.sponsorId);
+    const bookedDelegate = bookedTimeslotIds(allMeetings, params.delegateId);
 
-    const blockedSponsor = new Set<string>();
-    const blockedDelegate = new Set<string>();
-    for (const m of allMeetings) {
-        if (m.attendeeA === params.sponsorId) blockedSponsor.add(m.slotIdA);
-        if (m.attendeeB === params.sponsorId) blockedSponsor.add(m.slotIdB);
-        if (m.attendeeA === params.delegateId) blockedDelegate.add(m.slotIdA);
-        if (m.attendeeB === params.delegateId) blockedDelegate.add(m.slotIdB);
-    }
-
-    const options: SlotOption[] = [];
-    for (const sa of sponsor.scheduling.slots) {
-        if (sa.status !== "available" || blockedSponsor.has(sa.slotId)) continue;
-        for (const sb of delegate.scheduling.slots) {
-            if (sb.status !== "available" || blockedDelegate.has(sb.slotId)) continue;
-            if (sa.day === sb.day && sa.startTime === sb.startTime) {
-                options.push({
-                    slotIdA: sa.slotId,
-                    slotIdB: sb.slotId,
-                    day: sa.day,
-                    startTime: sa.startTime,
-                    endTime: sa.endTime,
-                });
-            }
-        }
-    }
-
-    return options.sort((a, b) => a.day - b.day || a.startTime.localeCompare(b.startTime));
+    return {
+        options: buildSlotOptions(timeslots, locationById, bookedSponsor, bookedDelegate),
+        locations: toLocationOptions(locations),
+    };
 }
 
 /**
@@ -456,18 +473,15 @@ export async function getNewMeetingSlots(params: {
  * delegate attendeeB. matchKind is always "admin". The meeting ID is a UUID
  * so it doesn't collide with engine-generated "mtg-NNN" ids.
  *
- * @param {{ eventCode: string; sponsorId: string; delegateId: string; slotIdA: string; slotIdB: string; day: 1 | 2; startTime: string; endTime: string; location: string | null }} params
+ * @param {{ eventCode: string; sponsorId: string; delegateId: string; timeslotId: string; day: 1 | 2; locationId: string | null }} params
  */
 export async function createMeeting(params: {
     eventCode: string;
     sponsorId: string;
     delegateId: string;
-    slotIdA: string;
-    slotIdB: string;
+    timeslotId: string;
     day: 1 | 2;
-    startTime: string;
-    endTime: string;
-    location: string | null;
+    locationId: string | null;
 }): Promise<void> {
     const { randomUUID } = await import("crypto");
     await db.insert(scheduledMeetings).values({
@@ -476,16 +490,13 @@ export async function createMeeting(params: {
         attendeeA: params.sponsorId,
         attendeeB: params.delegateId,
         day: params.day,
-        slotIdA: params.slotIdA,
-        slotIdB: params.slotIdB,
+        timeslotId: params.timeslotId,
         passNumber: 0,
         mutual: false,
         matchKind: "admin",
         rank: null,
         source: "portal",
-        location: params.location?.trim() || null,
-        startTime: params.startTime,
-        endTime: params.endTime,
+        locationId: params.locationId,
         cventAppointmentId: null,
         lastModifiedAt: null,
         lastPushedAt: null,

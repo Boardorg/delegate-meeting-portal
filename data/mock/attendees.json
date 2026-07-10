@@ -14,64 +14,15 @@
       "annualRevenue": 185000000,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["BtoB Services"],
+      "industrySectors": [
+        "BtoB Services"
+      ],
       "plannedSpend": null,
       "companySize": 420,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "s1-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s1-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s1-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "blocked"
-        },
-        {
-          "slotId": "s1-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s1-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s1-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s1-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": null
     }
   },
@@ -89,64 +40,15 @@
       "annualRevenue": 62000000,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["BtoB Services"],
+      "industrySectors": [
+        "BtoB Services"
+      ],
       "plannedSpend": null,
       "companySize": 99,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "s2-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s2-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s2-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s2-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s2-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s2-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s2-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": null
     }
   },
@@ -164,64 +66,15 @@
       "annualRevenue": null,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["BtoB Services"],
+      "industrySectors": [
+        "BtoB Services"
+      ],
       "plannedSpend": null,
       "companySize": null,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "s3-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "blocked"
-        },
-        {
-          "slotId": "s3-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s3-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s3-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s3-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s3-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s3-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": null
     }
   },
@@ -239,64 +92,15 @@
       "annualRevenue": 310000000,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["Manufacturing"],
+      "industrySectors": [
+        "Manufacturing"
+      ],
       "plannedSpend": null,
       "companySize": 850,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "s4-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s4-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s4-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s4-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s4-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s4-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s4-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": null
     }
   },
@@ -314,64 +118,15 @@
       "annualRevenue": 520000000,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["Biotechnology"],
+      "industrySectors": [
+        "Biotechnology"
+      ],
       "plannedSpend": null,
       "companySize": 1200,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "s5-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s5-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s5-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s5-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s5-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "blocked"
-        },
-        {
-          "slotId": "s5-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "s5-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": null
     }
   },
@@ -390,78 +145,15 @@
       "annualRevenue": 54100000000,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["Healthcare;Pharmaceuticals"],
+      "industrySectors": [
+        "Healthcare;Pharmaceuticals"
+      ],
       "plannedSpend": null,
       "companySize": 94300,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "d1-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d1-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d1-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d1-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "blocked"
-        },
-        {
-          "slotId": "d1-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d1-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d1-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d1-d2-01",
-          "day": 2,
-          "startTime": "2026-10-15T09:00:00Z",
-          "endTime": "2026-10-15T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d1-d2-02",
-          "day": 2,
-          "startTime": "2026-10-15T09:30:00Z",
-          "endTime": "2026-10-15T09:50:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": 2
     }
   },
@@ -479,78 +171,15 @@
       "annualRevenue": 34126000000,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
+      "industrySectors": [
+        "Biotechnology;Healthcare;Pharmaceuticals"
+      ],
       "plannedSpend": null,
       "companySize": 28000,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "d2-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d2-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d2-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d2-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d2-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d2-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d2-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d2-d2-01",
-          "day": 2,
-          "startTime": "2026-10-15T09:00:00Z",
-          "endTime": "2026-10-15T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d2-d2-02",
-          "day": 2,
-          "startTime": "2026-10-15T09:30:00Z",
-          "endTime": "2026-10-15T09:50:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": 2
     }
   },
@@ -568,78 +197,15 @@
       "annualRevenue": 54100000000,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["Healthcare;Pharmaceuticals"],
+      "industrySectors": [
+        "Healthcare;Pharmaceuticals"
+      ],
       "plannedSpend": null,
       "companySize": 94300,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "d3-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d3-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "blocked"
-        },
-        {
-          "slotId": "d3-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d3-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d3-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d3-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d3-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d3-d2-01",
-          "day": 2,
-          "startTime": "2026-10-15T09:00:00Z",
-          "endTime": "2026-10-15T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d3-d2-02",
-          "day": 2,
-          "startTime": "2026-10-15T09:30:00Z",
-          "endTime": "2026-10-15T09:50:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": 2
     }
   },
@@ -664,71 +230,6 @@
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "d4-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d4-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d4-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d4-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d4-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d4-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d4-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d4-d2-01",
-          "day": 2,
-          "startTime": "2026-10-15T09:00:00Z",
-          "endTime": "2026-10-15T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d4-d2-02",
-          "day": 2,
-          "startTime": "2026-10-15T09:30:00Z",
-          "endTime": "2026-10-15T09:50:00Z",
-          "status": "blocked"
-        }
-      ],
       "maxSameCompanyMeetings": 2
     }
   },
@@ -746,78 +247,15 @@
       "annualRevenue": 34126000000,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
+      "industrySectors": [
+        "Biotechnology;Healthcare;Pharmaceuticals"
+      ],
       "plannedSpend": null,
       "companySize": 28000,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "d5-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d5-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d5-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d5-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d5-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d5-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "blocked"
-        },
-        {
-          "slotId": "d5-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d5-d2-01",
-          "day": 2,
-          "startTime": "2026-10-15T09:00:00Z",
-          "endTime": "2026-10-15T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d5-d2-02",
-          "day": 2,
-          "startTime": "2026-10-15T09:30:00Z",
-          "endTime": "2026-10-15T09:50:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": 2
     }
   },
@@ -842,71 +280,6 @@
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "d6-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d6-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d6-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d6-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d6-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d6-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d6-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d6-d2-01",
-          "day": 2,
-          "startTime": "2026-10-15T09:00:00Z",
-          "endTime": "2026-10-15T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d6-d2-02",
-          "day": 2,
-          "startTime": "2026-10-15T09:30:00Z",
-          "endTime": "2026-10-15T09:50:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": 2
     }
   },
@@ -924,78 +297,15 @@
       "annualRevenue": 63616000000,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["Healthcare;Pharmaceuticals"],
+      "industrySectors": [
+        "Healthcare;Pharmaceuticals"
+      ],
       "plannedSpend": null,
       "companySize": 75000,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "d7-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "blocked"
-        },
-        {
-          "slotId": "d7-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d7-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d7-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d7-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d7-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d7-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "blocked"
-        },
-        {
-          "slotId": "d7-d2-01",
-          "day": 2,
-          "startTime": "2026-10-15T09:00:00Z",
-          "endTime": "2026-10-15T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d7-d2-02",
-          "day": 2,
-          "startTime": "2026-10-15T09:30:00Z",
-          "endTime": "2026-10-15T09:50:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": 2
     }
   },
@@ -1013,78 +323,15 @@
       "annualRevenue": 63616000000,
       "budgetaryResponsibility": null,
       "areasOfSpecialization": [],
-      "industrySectors": ["Healthcare;Pharmaceuticals"],
+      "industrySectors": [
+        "Healthcare;Pharmaceuticals"
+      ],
       "plannedSpend": null,
       "companySize": 75000,
       "regionsOverseen": [],
       "strategicPriorities": []
     },
     "scheduling": {
-      "slots": [
-        {
-          "slotId": "d8-d1-01",
-          "day": 1,
-          "startTime": "2026-10-14T09:00:00Z",
-          "endTime": "2026-10-14T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d8-d1-02",
-          "day": 1,
-          "startTime": "2026-10-14T09:30:00Z",
-          "endTime": "2026-10-14T09:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d8-d1-03",
-          "day": 1,
-          "startTime": "2026-10-14T10:00:00Z",
-          "endTime": "2026-10-14T10:20:00Z",
-          "status": "blocked"
-        },
-        {
-          "slotId": "d8-d1-04",
-          "day": 1,
-          "startTime": "2026-10-14T10:30:00Z",
-          "endTime": "2026-10-14T10:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d8-d1-05",
-          "day": 1,
-          "startTime": "2026-10-14T11:00:00Z",
-          "endTime": "2026-10-14T11:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d8-d1-06",
-          "day": 1,
-          "startTime": "2026-10-14T11:30:00Z",
-          "endTime": "2026-10-14T11:50:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d8-d1-07",
-          "day": 1,
-          "startTime": "2026-10-14T14:00:00Z",
-          "endTime": "2026-10-14T14:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d8-d2-01",
-          "day": 2,
-          "startTime": "2026-10-15T09:00:00Z",
-          "endTime": "2026-10-15T09:20:00Z",
-          "status": "available"
-        },
-        {
-          "slotId": "d8-d2-02",
-          "day": 2,
-          "startTime": "2026-10-15T09:30:00Z",
-          "endTime": "2026-10-15T09:50:00Z",
-          "status": "available"
-        }
-      ],
       "maxSameCompanyMeetings": 2
     }
   }

@@ -16,6 +16,7 @@ import {
     pushMeeting,
     removeMeeting,
     type DelegateOption,
+    type LocationOption,
     type MeetingRow,
     type SlotOption,
     type SyncStatus,
@@ -377,25 +378,27 @@ function EditMeetingModal({
 }) {
     const [options, setOptions] = useState<SlotOption[] | null>(null);
     const [selectedKey, setSelectedKey] = useState<string>("");
-    const [location, setLocation] = useState(meeting.location ?? "");
+    const [locations, setLocations] = useState<LocationOption[]>([]);
+    const [locationId, setLocationId] = useState(meeting.locationId ?? "");
     const [loadError, setLoadError] = useState<string | null>(null);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
-    // Load available slot options when the modal opens.
+    // Load available timeslot + location options when the modal opens.
     useEffect(() => {
         getSlotOptions({ meetingId: meeting.id, eventCode })
-            .then(({ current, options: opts }) => {
+            .then(({ current, options: opts, locations: locs }) => {
                 setOptions(opts);
+                setLocations(locs);
                 if (current) setSelectedKey(slotKey(current));
             })
             .catch(() => setLoadError("Failed to load slot options."));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Helper to create a unique key for a slot option based on its IDs.
+    // A timeslot id uniquely identifies an option.
     function slotKey(o: SlotOption): string {
-        return `${o.slotIdA}|${o.slotIdB}`;
+        return o.timeslotId;
     }
 
     // Handler for saving the edited meeting.
@@ -407,12 +410,9 @@ function EditMeetingModal({
                 setSaveError(null);
                 await editMeeting({
                     id: meeting.id,
-                    slotIdA: opt.slotIdA,
-                    slotIdB: opt.slotIdB,
+                    timeslotId: opt.timeslotId,
                     day: opt.day,
-                    startTime: opt.startTime,
-                    endTime: opt.endTime,
-                    location: location || null,
+                    locationId: locationId || null,
                 });
                 onSaved();
             } catch (e) {
@@ -448,6 +448,7 @@ function EditMeetingModal({
                                 {options.map((o) => (
                                     <option key={slotKey(o)} value={slotKey(o)}>
                                         Day {o.day} – {fmtTime(o.startTime)}
+                                        {o.locationName ? ` · ${o.locationName}` : ""}
                                     </option>
                                 ))}
                             </select>
@@ -455,14 +456,19 @@ function EditMeetingModal({
 
                         <label className="adm-field adm-field-mb-lg">
                             <span className="adm-field-label">Location</span>
-                            <input
-                                type="text"
-                                className="adm-input"
-                                placeholder="e.g. Table 3A"
-                                value={location}
-                                onChange={(e) => setLocation(e.target.value)}
+                            <select
+                                className="adm-input adm-select"
+                                value={locationId}
+                                onChange={(e) => setLocationId(e.target.value)}
                                 disabled={isPending}
-                            />
+                            >
+                                <option value="">— No location —</option>
+                                {locations.map((l) => (
+                                    <option key={l.id} value={l.id}>
+                                        {l.name}
+                                    </option>
+                                ))}
+                            </select>
                         </label>
                     </>
                 )}
@@ -513,7 +519,8 @@ function CreateMeetingModal({
     const [slotOptions, setSlotOptions] = useState<SlotOption[] | null>(null);
     const [slotsLoading, setSlotsLoading] = useState(false);
     const [selectedKey, setSelectedKey] = useState("");
-    const [location, setLocation] = useState("");
+    const [locations, setLocations] = useState<LocationOption[]>([]);
+    const [locationId, setLocationId] = useState("");
     const [saveError, setSaveError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
@@ -525,9 +532,9 @@ function CreateMeetingModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Helper to create a unique key for a slot option based on its IDs.
+    // A timeslot id uniquely identifies an option.
     function slotKey(o: SlotOption): string {
-        return `${o.slotIdA}|${o.slotIdB}`;
+        return o.timeslotId;
     }
 
     // Handler for selecting a delegate.
@@ -537,9 +544,10 @@ function CreateMeetingModal({
         setSelectedKey("");
         setSlotsLoading(true);
         getNewMeetingSlots({ sponsorId, delegateId: d.salesforceId, eventCode })
-            .then((opts) => {
-                setSlotOptions(opts);
-                if (opts.length > 0) setSelectedKey(slotKey(opts[0]));
+            .then(({ options, locations: locs }) => {
+                setSlotOptions(options);
+                setLocations(locs);
+                if (options.length > 0) setSelectedKey(slotKey(options[0]));
             })
             .catch(() => setSlotOptions([]))
             .finally(() => setSlotsLoading(false));
@@ -556,12 +564,9 @@ function CreateMeetingModal({
                     eventCode,
                     sponsorId,
                     delegateId: selected.salesforceId,
-                    slotIdA: opt.slotIdA,
-                    slotIdB: opt.slotIdB,
+                    timeslotId: opt.timeslotId,
                     day: opt.day,
-                    startTime: opt.startTime,
-                    endTime: opt.endTime,
-                    location: location || null,
+                    locationId: locationId || null,
                 });
                 onCreated();
             } catch (e) {
@@ -665,7 +670,7 @@ function CreateMeetingModal({
                                 <span className="adm-dim">Loading slots…</span>
                             ) : slotOptions && slotOptions.length === 0 ? (
                                 <span className="adm-gold-sm">
-                                    No mutual available slots for this pair.
+                                    No mutual available timeslots for this pair.
                                 </span>
                             ) : (
                                 <select
@@ -675,8 +680,9 @@ function CreateMeetingModal({
                                     disabled={isPending || !slotOptions}
                                 >
                                     {(slotOptions ?? []).map((o) => (
-                                        <option key={`${o.slotIdA}|${o.slotIdB}`} value={`${o.slotIdA}|${o.slotIdB}`}>
+                                        <option key={o.timeslotId} value={o.timeslotId}>
                                             Day {o.day} – {fmtTime(o.startTime)}
+                                            {o.locationName ? ` · ${o.locationName}` : ""}
                                         </option>
                                     ))}
                                 </select>
@@ -685,14 +691,19 @@ function CreateMeetingModal({
 
                         <label className="adm-field">
                             <span className="adm-field-label">Location</span>
-                            <input
-                                type="text"
-                                className="adm-input"
-                                placeholder="e.g. Table 3A"
-                                value={location}
-                                onChange={(e) => setLocation(e.target.value)}
+                            <select
+                                className="adm-input adm-select"
+                                value={locationId}
+                                onChange={(e) => setLocationId(e.target.value)}
                                 disabled={isPending}
-                            />
+                            >
+                                <option value="">— No location —</option>
+                                {locations.map((l) => (
+                                    <option key={l.id} value={l.id}>
+                                        {l.name}
+                                    </option>
+                                ))}
+                            </select>
                         </label>
                     </>
                 )}

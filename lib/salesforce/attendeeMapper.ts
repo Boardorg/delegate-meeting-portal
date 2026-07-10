@@ -2,7 +2,6 @@ import type {
     Attendee,
     AttendeeProfile,
     AttendeeRole,
-    AttendeeSlot,
     SponsorTier,
 } from "@/types";
 
@@ -73,46 +72,6 @@ export type MappingContext = {
  */
 function placeholderId(ctx: MappingContext): string {
     return `${ctx.role === "sponsor" ? "s" : "d"}${ctx.index + 1}`;
-}
-
-/**
- * Generates a deterministic set of placeholder slots for one attendee:
- * sponsors get 7 day-1 slots; delegates get 7 day-1 + 2 day-2. Slot times are
- * 20 minutes apart starting at 09:00 UTC on the event days, matching
- * data/mock/attendees.json so the scheduling engine sees a familiar shape.
- *
- * @param {AttendeeRole} role - Role of the attendee receiving slots.
- * @param {string} id - The attendee id used to build unique `slotId`s.
- * @returns {AttendeeSlot[]} The generated slot list.
- */
-function placeholderSlots(role: AttendeeRole, id: string): AttendeeSlot[] {
-    // Local helper that builds a fixed-count list of slots for one day.
-    const make = (day: 1 | 2, count: number): AttendeeSlot[] => {
-        // Day 1 and Day 2 are consecutive calendar dates; adjust here if the
-        // event's real dates change or become parameterized.
-        const dateBase = day === 1 ? "2026-10-14" : "2026-10-15";
-
-        return Array.from({ length: count }, (_, i) => {
-            // Slots are 30 minutes apart, each 20 minutes long (10-min gap).
-            const startHour = 9 + Math.floor((i * 30) / 60);
-            const startMin = (i * 30) % 60;
-            const endMin = startMin + 20;
-            const pad = (n: number) => String(n).padStart(2, "0");
-
-            // Roll over to the next hour when 20-minute window crosses :60.
-            const endHour = endMin >= 60 ? startHour + 1 : startHour;
-            return {
-                slotId: `${id}-d${day}-${pad(i + 1)}`,
-                day,
-                startTime: `${dateBase}T${pad(startHour)}:${pad(startMin)}:00Z`,
-                endTime: `${dateBase}T${pad(endHour)}:${pad(endMin % 60)}:00Z`,
-                status: "available" as const,
-            };
-        });
-    };
-
-    // Sponsors only need day-1 slots; delegates get both days.
-    return role === "sponsor" ? make(1, 7) : [...make(1, 7), ...make(2, 2)];
 }
 
 // ---------------------------------------------------------------------------
@@ -226,28 +185,13 @@ export const attendeeFieldMappers: AttendeeFieldMappers = {
     // Delegated to profileMapper to keep this object readable.
     profile: profileMapper,
 
-    // TODO: Slot availability comes from Cvent, not Salesforce.
-    // When the Cvent integration is ready:
-    // 1. Fetch the event's appointment schedule from the Cvent API (attendee
-    //    availability / time blocks) keyed by Cvent contact ID.
-    // 2. Add a `cventSlots` parameter to MappingContext so each record's
-    //    availability array can be passed in here.
-    // 3. Map each Cvent time block to an AttendeeSlot: { slotId, day, startTime,
-    //    endTime, status: 'available' | 'blocked' }.
-    // 4. Remove the placeholder branch below once real data is in place.
-    //
-    // Until then, placeholders generate synthetic slots so the engine can run
-    // in dev/staging. With USE_MOCK=false and no placeholder flag, slots are
-    // empty and the engine will produce zero meetings.
-    scheduling: (_record, ctx) => {
-        if (!ctx.usePlaceholders) {
-            return { slots: [], maxSameCompanyMeetings: null };
-        }
-        return {
-            slots: placeholderSlots(ctx.role, placeholderId(ctx)),
-            maxSameCompanyMeetings: ctx.role === "sponsor" ? null : 2,
-        };
-    },
+    // Availability is no longer per-attendee — it comes from the event-global
+    // Timeslot[] sourced from Cvent (see lib/cvent/mapper.ts). The only
+    // per-attendee scheduling constraint left is the company-diversity cap:
+    // null for sponsors (rule doesn't apply), 2 for delegates.
+    scheduling: (_record, ctx) => ({
+        maxSameCompanyMeetings: ctx.role === "sponsor" ? null : 2,
+    }),
 };
 
 // ---------------------------------------------------------------------------

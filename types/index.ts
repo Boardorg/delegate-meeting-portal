@@ -29,31 +29,53 @@ export type SponsorTier = "diamond" | "standard" | null;
 
 
 /**
- * Status of a single time slot in an attendee's schedule.
- * - `available`: The slot is free and can be assigned a meeting by the engine.
- * - `blocked`: The slot is already occupied by a session or existing appointment in Cvent.
+ * A single bookable time block for an event, sourced from Cvent's
+ * "List Available Times" API and shared by all attendees (event-global, not
+ * per-attendee). The engine assigns meetings to timeslots, honoring capacity
+ * and preventing an attendee from being double-booked at the same start time.
+ *
+ * Cvent binds each available-time to a location; `locationId` is that native
+ * location and is used as the default location for meetings booked here.
  */
-export type SlotStatus = "available" | "blocked";
+export interface Timeslot {
+    /** Cvent available-time id. Stored on ScheduledMeeting.timeslotId. */
+    id: string;
 
-/**
- * A single time slot in an attendee's schedule, sourced from Cvent's availability API.
- * The engine uses slots to find mutually available times when confirming a meeting pair.
- */
-export interface AttendeeSlot {
-    /** Unique identifier for this slot. Used to reference the slot on ScheduledMeeting. */
-    slotId: string;
-
-    /** The event day this slot belongs to. Day 1 = sponsor/delegate meetings; Day 2 = delegate/delegate only. */
+    /** The event day this timeslot belongs to. Day 1 = sponsor/delegate; Day 2 = delegate/delegate. */
     day: 1 | 2;
 
-    /** ISO 8601 UTC start time of the slot, sourced from Cvent. Written to the Cvent appointment on output. */
+    /** ISO 8601 UTC start time, sourced from Cvent. */
     startTime: string;
 
-    /** ISO 8601 UTC end time of the slot, sourced from Cvent. Written to the Cvent appointment on output. */
+    /** ISO 8601 UTC end time, sourced from Cvent. */
     endTime: string;
 
-    /** Whether this slot is free or already occupied. The engine skips blocked slots entirely. */
-    status: SlotStatus;
+    /**
+     * How many meetings may book this timeslot, from Cvent's availableAppointments.
+     * Infinity when Cvent reports unlimited (-1) or omits the value.
+     */
+    capacity: number;
+
+    /** Cvent location bound to this timeslot. Null when Cvent omits it. */
+    locationId: string | null;
+}
+
+/**
+ * A bookable location (room, table, booth) for an event, sourced from Cvent's
+ * "List Locations" API. Meetings reference a location by id.
+ */
+export interface Location {
+    /** Cvent location id. Stored on ScheduledMeeting.locationId. */
+    id: string;
+
+    /** Human-readable location name (e.g. "Table 3A", "Conference Room B"). */
+    name: string;
+
+    /** Max occupancy from Cvent. Infinity when Cvent reports unlimited (-1) or omits the value. */
+    capacity: number;
+
+    /** Parent location id when this location is nested (e.g. a table within a room). Null for top-level. */
+    parentLocationId: string | null;
 }
 
 /**
@@ -165,11 +187,12 @@ export interface Attendee {
     /** Profile attributes used by the browse and filter UI. */
     profile: AttendeeProfile;
 
-    /** Existing scheduling constraints for this attendee. */
+    /**
+     * Existing scheduling constraints for this attendee. Availability is no
+     * longer per-attendee — it comes from the event-global Timeslot[] passed to
+     * the engine — so only the company-diversity cap lives here.
+     */
     scheduling: {
-        /** All possible meeting slots for this attendee across both days sourced from Cvent's availability API. */
-        slots: AttendeeSlot[];
-
         /**
          * Maximum number of meetings this attendee can have with people from the same company.
          * Null for sponsors because the rule does not apply to them (@todo need to confirm this).
@@ -213,8 +236,11 @@ export interface MeetingRequest {
 
 /**
  * A single confirmed meeting produced by the scheduling engine.
- * startTime, endTime, and cventAppointmentId are null until the schedule is written to Cvent,
- * at which point slot times are mapped from AttendeeSlot and the Cvent appointment ID is populated.
+ *
+ * Meetings are thin id references: `timeslotId` and `locationId` point into the
+ * event-global Timeslot[]/Location[] (sourced from Cvent). Display values
+ * (start/end time, location name) are resolved from those by joining at read
+ * time — they are not stored on the meeting.
  */
 export interface ScheduledMeeting {
     /** Unique identifier for this scheduled meeting. */
@@ -229,11 +255,8 @@ export interface ScheduledMeeting {
     /** The event day on which this meeting is scheduled. */
     day: 1 | 2;
 
-    /** The slotId from attendeeA's slots array assigned to this meeting. */
-    slotIdA: string;
-
-    /** The slotId from attendeeB's slots array assigned to this meeting. */
-    slotIdB: string;
+    /** The Timeslot.id assigned to this meeting. Shared by both attendees. */
+    timeslotId: string;
 
     /**
      * Which algorithm pass produced this meeting (1–7).
@@ -268,20 +291,12 @@ export interface ScheduledMeeting {
      */
     source: MeetingSource;
 
-    /** Meeting location (e.g. "Table 3A", "Room 12"). Null until assigned by an admin. */
-    location: string | null;
-
     /**
-     * ISO 8601 UTC start time of the meeting.
-     * Null until the Cvent write step, at which point it is populated from the assigned AttendeeSlot.
+     * The Location.id for this meeting. Seeded by the engine from the booked
+     * timeslot's native location, but independently editable by an admin.
+     * Null when no location is assigned.
      */
-    startTime: string | null;
-
-    /**
-     * ISO 8601 UTC end time of the meeting.
-     * Null until the Cvent write step, at which point it is populated from the assigned AttendeeSlot.
-     */
-    endTime: string | null;
+    locationId: string | null;
 
     /**
      * Cvent appointment UUID returned after a successful POST to /appointment-events/{id}/appointments.

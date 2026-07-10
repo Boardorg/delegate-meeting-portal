@@ -1,6 +1,7 @@
 import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { CventSDK } from "@cvent/sdk";
 import {
     locationsPaginatedResponseFromJSON,
@@ -35,14 +36,38 @@ function isMock(): boolean {
     return process.env.USE_MOCK === "true";
 }
 
-/** Translates an internal event code to its Cvent appointment-event id. Hardcoded stub for now. */
-function eventCodeToCventId(_eventCode: string): string {
-    return "00000000-0000-4000-8000-000000000000";
+// Maps our internal event codes to their Cvent appointment-event id (the `{id}`
+// in /ea/appointment-events/{id}/...). Add an entry per event.
+// TODO: replace the placeholder with BMWS's real Cvent appointment-event id.
+const CVENT_EVENT_IDS: Record<string, string> = {
+    BMWS: "05b5b30f-72c9-4aa1-8d24-1c201ff0a5a4",
+};
+
+/**
+ * Translates an internal event code to its Cvent appointment-event id.
+ * Only used on the live path; mock mode never calls this.
+ *
+ * @param {string} eventCode - The internal event code (e.g. "BMWS").
+ * @returns {string} The Cvent appointment-event id.
+ * @throws {Error} When the event code has no mapping.
+ */
+function eventCodeToCventId(eventCode: string): string {
+    const id = CVENT_EVENT_IDS[eventCode];
+    if (!id) {
+        throw new Error(
+            `No Cvent appointment-event id mapped for event code "${eventCode}". ` +
+                "Add it to CVENT_EVENT_IDS in lib/cvent/client.ts.",
+        );
+    }
+    return id;
 }
 
 // ---------------------------------------------------------------------------
 // SDK client (singleton)
 // ---------------------------------------------------------------------------
+
+// Cvent's production OAuth2 token endpoint. Used unless overridden via env.
+const DEFAULT_TOKEN_URL = "https://api-platform.cvent.com/ea/oauth2/token";
 
 // Lazily-built SDK instance, reused across calls in the same Node process. The
 // SDK manages its own OAuth2 token lifecycle internally.
@@ -66,11 +91,23 @@ function getClient(): CventSDK {
         );
     }
 
+    // Optional space/comma-separated scopes. When omitted the SDK falls back to
+    // the per-operation scopes it declares for each endpoint.
+    const scopes = (process.env.CVENT_SCOPES ?? "")
+        .split(/[\s,]+/)
+        .filter(Boolean);
+
     sdk = new CventSDK({
         security: {
             oAuth2ClientCredentials: {
                 clientID,
                 clientSecret,
+                // Required: the client-credentials token exchange. Without an
+                // explicit tokenURL the SDK posts the token request to the API
+                // base URL instead of the OAuth endpoint, so auth silently fails
+                // and calls come back as ResponseValidationError.
+                tokenURL: process.env.CVENT_TOKEN_URL ?? DEFAULT_TOKEN_URL,
+                ...(scopes.length ? { scopes } : {}),
             },
         },
     });
@@ -97,7 +134,9 @@ async function readMock<T>(
     const raw = await fs.readFile(path.join(MOCK_DIR, file), "utf-8");
     const parsed = parse(raw);
     if (!parsed.ok) {
-        throw new Error(`Invalid Cvent mock fixture ${file}: ${String(parsed.error)}`);
+        throw new Error(
+            `Invalid Cvent mock fixture ${file}: ${String(parsed.error)}`,
+        );
     }
     return parsed.value?.data ?? [];
 }
@@ -158,4 +197,120 @@ export async function getTimeslotsByEvent(
         out.push(...(page.result.data ?? []));
     }
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// Write operations
+// ---------------------------------------------------------------------------
+
+/** Fields needed to create or update a Cvent appointment for a scheduled meeting. */
+export type CventAppointmentInput = {
+    /** Appointment title shown in Cvent. */
+    subject: string;
+    /** Appointment start (UTC). */
+    startTime: Date;
+    /** Appointment end (UTC). */
+    endTime: Date;
+    /** Cvent location id. Omitted from the request when null/undefined. */
+    locationId?: string | null;
+    /** Cvent contact ids of the meeting participants. */
+    attendeeContactIds?: string[];
+    /** External reference code (we pass our meeting id) for traceability. */
+    code?: string;
+};
+
+/**
+ * Reads the appointment host + type ids required to create appointments in
+ * Cvent, throwing a single combined error if either is missing.
+ *
+ * @returns {{ hostId: string; appointmentTypeId: string }} The validated ids.
+ */
+function readAppointmentEnv(): { hostId: string; appointmentTypeId: string } {
+    const hostId = process.env.CVENT_APPOINTMENT_HOST_ID;
+    const appointmentTypeId = process.env.CVENT_APPOINTMENT_TYPE_ID;
+    if (!hostId || !appointmentTypeId) {
+        throw new Error(
+            "Missing Cvent env vars: CVENT_APPOINTMENT_HOST_ID, CVENT_APPOINTMENT_TYPE_ID",
+        );
+    }
+    return { hostId, appointmentTypeId };
+}
+
+/** Maps a list of Cvent contact ids into the SDK's `{ id }[]` attendee/host shape. */
+function toUuidList(ids: string[]): Array<{ id: string }> {
+    return ids.map((id) => ({ id }));
+}
+
+/**
+ * Creates a Cvent appointment for a scheduled meeting and returns its Cvent
+ * appointment id. In mock mode returns a synthetic id without any network call.
+ *
+ * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
+ * @param {CventAppointmentInput} input - The appointment fields.
+ * @returns {Promise<string>} The created appointment's Cvent id.
+ */
+export async function createAppointment(
+    eventCode: string,
+    input: CventAppointmentInput,
+): Promise<string> {
+    // Mock mode never hits Cvent; hand back a synthetic appointment id.
+    if (isMock()) return `mock-appt-${randomUUID()}`;
+
+    const { hostId, appointmentTypeId } = readAppointmentEnv();
+    const id = eventCodeToCventId(eventCode);
+
+    const res = await getClient().appointments.createAppointment({
+        id,
+        createAppointmentRequest: {
+            subject: input.subject,
+            startTime: input.startTime,
+            endTime: input.endTime,
+            hosts: [{ id: hostId }],
+            appointmentTypeId,
+            ...(input.locationId ? { location: input.locationId } : {}),
+            ...(input.attendeeContactIds?.length
+                ? { attendees: toUuidList(input.attendeeContactIds) }
+                : {}),
+            ...(input.code ? { code: input.code } : {}),
+        },
+    });
+    return res.id;
+}
+
+/**
+ * Updates an existing Cvent appointment (used when a meeting was edited after
+ * its last push). Returns the appointment id. In mock mode is a no-op that
+ * returns the given apptId.
+ *
+ * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
+ * @param {string} apptId - The existing Cvent appointment id to update.
+ * @param {CventAppointmentInput} input - The updated appointment fields.
+ * @returns {Promise<string>} The appointment's Cvent id.
+ */
+export async function updateAppointment(
+    eventCode: string,
+    apptId: string,
+    input: CventAppointmentInput,
+): Promise<string> {
+    if (isMock()) return apptId;
+
+    const { hostId } = readAppointmentEnv();
+    const id = eventCodeToCventId(eventCode);
+
+    const res = await getClient().appointments.updateAppointment({
+        id,
+        apptId,
+        updateAppointmentRequest: {
+            id: apptId,
+            subject: input.subject,
+            startTime: input.startTime,
+            endTime: input.endTime,
+            hosts: [{ id: hostId }],
+            ...(input.locationId ? { location: input.locationId } : {}),
+            ...(input.attendeeContactIds?.length
+                ? { attendees: toUuidList(input.attendeeContactIds) }
+                : {}),
+        },
+    });
+    return res.id;
 }

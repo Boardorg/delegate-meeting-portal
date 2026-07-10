@@ -42,11 +42,11 @@ export const meetingMatchKind = pgEnum("meeting_match_kind", [
     "delegate_choice",
     "admin",
 ]);
-export type MeetingMatchKind = typeof meetingMatchKind.enumValues[number];
+export type MeetingMatchKind = (typeof meetingMatchKind.enumValues)[number];
 
 /** Where a meeting originates. Cvent-native meetings are read-only in the portal. */
 export const meetingSource = pgEnum("meeting_source", ["portal", "cvent"]);
-export type MeetingSource = typeof meetingSource.enumValues[number];
+export type MeetingSource = (typeof meetingSource.enumValues)[number];
 
 // ---------------------------------------------------------------------------
 // Tables
@@ -120,6 +120,7 @@ export const meetingRequests = pgTable(
         unique("meeting_requests_requester_target_unique").on(
             t.requesterId,
             t.targetId,
+            t.eventCode,
         ),
     ],
 );

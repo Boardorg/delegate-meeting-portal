@@ -3,17 +3,22 @@
 import { and, eq, gt, isNull, isNotNull, ne, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { meetingRequests, scheduledMeetings, type ScheduledMeetingRow } from "@/lib/db/schema";
+import {
+    meetingRequests,
+    scheduledMeetings,
+    type ScheduledMeetingRow,
+} from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { pushMeetingRows } from "@/lib/cvent/push";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
-import type { SponsorDetail } from "@/types";
+import type { SponsorDetail, Timeslot, Location } from "@/types";
+import type { PushResult, PushSummary } from "@/lib/cvent/push";
 
 // Re-exported so client components (MeetingDetail) can type the push result
 // without importing the server-only push module directly.
-export type { PushResult, PushSummary } from "@/lib/cvent/push";
+export type { PushResult, PushSummary };
 
 // ---------------------------------------------------------------------------
 // Server actions for /admin/meetings/[sponsorId] — the per-sponsor meeting
@@ -55,11 +60,7 @@ export type MeetingRow = {
  */
 function getSyncStatus(m: ScheduledMeetingRow): SyncStatus {
     if (!m.cventAppointmentId) return "not_pushed";
-    if (
-        m.lastModifiedAt &&
-        m.lastPushedAt &&
-        m.lastModifiedAt > m.lastPushedAt
-    )
+    if (m.lastModifiedAt && m.lastPushedAt && m.lastModifiedAt > m.lastPushedAt)
         return "modified";
     return "synced";
 }
@@ -78,31 +79,32 @@ export async function getMeetingDetail(params: {
     sponsorId: string;
     eventCode: string;
 }): Promise<{ sponsor: SponsorDetail; meetings: MeetingRow[] } | null> {
-    const [attendees, meetingRows, requestRows, scheduleData] = await Promise.all([
-        loadAttendees(false, params.eventCode),
-        db
-            .select()
-            .from(scheduledMeetings)
-            .where(
-                and(
-                    eq(scheduledMeetings.eventCode, params.eventCode),
-                    or(
-                        eq(scheduledMeetings.attendeeA, params.sponsorId),
-                        eq(scheduledMeetings.attendeeB, params.sponsorId),
+    const [attendees, meetingRows, requestRows, scheduleData] =
+        await Promise.all([
+            loadAttendees(false, params.eventCode),
+            db
+                .select()
+                .from(scheduledMeetings)
+                .where(
+                    and(
+                        eq(scheduledMeetings.eventCode, params.eventCode),
+                        or(
+                            eq(scheduledMeetings.attendeeA, params.sponsorId),
+                            eq(scheduledMeetings.attendeeB, params.sponsorId),
+                        ),
                     ),
                 ),
-            ),
-        db
-            .select({ id: meetingRequests.id })
-            .from(meetingRequests)
-            .where(
-                and(
-                    eq(meetingRequests.eventCode, params.eventCode),
-                    eq(meetingRequests.requesterId, params.sponsorId),
+            db
+                .select({ id: meetingRequests.id })
+                .from(meetingRequests)
+                .where(
+                    and(
+                        eq(meetingRequests.eventCode, params.eventCode),
+                        eq(meetingRequests.requesterId, params.sponsorId),
+                    ),
                 ),
-            ),
-        loadEventScheduleData(params.eventCode),
-    ]);
+            loadEventScheduleData(params.eventCode),
+        ]);
 
     const sponsor = attendees.find(
         (a) => a.salesforceId === params.sponsorId && a.role === "sponsor",
@@ -150,7 +152,8 @@ export async function getMeetingDetail(params: {
     return {
         sponsor: {
             ...sponsor,
-            sponsorTier: sponsor.sponsorTier === "diamond" ? "diamond" : "standard",
+            sponsorTier:
+                sponsor.sponsorTier === "diamond" ? "diamond" : "standard",
             contracted,
             bonus,
             requestCount: requestRows.length,
@@ -201,28 +204,35 @@ function bookedTimeslotIds(
  * attendee holds it.) Sorted by day then start time.
  */
 function buildSlotOptions(
-    timeslots: import("@/types").Timeslot[],
-    locationById: Map<string, import("@/types").Location>,
+    timeslots: Timeslot[],
+    locationById: Map<string, Location>,
     bookedA: Set<string>,
     bookedB: Set<string>,
 ): SlotOption[] {
     return timeslots
-        .filter((t) => (t.day === 1 || t.day === 2) && !bookedA.has(t.id) && !bookedB.has(t.id))
+        .filter(
+            (t) =>
+                (t.day === 1 || t.day === 2) &&
+                !bookedA.has(t.id) &&
+                !bookedB.has(t.id),
+        )
         .map((t) => ({
             timeslotId: t.id,
             day: t.day,
             startTime: t.startTime,
             endTime: t.endTime,
             locationId: t.locationId,
-            locationName: t.locationId ? locationById.get(t.locationId)?.name ?? null : null,
+            locationName: t.locationId
+                ? (locationById.get(t.locationId)?.name ?? null)
+                : null,
         }))
-        .sort((a, b) => a.day - b.day || a.startTime.localeCompare(b.startTime));
+        .sort(
+            (a, b) => a.day - b.day || a.startTime.localeCompare(b.startTime),
+        );
 }
 
 /** Maps the event's locations into picker options, sorted by name. */
-function toLocationOptions(
-    locations: import("@/types").Location[],
-): LocationOption[] {
+function toLocationOptions(locations: Location[]): LocationOption[] {
     return locations
         .map((l) => ({ id: l.id, name: l.name }))
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -243,7 +253,11 @@ function toLocationOptions(
 export async function getSlotOptions(params: {
     meetingId: string;
     eventCode: string;
-}): Promise<{ current: SlotOption | null; options: SlotOption[]; locations: LocationOption[] }> {
+}): Promise<{
+    current: SlotOption | null;
+    options: SlotOption[];
+    locations: LocationOption[];
+}> {
     const [meetingRows, otherMeetings, scheduleData] = await Promise.all([
         db
             .select()
@@ -277,11 +291,13 @@ export async function getSlotOptions(params: {
     const currentTs = timeslotById.get(meeting.timeslotId);
     const current: SlotOption = {
         timeslotId: meeting.timeslotId,
-        day: (currentTs?.day ?? (meeting.day as 1 | 2)),
+        day: currentTs?.day ?? (meeting.day as 1 | 2),
         startTime: currentTs?.startTime ?? "",
         endTime: currentTs?.endTime ?? "",
         locationId: meeting.locationId,
-        locationName: meeting.locationId ? locationById.get(meeting.locationId)?.name ?? null : null,
+        locationName: meeting.locationId
+            ? (locationById.get(meeting.locationId)?.name ?? null)
+            : null,
     };
 
     if (!options.some((o) => o.timeslotId === current.timeslotId)) {
@@ -349,7 +365,7 @@ export async function removeMeeting(params: { id: string }): Promise<void> {
 export async function pushMeeting(params: {
     id: string;
     eventCode: string;
-}): Promise<import("@/lib/cvent/push").PushSummary> {
+}): Promise<PushSummary> {
     const rows = await db
         .select()
         .from(scheduledMeetings)
@@ -377,7 +393,7 @@ export async function pushMeeting(params: {
 export async function pushAllForSponsor(params: {
     sponsorId: string;
     eventCode: string;
-}): Promise<import("@/lib/cvent/push").PushSummary> {
+}): Promise<PushSummary> {
     const rows = await db
         .select()
         .from(scheduledMeetings)
@@ -394,7 +410,10 @@ export async function pushAllForSponsor(params: {
                     and(
                         isNotNull(scheduledMeetings.lastModifiedAt),
                         isNotNull(scheduledMeetings.lastPushedAt),
-                        gt(scheduledMeetings.lastModifiedAt, scheduledMeetings.lastPushedAt),
+                        gt(
+                            scheduledMeetings.lastModifiedAt,
+                            scheduledMeetings.lastPushedAt,
+                        ),
                     ),
                 ),
             ),
@@ -459,7 +478,12 @@ export async function getNewMeetingSlots(params: {
     const bookedDelegate = bookedTimeslotIds(allMeetings, params.delegateId);
 
     return {
-        options: buildSlotOptions(timeslots, locationById, bookedSponsor, bookedDelegate),
+        options: buildSlotOptions(
+            timeslots,
+            locationById,
+            bookedSponsor,
+            bookedDelegate,
+        ),
         locations: toLocationOptions(locations),
     };
 }

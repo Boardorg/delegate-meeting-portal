@@ -50,7 +50,7 @@ function userToAttendee(user: User): Attendee {
             regionsOverseen: [],
             strategicPriorities: [],
         },
-        scheduling: { slots: [], maxSameCompanyMeetings: null },
+        scheduling: { maxSameCompanyMeetings: null },
     };
 }
 

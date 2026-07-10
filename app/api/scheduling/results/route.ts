@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { loadMockData, loadMockRequests } from '@/lib/scheduling/loader';
 import { runScheduler } from '@/lib/scheduling/engine';
+import { loadEventScheduleData } from '@/lib/cvent/mapper';
+import { getEventCode } from '@/lib/helpers/getEventCode';
 import path from 'path';
 
 /**
@@ -15,14 +17,20 @@ export async function GET() {
 		// Build the absolute path to the local mock data directory.
 		const base = path.join(process.cwd(), 'data', 'mock');
 
-		// Load attendee and request data.
-		const [attendees, requests] = await Promise.all([
+		// Load attendee and request data, plus the event's Cvent availability.
+		const [attendees, requests, scheduleData] = await Promise.all([
 			loadMockData(path.join(base, 'attendees.json')),
 			loadMockRequests(path.join(base, 'requests.json')),
+			loadEventScheduleData(await getEventCode()),
 		]);
 
 		// Run the scheduler to generate the meeting schedule and individual attendee schedules.
-		const { schedule, attendeeSchedules } = await runScheduler(attendees, requests);
+		const { schedule, attendeeSchedules } = await runScheduler(
+			attendees,
+			requests,
+			scheduleData.timeslots,
+			scheduleData.locations,
+		);
 
 		// Initialize a constant to count how many meetings were created during each scheduler pass.
 		const meetingsByPass: Record<number, number> = {};

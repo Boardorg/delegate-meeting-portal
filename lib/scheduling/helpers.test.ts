@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
-import { pairKey, computeMutualPairs, findMutualSlot, wouldViolateCompanyDiversity } from './helpers';
-import type { Attendee, MeetingRequest, AttendeeSlot, ScheduledMeeting } from '@/types';
+import { pairKey, computeMutualPairs, findAvailableTimeslot, wouldViolateCompanyDiversity } from './helpers';
+import type { Attendee, MeetingRequest, Timeslot, ScheduledMeeting } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Helpers for generating test data
@@ -18,16 +18,21 @@ function makeRequest(requesterId: string, targetId: string): MeetingRequest {
 }
 
 /**
- * Helper to generate a fake attendee slot for testing.
+ * Helper to generate a fake event-global timeslot for testing.
  *
- * @param {string} slotId - Unique identifier for the slot.
- * @param {1 | 2} day - The event day this slot belongs to.
- * @param {string} startTime - ISO 8601 start time string.
- * @param {'available' | 'blocked'} status - Whether the slot is free or occupied.
- * @returns {AttendeeSlot} A slot object with the specified properties.
+ * @param {string} id - Unique identifier for the timeslot.
+ * @param {1 | 2} day - The event day this timeslot belongs to.
+ * @param {string} startTime - Start time string (treated opaquely).
+ * @param {number} [capacity=1] - How many meetings may book this timeslot.
+ * @returns {Timeslot} A timeslot object with the specified properties.
  */
-function makeSlot(slotId: string, day: 1 | 2, startTime: string, status: 'available' | 'blocked' = 'available'): AttendeeSlot {
-    return { slotId, day, startTime, endTime: startTime, status };
+function makeTimeslot(id: string, day: 1 | 2, startTime: string, capacity = 1): Timeslot {
+    return { id, day, startTime, endTime: startTime, capacity, locationId: null };
+}
+
+/** Builds the remaining-capacity map findAvailableTimeslot expects. */
+function remainingOf(timeslots: Timeslot[]): Map<string, number> {
+    return new Map(timeslots.map((t) => [t.id, t.capacity]));
 }
 
 /**
@@ -43,7 +48,7 @@ function makeAttendee(id: string, company: string): Attendee {
         cventContactId: '', salesforceId: id, name: '', email: '', phone: '',
         role: 'delegate', title: '', sponsorTier: null,
         profile: { annualRevenue: null, budgetaryResponsibility: null, areasOfSpecialization: [], industrySectors: [], plannedSpend: null, companySize: null, regionsOverseen: [], strategicPriorities: [] },
-        scheduling: { slots: [], maxSameCompanyMeetings: null },
+        scheduling: { maxSameCompanyMeetings: null },
     };
 }
 
@@ -57,10 +62,9 @@ function makeAttendee(id: string, company: string): Attendee {
 function makeMeeting(attendeeA: string, attendeeB: string): ScheduledMeeting {
     return {
         id: `${attendeeA}-${attendeeB}`, attendeeA, attendeeB,
-        day: 1, slotIdA: '', slotIdB: '', passNumber: 1,
+        day: 1, timeslotId: '', passNumber: 1,
         mutual: false, matchKind: 'sponsor_choice', rank: null,
-        source: 'portal', location: null,
-        startTime: null, endTime: null, cventAppointmentId: null,
+        source: 'portal', locationId: null, cventAppointmentId: null,
         lastModifiedAt: null, lastPushedAt: null,
     };
 }
@@ -103,41 +107,40 @@ describe('computeMutualPairs', () => {
     });
 });
 
-describe('findMutualSlot', () => {
-    test('returns null when both attendees have no slots', () => {
-        expect(findMutualSlot([], [], 1)).toBeNull();
+describe('findAvailableTimeslot', () => {
+    const empty = new Set<string>();
+
+    test('returns null when there are no timeslots', () => {
+        expect(findAvailableTimeslot([], 1, empty, empty, new Map())).toBeNull();
     });
 
-    test('returns null when slots do not overlap', () => {
-        const slotsA = [makeSlot('a-d1-01', 1, '09:00')];
-        const slotsB = [makeSlot('b-d1-01', 1, '10:00')];
-        expect(findMutualSlot(slotsA, slotsB, 1)).toBeNull();
+    test('returns null when the only timeslot is on a different day', () => {
+        const timeslots = [makeTimeslot('ts-1', 2, '09:00')];
+        expect(findAvailableTimeslot(timeslots, 1, new Set(), new Set(), remainingOf(timeslots))).toBeNull();
     });
 
-    test('returns null when the matching slot is on a different day', () => {
-        const slotsA = [makeSlot('a-d1-01', 1, '09:00')];
-        const slotsB = [makeSlot('b-d2-01', 2, '09:00')];
-        expect(findMutualSlot(slotsA, slotsB, 1)).toBeNull();
+    test('returns null when the timeslot has no remaining capacity', () => {
+        const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
+        const remaining = new Map([['ts-1', 0]]);
+        expect(findAvailableTimeslot(timeslots, 1, new Set(), new Set(), remaining)).toBeNull();
     });
 
-    test('returns null when the matching slot is blocked', () => {
-        const slotsA = [makeSlot('a-d1-01', 1, '09:00')];
-        const slotsB = [makeSlot('b-d1-01', 1, '09:00', 'blocked')];
-        expect(findMutualSlot(slotsA, slotsB, 1)).toBeNull();
+    test('returns null when one attendee is already busy at that start time', () => {
+        const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
+        const busyA = new Set(['09:00']);
+        expect(findAvailableTimeslot(timeslots, 1, busyA, new Set(), remainingOf(timeslots))).toBeNull();
     });
 
-    test('returns the matched slot pair when both attendees are available at the same time', () => {
-        const slotA = makeSlot('a-d1-01', 1, '09:00');
-        const slotB = makeSlot('b-d1-01', 1, '09:00');
-        expect(findMutualSlot([slotA], [slotB], 1)).toEqual({ slotA, slotB });
+    test('returns the timeslot when both attendees are free and capacity remains', () => {
+        const ts = makeTimeslot('ts-1', 1, '09:00');
+        expect(findAvailableTimeslot([ts], 1, new Set(), new Set(), remainingOf([ts]))).toEqual(ts);
     });
 
-    test('returns the first overlapping slot when multiple are available', () => {
-        const slotA1 = makeSlot('a-d1-01', 1, '09:00');
-        const slotA2 = makeSlot('a-d1-02', 1, '10:00');
-        const slotB1 = makeSlot('b-d1-01', 1, '09:00');
-        const slotB2 = makeSlot('b-d1-02', 1, '10:00');
-        expect(findMutualSlot([slotA1, slotA2], [slotB1, slotB2], 1)).toEqual({ slotA: slotA1, slotB: slotB1 });
+    test('returns the first usable timeslot when several exist', () => {
+        const busy = new Set(['09:00']); // both busy at 09:00, so the 10:00 slot wins
+        const ts1 = makeTimeslot('ts-1', 1, '09:00');
+        const ts2 = makeTimeslot('ts-2', 1, '10:00');
+        expect(findAvailableTimeslot([ts1, ts2], 1, busy, busy, remainingOf([ts1, ts2]))).toEqual(ts2);
     });
 });
 

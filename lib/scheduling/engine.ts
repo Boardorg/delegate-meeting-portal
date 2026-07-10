@@ -2,11 +2,13 @@ import {
 	Attendee,
 	AttendeeRole,
 	AttendeeSchedule,
+	Location,
 	MeetingRequest,
 	ScheduledMeeting,
 	SponsorTier,
+	Timeslot,
 } from '@/types';
-import { pairKey, computeMutualPairs, findMutualSlot, wouldViolateCompanyDiversity } from './helpers';
+import { pairKey, computeMutualPairs, findAvailableTimeslot, wouldViolateCompanyDiversity } from './helpers';
 
 // Defines the configuration for each pass of the scheduling algorithm, including caps and filters.
 interface PassConfig {
@@ -146,10 +148,12 @@ function countMeetingsOnDay(
  * Runs the full multi-pass scheduling algorithm against a set of attendees and requests.
  *
  * Meetings are scheduled across seven passes in priority order. Caps are cumulative —
- * each pass raises the ceiling without resetting counts. Before confirming any meeting,
- * the engine verifies that both attendees have a mutually available time slot, then marks
- * those slots as blocked so they cannot be reused. Business rules (no duplicates,
- * no self-meetings, company diversity) are enforced on every candidate.
+ * each pass raises the ceiling without resetting counts. Availability is event-global:
+ * before confirming any meeting, the engine finds a timeslot where both attendees are
+ * free and capacity remains, then marks them busy at that time and decrements the
+ * timeslot's remaining capacity. Each meeting's location defaults to the booked
+ * timeslot's native Cvent location. Business rules (no duplicates, no self-meetings,
+ * company diversity) are enforced on every candidate.
  *
  * The engine runs freely with no knowledge of previously pushed meetings. Callers are
  * responsible for post-reconciliation: drop any fresh meeting that duplicates or conflicts
@@ -157,16 +161,23 @@ function countMeetingsOnDay(
  *
  * @param {Attendee[]} attendees - All attendees to schedule meetings for.
  * @param {MeetingRequest[]} requests - All submitted meeting requests.
+ * @param {Timeslot[]} timeslots - The event's global, Cvent-sourced timeslots.
+ * @param {Location[]} _locations - The event's locations (reserved for future location-aware assignment).
  * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }>}
  *   Resolves to the flat list of newly scheduled meetings and a per-attendee breakdown.
  */
 export async function runScheduler(
 	attendees: Attendee[],
 	requests: MeetingRequest[],
+	timeslots: Timeslot[],
+	_locations: Location[],
 ): Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }> {
 
 	// Index attendees by Salesforce ID for lookup throughout the algorithm.
 	const attendeeMap = new Map(attendees.map(a => [a.salesforceId, a]));
+
+	// Index timeslots by id for resolving booked times when sorting schedules.
+	const timeslotById = new Map(timeslots.map(t => [t.id, t]));
 
 	// Pre-compute all mutual pairs once so each pass can check mutuality cheaply.
 	const mutualPairs = computeMutualPairs(requests);
@@ -174,13 +185,14 @@ export async function runScheduler(
 	// Initialize a set to track which pairs have already been scheduled to prevent duplicates.
 	const scheduledPairs = new Set<string>();
 
-	// Create a mutable copy of each attendee's slots keyed by Salesforce ID.
-	const slotsByAttendee = new Map(
-		attendees.map(a => [
-			a.salesforceId,
-			a.scheduling.slots.map(s => ({ ...s })),
-		])
+	// Per-attendee set of start times already booked, so nobody is double-booked
+	// at the same wall-clock time. Keyed by Salesforce ID.
+	const busyByAttendee = new Map<string, Set<string>>(
+		attendees.map(a => [a.salesforceId, new Set<string>()])
 	);
+
+	// Remaining capacity per timeslot id, drawn down as meetings are booked.
+	const timeslotRemaining = new Map(timeslots.map(t => [t.id, t.capacity]));
 
 	// Initialize the master list of all scheduled meetings.
 	const allMeetings: ScheduledMeeting[] = [];
@@ -244,15 +256,23 @@ export async function runScheduler(
 			const requesterDayCount = countMeetingsOnDay(allMeetings, req.requesterId, day);
 			const targetDayCount    = countMeetingsOnDay(allMeetings, req.targetId,    day);
 
-			// Derive the available slot count for each attendee on this day from the mutable slot map.
-			const requesterAvailableSlots = (slotsByAttendee.get(req.requesterId) ?? [])
-				.filter(s => s.day === day && s.status === 'available').length;
-			const targetAvailableSlots    = (slotsByAttendee.get(req.targetId) ?? [])
-				.filter(s => s.day === day && s.status === 'available').length;
+			// Busy-time sets for each attendee, used both to count remaining availability
+			// and to find a free timeslot below.
+			const requesterBusy = busyByAttendee.get(req.requesterId) ?? new Set<string>();
+			const targetBusy    = busyByAttendee.get(req.targetId)    ?? new Set<string>();
 
-			// Cap is the lower of the pass cap and the attendee's total available slots on this day.
-			const requesterCap = Math.min(getCap(requester, pass), requesterAvailableSlots + requesterDayCount);
-			const targetCap    = Math.min(getCap(target,    pass), targetAvailableSlots    + targetDayCount);
+			// Count timeslots on this day that the attendee is still free for and that
+			// have capacity left. Bounds the cap to realistic availability.
+			const countAvailable = (busy: Set<string>) =>
+				timeslots.filter(t =>
+					t.day === day &&
+					!busy.has(t.startTime) &&
+					(timeslotRemaining.get(t.id) ?? 0) > 0
+				).length;
+
+			// Cap is the lower of the pass cap and the attendee's reachable availability on this day.
+			const requesterCap = Math.min(getCap(requester, pass), countAvailable(requesterBusy) + requesterDayCount);
+			const targetCap    = Math.min(getCap(target,    pass), countAvailable(targetBusy)    + targetDayCount);
 
 			// Skip if either attendee has already reached their cumulative cap for this pass.
 			if (requesterDayCount >= requesterCap) continue;
@@ -264,34 +284,31 @@ export async function runScheduler(
 			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.requesterId, req.targetId, requesterMaxSame)) continue;
 			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.targetId, req.requesterId, targetMaxSame))    continue;
 
-			// Find a mutually available time slot for both attendees on this day.
-			const requesterSlots = slotsByAttendee.get(req.requesterId) ?? [];
-			const targetSlots    = slotsByAttendee.get(req.targetId)    ?? [];
-			const mutualSlot     = findMutualSlot(requesterSlots, targetSlots, day);
+			// Find a timeslot on this day where both attendees are free and capacity remains.
+			const timeslot = findAvailableTimeslot(timeslots, day, requesterBusy, targetBusy, timeslotRemaining);
 
-			// Skip this pair if no overlapping available slot exists.
-			if (!mutualSlot) continue;
+			// Skip this pair if no usable timeslot exists.
+			if (!timeslot) continue;
 
-			// Mark both matched slots as blocked so they can't be reassigned to another meeting.
-			mutualSlot.slotA.status = 'blocked';
-			mutualSlot.slotB.status = 'blocked';
+			// Book the timeslot: mark both attendees busy at its start time and draw down capacity.
+			requesterBusy.add(timeslot.startTime);
+			targetBusy.add(timeslot.startTime);
+			timeslotRemaining.set(timeslot.id, (timeslotRemaining.get(timeslot.id) ?? 0) - 1);
 
-			// Build the ScheduledMeeting record with all required fields.
+			// Build the ScheduledMeeting record with all required fields. Location defaults
+			// to the timeslot's native Cvent location; an admin can reassign it later.
 			const meeting: ScheduledMeeting = {
 				id: `mtg-${String(meetingCounter++).padStart(3, '0')}`,
 				attendeeA: req.requesterId,
 				attendeeB: req.targetId,
 				day,
-				slotIdA: mutualSlot.slotA.slotId,
-				slotIdB: mutualSlot.slotB.slotId,
+				timeslotId: timeslot.id,
 				passNumber: pass.passNumber,
 				mutual: isMutual,
 				matchKind: isMutual ? 'mutual' : requester.role === 'sponsor' ? 'sponsor_choice' : 'delegate_choice',
 				rank: req.rank,
 				source: 'portal',
-				location: null,
-				startTime: mutualSlot.slotA.startTime,
-				endTime: mutualSlot.slotA.endTime,
+				locationId: timeslot.locationId,
 				cventAppointmentId: null,
 				lastModifiedAt: null,
 				lastPushedAt: null,
@@ -305,6 +322,10 @@ export async function runScheduler(
 		}
 	}
 
+	// Resolve a meeting's start time from its booked timeslot, for ordering.
+	const startTimeOf = (m: ScheduledMeeting) =>
+		timeslotById.get(m.timeslotId)?.startTime ?? '';
+
 	// Build a per-attendee view from all meetings for a complete picture.
 	const attendeeSchedules: AttendeeSchedule[] = attendees.map(a => ({
 		attendeeId: a.salesforceId,
@@ -313,10 +334,10 @@ export async function runScheduler(
 		role: a.role as AttendeeRole,
 		day1Meetings: allMeetings
 			.filter(m => m.day === 1 && (m.attendeeA === a.salesforceId || m.attendeeB === a.salesforceId))
-			.sort((a, b) => a.startTime!.localeCompare(b.startTime!)),
+			.sort((x, y) => startTimeOf(x).localeCompare(startTimeOf(y))),
 		day2Meetings: allMeetings
 			.filter(m => m.day === 2 && (m.attendeeA === a.salesforceId || m.attendeeB === a.salesforceId))
-			.sort((a, b) => a.startTime!.localeCompare(b.startTime!)),
+			.sort((x, y) => startTimeOf(x).localeCompare(startTimeOf(y))),
 	}));
 
 	return { schedule: allMeetings, attendeeSchedules };

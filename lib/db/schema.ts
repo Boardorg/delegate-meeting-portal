@@ -42,11 +42,11 @@ export const meetingMatchKind = pgEnum("meeting_match_kind", [
     "delegate_choice",
     "admin",
 ]);
-export type MeetingMatchKind = typeof meetingMatchKind.enumValues[number];
+export type MeetingMatchKind = (typeof meetingMatchKind.enumValues)[number];
 
 /** Where a meeting originates. Cvent-native meetings are read-only in the portal. */
 export const meetingSource = pgEnum("meeting_source", ["portal", "cvent"]);
-export type MeetingSource = typeof meetingSource.enumValues[number];
+export type MeetingSource = (typeof meetingSource.enumValues)[number];
 
 // ---------------------------------------------------------------------------
 // Tables
@@ -120,6 +120,7 @@ export const meetingRequests = pgTable(
         unique("meeting_requests_requester_target_unique").on(
             t.requesterId,
             t.targetId,
+            t.eventCode,
         ),
     ],
 );
@@ -151,9 +152,9 @@ export const scheduledMeetings = pgTable("scheduled_meetings", {
     // 1 = Day 1 (sponsor/delegate), 2 = Day 2 (delegate/delegate).
     day: integer("day").notNull(),
 
-    // Slot ids from each attendee's AttendeeSlot[]. Used to look up start/end times.
-    slotIdA: text("slot_id_a").notNull(),
-    slotIdB: text("slot_id_b").notNull(),
+    // Cvent timeslot id (Timeslot.id). Shared by both attendees; start/end times
+    // are resolved from the event's Cvent timeslots at read time, not stored here.
+    timeslotId: text("timeslot_id").notNull(),
 
     // Engine pass that produced this meeting (1–7). 0 for admin-created.
     passNumber: integer("pass_number").notNull(),
@@ -166,12 +167,10 @@ export const scheduledMeetings = pgTable("scheduled_meetings", {
 
     source: meetingSource("source").notNull().default("portal"),
 
-    // Admin-assigned location (e.g. "Table 3A"). Null until set.
-    location: text("location"),
-
-    // ISO 8601 strings matching the assigned AttendeeSlot times.
-    startTime: text("start_time"),
-    endTime: text("end_time"),
+    // Cvent location id (Location.id). Seeded from the timeslot's native location
+    // by the engine, independently editable by an admin. Null until assigned.
+    // The location name is resolved from the event's Cvent locations at read time.
+    locationId: text("location_id"),
 
     // Null until the meeting has been pushed to Cvent.
     cventAppointmentId: text("cvent_appointment_id"),

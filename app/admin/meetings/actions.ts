@@ -26,34 +26,6 @@ import type { MeetingRequest } from "@/types";
 // show as 0 until that field is available from Salesforce.
 // ---------------------------------------------------------------------------
 
-/**
- * Returns distinct event codes present in either the meeting requests or
- * scheduled meetings tables, sorted alphabetically.
- *
- * @returns {Promise<string[]>} Sorted list of event codes.
- */
-export async function listMeetingsEventCodes(): Promise<string[]> {
-    // In mock mode, return a fixed event code from the mock data.
-    if (process.env.USE_MOCK === "true") {
-        return ["PARTY1999"];
-    }
-
-    // Get distinct event codes from both tables in parallel.
-    const [fromRequests, fromMeetings] = await Promise.all([
-        db.selectDistinct({ eventCode: meetingRequests.eventCode }).from(meetingRequests),
-        db.selectDistinct({ eventCode: scheduledMeetings.eventCode }).from(scheduledMeetings),
-    ]);
-
-    // Combine event codes from both sources into a single set to ensure uniqueness.
-    const codes = new Set([
-        ...fromRequests.map((r) => r.eventCode),
-        ...fromMeetings.map((r) => r.eventCode),
-    ]);
-
-    // Convert the set to an array and sort alphabetically.
-    return [...codes].sort();
-}
-
 /** One sponsor row as returned to the client table. */
 export type SponsorRow = {
     salesforceId: string;

@@ -36,7 +36,6 @@ import {
 // ---------------------------------------------------------------------------
 
 type Props = {
-    eventCodes: string[];
     selectedEvent: string | null;
     query: string;
     sortField: RequestSortField;
@@ -59,7 +58,6 @@ function emptyDraft(): NewDraft {
 }
 
 export default function RequestsTable({
-    eventCodes,
     selectedEvent,
     query,
     sortField,
@@ -75,16 +73,12 @@ export default function RequestsTable({
      * its own param.
      */
     function hrefWith(overrides: {
-        event?: string | null;
         q?: string;
         sort?: RequestSortField;
         dir?: "asc" | "desc";
         page?: number;
     }): string {
         const params = new URLSearchParams();
-        const event =
-            overrides.event !== undefined ? overrides.event : selectedEvent;
-        if (event) params.set("event", event);
         const q = overrides.q !== undefined ? overrides.q : query;
         if (q.trim()) params.set("q", q.trim());
         params.set("sort", overrides.sort ?? sortField);
@@ -171,13 +165,6 @@ export default function RequestsTable({
     } | null>(null);
 
     const [pending, startTransition] = useTransition();
-
-    // ── Event dropdown ───────────────────────────────────────────────────────
-
-    function changeEvent(code: string) {
-        // New event → reset to page 1; search carries over.
-        router.push(hrefWith({ event: code, page: 1 }));
-    }
 
     // ── Edit handlers ─────────────────────────────────────────────────────────
 
@@ -278,25 +265,6 @@ export default function RequestsTable({
             </div>
 
             <div className="adm-toolbar">
-                <label className="adm-field">
-                    <span className="adm-field-label">Event</span>
-                    <select
-                        className="adm-input adm-select"
-                        value={selectedEvent ?? ""}
-                        onChange={(e) => changeEvent(e.target.value)}
-                        disabled={eventCodes.length === 0}
-                    >
-                        {eventCodes.length === 0 ? (
-                            <option value="">No events</option>
-                        ) : (
-                            eventCodes.map((code) => (
-                                <option key={code} value={code}>
-                                    {code}
-                                </option>
-                            ))
-                        )}
-                    </select>
-                </label>
                 <input
                     type="search"
                     className="adm-input adm-search"

@@ -40,7 +40,6 @@ export type EventSettingsInput = {
     name?: string | null;
     cventEventId?: string | null;
     cventAppointmentEventId?: string | null;
-    cventAppointmentHostId?: string | null;
     cventAppointmentTypeId?: string | null;
 };
 
@@ -50,7 +49,6 @@ function toPatch(input: EventSettingsInput) {
         name: trimToNull(input.name),
         cventEventId: trimToNull(input.cventEventId),
         cventAppointmentEventId: trimToNull(input.cventAppointmentEventId),
-        cventAppointmentHostId: trimToNull(input.cventAppointmentHostId),
         cventAppointmentTypeId: trimToNull(input.cventAppointmentTypeId),
     };
 }

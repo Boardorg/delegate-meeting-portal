@@ -70,9 +70,11 @@ export async function pushMeetingRows(
 
     const results: PushResult[] = [];
     for (const row of rows) {
-        const a = attendeeById.get(row.attendeeA);
-        const b = attendeeById.get(row.attendeeB);
-        const label = `${a?.name ?? row.attendeeA} & ${b?.name ?? row.attendeeB}`;
+        // attendeeA is the requester (the party whose request produced the
+        // meeting) and hosts the Cvent appointment; attendeeB is the target.
+        const requester = attendeeById.get(row.attendeeA);
+        const target = attendeeById.get(row.attendeeB);
+        const label = `${requester?.name ?? row.attendeeA} & ${target?.name ?? row.attendeeB}`;
 
         // A meeting can't be pushed without a resolvable time block.
         const timeslot = scheduleData.timeslotById.get(row.timeslotId);
@@ -86,14 +88,29 @@ export async function pushMeetingRows(
             continue;
         }
 
-        const attendeeContactIds = [a?.cventContactId, b?.cventContactId].filter(
-            (id): id is string => !!id,
-        );
+        // The requester hosts the appointment, so a Cvent contact id is required.
+        const hostContactId = requester?.cventContactId;
+        if (!hostContactId) {
+            results.push({
+                meetingId: row.id,
+                label,
+                ok: false,
+                error: `Requester ${requester?.name ?? row.attendeeA} has no Cvent contact id to host the appointment`,
+            });
+            continue;
+        }
+
+        // Attendees are the non-host participant(s); the target's contact id
+        // when known.
+        const attendeeContactIds = target?.cventContactId
+            ? [target.cventContactId]
+            : [];
 
         const input = {
             subject: label,
             startTime: new Date(timeslot.startTime),
             endTime: new Date(timeslot.endTime),
+            hostContactId,
             locationId: row.locationId,
             attendeeContactIds,
             code: row.id,

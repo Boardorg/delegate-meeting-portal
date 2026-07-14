@@ -21,7 +21,6 @@ type Draft = {
     name: string;
     cventEventId: string;
     cventAppointmentEventId: string;
-    cventAppointmentHostId: string;
     cventAppointmentTypeId: string;
 };
 
@@ -31,14 +30,13 @@ function draftFrom(row: EventSettingsRow | null): Draft {
         name: row?.name ?? "",
         cventEventId: row?.cventEventId ?? "",
         cventAppointmentEventId: row?.cventAppointmentEventId ?? "",
-        cventAppointmentHostId: row?.cventAppointmentHostId ?? "",
         cventAppointmentTypeId: row?.cventAppointmentTypeId ?? "",
     };
 }
 
 // The Cvent id fields, in display order. Kept as data so the inputs render
-// from one list instead of five near-identical blocks.
-//TODO deprecate the cventAppointmentHostId by using sponsor instead.
+// from one list instead of near-identical blocks. The appointment host is not
+// configured here — each pushed meeting is hosted by its requester.
 const ID_FIELDS: { key: keyof Draft; label: string; hint: string }[] = [
     {
         key: "cventEventId",
@@ -49,11 +47,6 @@ const ID_FIELDS: { key: keyof Draft; label: string; hint: string }[] = [
         key: "cventAppointmentEventId",
         label: "Cvent Appointment Event ID",
         hint: "find in the cvent appointments area",
-    },
-    {
-        key: "cventAppointmentHostId",
-        label: "Default Meeting Host (Contact ID)",
-        hint: "Cvent contact id that owns created appointments.",
     },
     {
         key: "cventAppointmentTypeId",

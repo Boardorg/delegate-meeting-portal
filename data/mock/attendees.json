@@ -1,338 +1,316 @@
 [
-  {
-    "id": "s1",
-    "cventContactId": "cvent-s1-uuid",
-    "salesforceId": "a00PZ00000TMLocYAH",
-    "name": "Jordan Marsh",
-    "email": "jordan.marsh@nexapathbio.com",
-    "phone": "+15555550101",
-    "role": "sponsor",
-    "company": "Nexapath Biologics",
-    "title": "VP, Strategic Partnerships",
-    "sponsorTier": "diamond",
-    "profile": {
-      "annualRevenue": 185000000,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "BtoB Services"
-      ],
-      "plannedSpend": null,
-      "companySize": 420,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "s1",
+        "cventContactId": "055690f2-23f2-4b8e-841a-4aa33cc2a0b5",
+        "salesforceId": "003PZ00000V1vKFYAZ",
+        "name": "Morgan Labbree",
+        "email": "morgan.labbree@precisionmedicinegrp.com",
+        "phone": "+19523935770",
+        "role": "sponsor",
+        "company": "Project Farma",
+        "title": "VP, Strategic Partnerships",
+        "sponsorTier": "diamond",
+        "profile": {
+            "annualRevenue": 185000000,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["BtoB Services"],
+            "plannedSpend": null,
+            "companySize": 420,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": null
-    }
-  },
-  {
-    "id": "s2",
-    "cventContactId": "cvent-s2-uuid",
-    "salesforceId": "a00PZ00000TMKz1YAH",
-    "name": "Priya Sundaram",
-    "email": "priya.sundaram@cellavance.com",
-    "role": "sponsor",
-    "company": "Cellavance Solutions",
-    "title": "Director, Global Marketing",
-    "sponsorTier": "standard",
-    "profile": {
-      "annualRevenue": 62000000,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "BtoB Services"
-      ],
-      "plannedSpend": null,
-      "companySize": 99,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "s2",
+        "cventContactId": "cvent-s2-uuid",
+        "salesforceId": "a00PZ00000TMKz1YAH",
+        "name": "Priya Sundaram",
+        "email": "priya.sundaram@cellavance.com",
+        "role": "sponsor",
+        "company": "Cellavance Solutions",
+        "title": "Director, Global Marketing",
+        "sponsorTier": "standard",
+        "profile": {
+            "annualRevenue": 62000000,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["BtoB Services"],
+            "plannedSpend": null,
+            "companySize": 99,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": null
-    }
-  },
-  {
-    "id": "s3",
-    "cventContactId": "cvent-s3-uuid",
-    "salesforceId": "a00PZ00000fp2wQYAQ",
-    "name": "Marcus Delacroix",
-    "email": "marcus.delacroix@omnipathbio.com",
-    "role": "sponsor",
-    "company": "OmniPath Biotech",
-    "title": "Senior Manager, Business Development",
-    "sponsorTier": "standard",
-    "profile": {
-      "annualRevenue": null,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "BtoB Services"
-      ],
-      "plannedSpend": null,
-      "companySize": null,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "s3",
+        "cventContactId": "cvent-s3-uuid",
+        "salesforceId": "a00PZ00000fp2wQYAQ",
+        "name": "Marcus Delacroix",
+        "email": "marcus.delacroix@omnipathbio.com",
+        "role": "sponsor",
+        "company": "OmniPath Biotech",
+        "title": "Senior Manager, Business Development",
+        "sponsorTier": "standard",
+        "profile": {
+            "annualRevenue": null,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["BtoB Services"],
+            "plannedSpend": null,
+            "companySize": null,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": null
-    }
-  },
-  {
-    "id": "s4",
-    "cventContactId": "cvent-s4-uuid",
-    "salesforceId": "a00PZ00000TML09YAH",
-    "name": "Elaine Forster",
-    "email": "elaine.forster@helix-mfg.com",
-    "role": "sponsor",
-    "company": "Helix Manufacturing Partners",
-    "title": "VP Sales & Client Success",
-    "sponsorTier": "standard",
-    "profile": {
-      "annualRevenue": 310000000,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "Manufacturing"
-      ],
-      "plannedSpend": null,
-      "companySize": 850,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "s4",
+        "cventContactId": "cvent-s4-uuid",
+        "salesforceId": "a00PZ00000TML09YAH",
+        "name": "Elaine Forster",
+        "email": "elaine.forster@helix-mfg.com",
+        "role": "sponsor",
+        "company": "Helix Manufacturing Partners",
+        "title": "VP Sales & Client Success",
+        "sponsorTier": "standard",
+        "profile": {
+            "annualRevenue": 310000000,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["Manufacturing"],
+            "plannedSpend": null,
+            "companySize": 850,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": null
-    }
-  },
-  {
-    "id": "s5",
-    "cventContactId": "cvent-s5-uuid",
-    "salesforceId": "a00PZ00000TML0EYAX",
-    "name": "Tobias Wren",
-    "email": "tobias.wren@vericelsciences.com",
-    "role": "sponsor",
-    "company": "Vericel Sciences",
-    "title": "Chief Revenue Officer",
-    "sponsorTier": "diamond",
-    "profile": {
-      "annualRevenue": 520000000,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "Biotechnology"
-      ],
-      "plannedSpend": null,
-      "companySize": 1200,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "s5",
+        "cventContactId": "cvent-s5-uuid",
+        "salesforceId": "a00PZ00000TML0EYAX",
+        "name": "Tobias Wren",
+        "email": "tobias.wren@vericelsciences.com",
+        "role": "sponsor",
+        "company": "Vericel Sciences",
+        "title": "Chief Revenue Officer",
+        "sponsorTier": "diamond",
+        "profile": {
+            "annualRevenue": 520000000,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["Biotechnology"],
+            "plannedSpend": null,
+            "companySize": 1200,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": null
-    }
-  },
-  {
-    "id": "d1",
-    "cventContactId": "cvent-d1-uuid",
-    "salesforceId": "a00PZ00000cOBpoYAG",
-    "name": "Miriam Kastner",
-    "email": "m.kastner@brenvaxpharma.com",
-    "phone": "+15555550102",
-    "role": "delegate",
-    "company": "Brenvax Pharmaceuticals",
-    "title": "Chief Quality Officer & SVP, Global Operations",
-    "sponsorTier": null,
-    "profile": {
-      "annualRevenue": 54100000000,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "Healthcare;Pharmaceuticals"
-      ],
-      "plannedSpend": null,
-      "companySize": 94300,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "d1",
+        "cventContactId": "cvent-d1-uuid",
+        "salesforceId": "a00PZ00000cOBpoYAG",
+        "name": "Miriam Kastner",
+        "email": "m.kastner@brenvaxpharma.com",
+        "phone": "+15555550102",
+        "role": "delegate",
+        "company": "Brenvax Pharmaceuticals",
+        "title": "Chief Quality Officer & SVP, Global Operations",
+        "sponsorTier": null,
+        "profile": {
+            "annualRevenue": 54100000000,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["Healthcare;Pharmaceuticals"],
+            "plannedSpend": null,
+            "companySize": 94300,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": 2
-    }
-  },
-  {
-    "id": "d2",
-    "cventContactId": "cvent-d2-uuid",
-    "salesforceId": "a00PZ00000ckAv1YAE",
-    "name": "Renata Osei",
-    "email": "r.osei@genomerabiologics.com",
-    "role": "delegate",
-    "company": "Genomera Biologics",
-    "title": "Executive Vice President & President, Manufacturing Operations",
-    "sponsorTier": null,
-    "profile": {
-      "annualRevenue": 34126000000,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "Biotechnology;Healthcare;Pharmaceuticals"
-      ],
-      "plannedSpend": null,
-      "companySize": 28000,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "d2",
+        "cventContactId": "cvent-d2-uuid",
+        "salesforceId": "a00PZ00000ckAv1YAE",
+        "name": "Renata Osei",
+        "email": "r.osei@genomerabiologics.com",
+        "role": "delegate",
+        "company": "Genomera Biologics",
+        "title": "Executive Vice President & President, Manufacturing Operations",
+        "sponsorTier": null,
+        "profile": {
+            "annualRevenue": 34126000000,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
+            "plannedSpend": null,
+            "companySize": 28000,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": 2
-    }
-  },
-  {
-    "id": "d3",
-    "cventContactId": "cvent-d3-uuid",
-    "salesforceId": "a00PZ00000cuEKCYA2",
-    "name": "Stefan Holmqvist",
-    "email": "stefan.holmqvist@brenvaxpharma.com",
-    "role": "delegate",
-    "company": "Brenvax Pharmaceuticals",
-    "title": "SVP, Head of Global MSAT, Engineering & Sustainability",
-    "sponsorTier": null,
-    "profile": {
-      "annualRevenue": 54100000000,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "Healthcare;Pharmaceuticals"
-      ],
-      "plannedSpend": null,
-      "companySize": 94300,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "d3",
+        "cventContactId": "cvent-d3-uuid",
+        "salesforceId": "a00PZ00000cuEKCYA2",
+        "name": "Stefan Holmqvist",
+        "email": "stefan.holmqvist@brenvaxpharma.com",
+        "role": "delegate",
+        "company": "Brenvax Pharmaceuticals",
+        "title": "SVP, Head of Global MSAT, Engineering & Sustainability",
+        "sponsorTier": null,
+        "profile": {
+            "annualRevenue": 54100000000,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["Healthcare;Pharmaceuticals"],
+            "plannedSpend": null,
+            "companySize": 94300,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": 2
-    }
-  },
-  {
-    "id": "d4",
-    "cventContactId": "cvent-d4-uuid",
-    "salesforceId": "a00PZ00000cxnS0YAI",
-    "name": "Anita Rourke",
-    "email": "anita.rourke@clarivantbio.com",
-    "role": "delegate",
-    "company": "Clarivant Biosciences",
-    "title": "Vice President, Quality Assurance",
-    "sponsorTier": null,
-    "profile": {
-      "annualRevenue": null,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [],
-      "plannedSpend": null,
-      "companySize": null,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "d4",
+        "cventContactId": "cvent-d4-uuid",
+        "salesforceId": "a00PZ00000cxnS0YAI",
+        "name": "Anita Rourke",
+        "email": "anita.rourke@clarivantbio.com",
+        "role": "delegate",
+        "company": "Clarivant Biosciences",
+        "title": "Vice President, Quality Assurance",
+        "sponsorTier": null,
+        "profile": {
+            "annualRevenue": null,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": [],
+            "plannedSpend": null,
+            "companySize": null,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": 2
-    }
-  },
-  {
-    "id": "d5",
-    "cventContactId": "cvent-d5-uuid",
-    "salesforceId": "a00PZ00000dFeF5YAK",
-    "name": "Laurence Mbeki",
-    "email": "l.mbeki@genomera.com",
-    "role": "delegate",
-    "company": "Genomera Biologics",
-    "title": "Executive Director, Manufacturing Plant Manager",
-    "sponsorTier": null,
-    "profile": {
-      "annualRevenue": 34126000000,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "Biotechnology;Healthcare;Pharmaceuticals"
-      ],
-      "plannedSpend": null,
-      "companySize": 28000,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "d5",
+        "cventContactId": "cvent-d5-uuid",
+        "salesforceId": "a00PZ00000dFeF5YAK",
+        "name": "Laurence Mbeki",
+        "email": "l.mbeki@genomera.com",
+        "role": "delegate",
+        "company": "Genomera Biologics",
+        "title": "Executive Director, Manufacturing Plant Manager",
+        "sponsorTier": null,
+        "profile": {
+            "annualRevenue": 34126000000,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
+            "plannedSpend": null,
+            "companySize": 28000,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": 2
-    }
-  },
-  {
-    "id": "d6",
-    "cventContactId": "cvent-d6-uuid",
-    "salesforceId": "a00PZ00000dINr4YAG",
-    "name": "Ingrid Solvang",
-    "email": "ingrid.solvang@clarivantbio.com",
-    "role": "delegate",
-    "company": "Clarivant Biosciences",
-    "title": "Global Head of Technical Operations",
-    "sponsorTier": null,
-    "profile": {
-      "annualRevenue": null,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [],
-      "plannedSpend": null,
-      "companySize": null,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "d6",
+        "cventContactId": "cvent-d6-uuid",
+        "salesforceId": "a00PZ00000dINr4YAG",
+        "name": "Ingrid Solvang",
+        "email": "ingrid.solvang@clarivantbio.com",
+        "role": "delegate",
+        "company": "Clarivant Biosciences",
+        "title": "Global Head of Technical Operations",
+        "sponsorTier": null,
+        "profile": {
+            "annualRevenue": null,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": [],
+            "plannedSpend": null,
+            "companySize": null,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": 2
-    }
-  },
-  {
-    "id": "d7",
-    "cventContactId": "cvent-d7-uuid",
-    "salesforceId": "a00PZ00000dIinUYAS",
-    "name": "Devon Harcastle",
-    "email": "d.harcastle@solisbiogen.com",
-    "role": "delegate",
-    "company": "Solis Biogen",
-    "title": "SVP, Product Development & Clinical Supply",
-    "sponsorTier": null,
-    "profile": {
-      "annualRevenue": 63616000000,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "Healthcare;Pharmaceuticals"
-      ],
-      "plannedSpend": null,
-      "companySize": 75000,
-      "regionsOverseen": [],
-      "strategicPriorities": []
+    {
+        "id": "d7",
+        "cventContactId": "cvent-d7-uuid",
+        "salesforceId": "a00PZ00000dIinUYAS",
+        "name": "Devon Harcastle",
+        "email": "d.harcastle@solisbiogen.com",
+        "role": "delegate",
+        "company": "Solis Biogen",
+        "title": "SVP, Product Development & Clinical Supply",
+        "sponsorTier": null,
+        "profile": {
+            "annualRevenue": 63616000000,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["Healthcare;Pharmaceuticals"],
+            "plannedSpend": null,
+            "companySize": 75000,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2
+        }
     },
-    "scheduling": {
-      "maxSameCompanyMeetings": 2
+    {
+        "id": "d8",
+        "cventContactId": "cvent-d8-uuid",
+        "salesforceId": "a00PZ00000e8YDcYAM",
+        "name": "Camille Tran",
+        "email": "camille.tran@solisbiogen.com",
+        "role": "delegate",
+        "company": "Solis Biogen",
+        "title": "Vice President, Manufacturing Sciences",
+        "sponsorTier": null,
+        "profile": {
+            "annualRevenue": 63616000000,
+            "budgetaryResponsibility": null,
+            "areasOfSpecialization": [],
+            "industrySectors": ["Healthcare;Pharmaceuticals"],
+            "plannedSpend": null,
+            "companySize": 75000,
+            "regionsOverseen": [],
+            "strategicPriorities": []
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2
+        }
     }
-  },
-  {
-    "id": "d8",
-    "cventContactId": "cvent-d8-uuid",
-    "salesforceId": "a00PZ00000e8YDcYAM",
-    "name": "Camille Tran",
-    "email": "camille.tran@solisbiogen.com",
-    "role": "delegate",
-    "company": "Solis Biogen",
-    "title": "Vice President, Manufacturing Sciences",
-    "sponsorTier": null,
-    "profile": {
-      "annualRevenue": 63616000000,
-      "budgetaryResponsibility": null,
-      "areasOfSpecialization": [],
-      "industrySectors": [
-        "Healthcare;Pharmaceuticals"
-      ],
-      "plannedSpend": null,
-      "companySize": 75000,
-      "regionsOverseen": [],
-      "strategicPriorities": []
-    },
-    "scheduling": {
-      "maxSameCompanyMeetings": 2
-    }
-  }
 ]

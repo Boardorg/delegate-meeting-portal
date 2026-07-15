@@ -32,7 +32,10 @@ function normalizeCventEmail(email: string): string {
         lower.endsWith(EMAIL_SAFE_WRAP) &&
         lower.length > EMAIL_SAFE_WRAP.length * 2
     ) {
-        return lower.slice(EMAIL_SAFE_WRAP.length, lower.length - EMAIL_SAFE_WRAP.length);
+        return lower.slice(
+            EMAIL_SAFE_WRAP.length,
+            lower.length - EMAIL_SAFE_WRAP.length,
+        );
     }
     return lower;
 }
@@ -88,14 +91,25 @@ export async function loadAttendees(
             return [];
         }
 
-        const contactIdByEmail = new Map(
-            cventAttendees.map((c) => [normalizeCventEmail(c.email), c.contactId]),
-        );
+        const cventAttendeesNormalized = cventAttendees.map((c) => ({
+            email: normalizeCventEmail(c.email),
+            contactId: c.contactId,
+        }));
+
         attendees = attendees
-            .filter((a) => a.email && contactIdByEmail.has(a.email.toLowerCase()))
+            .filter(
+                (a) =>
+                    a.email &&
+                    cventAttendeesNormalized.find(
+                        (c) => c.email === a.email.toLowerCase(),
+                    ),
+            )
             .map((a) => ({
                 ...a,
-                cventContactId: contactIdByEmail.get(a.email.toLowerCase())!,
+                cventContactId:
+                    cventAttendeesNormalized.find(
+                        (c) => c.email === a.email.toLowerCase(),
+                    )?.contactId ?? "",
             }));
     }
 

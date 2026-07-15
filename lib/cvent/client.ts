@@ -227,6 +227,8 @@ export type CventAppointmentInput = {
     endTime: Date;
     /** Cvent contact id of the appointment host (the meeting's requester). */
     hostContactId: string;
+    /** Cvent appointment-type id, taken from the booked timeslot. Required on create; Cvent's update endpoint doesn't accept it. */
+    appointmentTypeId: string;
     /** Cvent location id. Omitted from the request when null/undefined. */
     locationId?: string | null;
     /** Cvent contact ids of the appointment attendees (the non-host participant). */
@@ -234,34 +236,6 @@ export type CventAppointmentInput = {
     /** External reference code (we pass our meeting id) for traceability. */
     code?: string;
 };
-
-/**
- * Reads the event's appointment-event id and appointment type id from its
- * settings row — both required to create appointments in Cvent. Throws a single
- * combined error naming any that are missing. (The host is per-meeting, not from
- * settings — see the requester-as-host handling in lib/cvent/push.ts.)
- *
- * @param {string} eventCode - The internal event code.
- * @returns {Promise<{ id: string; appointmentTypeId: string }>} The validated ids.
- */
-async function readAppointmentConfig(
-    eventCode: string,
-): Promise<{ id: string; appointmentTypeId: string }> {
-    const s = await requireEventSettings(eventCode);
-    const missing: string[] = [];
-    if (!s.cventAppointmentEventId) missing.push("Appointment Event ID");
-    if (!s.cventAppointmentTypeId) missing.push("Appointment Type ID");
-    if (missing.length) {
-        throw new Error(
-            `Event "${eventCode}" is missing Cvent settings: ${missing.join(", ")} ` +
-                "(Admin → Event settings).",
-        );
-    }
-    return {
-        id: s.cventAppointmentEventId!,
-        appointmentTypeId: s.cventAppointmentTypeId!,
-    };
-}
 
 /** Maps a list of Cvent contact ids into the SDK's `{ id }[]` attendee/host shape. */
 function toUuidList(ids: string[]): Array<{ id: string }> {
@@ -292,7 +266,7 @@ export async function createAppointment(
     // Mock mode never hits Cvent; hand back a synthetic appointment id.
     if (isMock()) return `mock-appt-${randomUUID()}`;
 
-    const { id, appointmentTypeId } = await readAppointmentConfig(eventCode);
+    const id = await getAppointmentEventId(eventCode);
 
     const res = await getClient().appointments.createAppointment({
         id,
@@ -302,7 +276,7 @@ export async function createAppointment(
             startTime: input.startTime,
             endTime: input.endTime,
             hosts: [{ id: input.hostContactId }],
-            appointmentTypeId,
+            appointmentTypeId: input.appointmentTypeId,
             ...(input.locationId ? { location: input.locationId } : {}),
             ...(input.attendeeContactIds?.length
                 ? { attendees: toUuidList(input.attendeeContactIds) }
@@ -330,7 +304,7 @@ export async function updateAppointment(
 ): Promise<string> {
     if (isMock()) return apptId;
 
-    const { id } = await readAppointmentConfig(eventCode);
+    const id = await getAppointmentEventId(eventCode);
 
     const res = await getClient().appointments.updateAppointment({
         id,

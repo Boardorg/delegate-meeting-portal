@@ -35,7 +35,7 @@ function makeAttendee(id: string, company: string, role: 'sponsor' | 'delegate')
  * @returns {Timeslot} The timeslot.
  */
 function makeTimeslot(id: string, day: 1 | 2, startTime: string, capacity = 1): Timeslot {
-    return { id, day, startTime, endTime: startTime, capacity, locationId: null };
+    return { id, day, startTime, endTime: startTime, capacity, locationId: null, appointmentTypeId: 'type-1' };
 }
 
 /**

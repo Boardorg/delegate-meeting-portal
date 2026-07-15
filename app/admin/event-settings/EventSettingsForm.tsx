@@ -21,7 +21,6 @@ type Draft = {
     name: string;
     cventEventId: string;
     cventAppointmentEventId: string;
-    cventAppointmentTypeId: string;
 };
 
 /** Builds a draft from a row (nulls → empty strings for controlled inputs). */
@@ -30,7 +29,6 @@ function draftFrom(row: EventSettingsRow | null): Draft {
         name: row?.name ?? "",
         cventEventId: row?.cventEventId ?? "",
         cventAppointmentEventId: row?.cventAppointmentEventId ?? "",
-        cventAppointmentTypeId: row?.cventAppointmentTypeId ?? "",
     };
 }
 
@@ -47,11 +45,6 @@ const ID_FIELDS: { key: keyof Draft; label: string; hint: string }[] = [
         key: "cventAppointmentEventId",
         label: "Cvent Appointment Event ID",
         hint: "find in the cvent appointments area",
-    },
-    {
-        key: "cventAppointmentTypeId",
-        label: "Appointment Type ID",
-        hint: "Appointment Type that all pushed meetings are created with.",
     },
 ];
 

@@ -111,6 +111,7 @@ export async function pushMeetingRows(
             startTime: new Date(timeslot.startTime),
             endTime: new Date(timeslot.endTime),
             hostContactId,
+            appointmentTypeId: timeslot.appointmentTypeId,
             locationId: row.locationId,
             attendeeContactIds,
             code: row.id,

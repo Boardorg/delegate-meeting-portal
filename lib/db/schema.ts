@@ -191,7 +191,7 @@ export type NewScheduledMeeting = typeof scheduledMeetings.$inferInsert;
 
 /**
  * Per-event configuration, one row per event. Holds the Cvent identifiers the
- * integration needs (appointment-event id used in API paths, appointment type)xw
+ * integration needs (event id and appointment-event id used in API paths).
  *
  * This table is also the registry that drives the global event dropdown, so an
  * event must have a row here to be selectable in the admin UI.
@@ -212,9 +212,6 @@ export const eventSettings = pgTable("event_settings", {
     // Cvent appointment-event id — the `{id}` in /ea/appointment-events/{id}/...
     // that every appointment API call uses.
     cventAppointmentEventId: text("cvent_appointment_event_id"),
-
-    // Appointment type id all pushed meetings are created under.
-    cventAppointmentTypeId: text("cvent_appointment_type_id"),
 
     createdAt: timestamp("created_at", { withTimezone: true })
         .notNull()

@@ -46,6 +46,7 @@ export function toTimeslots(times: CventAvailableTime[]): Timeslot[] {
             endTime: t.endTime.toISOString(),
             capacity: normalizeCapacity(t.availableAppointments),
             locationId: t.location?.id ?? null,
+            appointmentTypeId: t.appointmentType.id,
         };
     });
 }

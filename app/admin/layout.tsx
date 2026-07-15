@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import "@/app/backend.css";
 import TopBar from "@/app/components/TopBar";
 import AdminSidebar from "@/app/components/AdminSidebar";
-import { getCurrentUser } from "@/lib/auth/currentUser";
+import EventSwitcher from "@/app/components/EventSwitcher";
+import { getAdminState } from "@/lib/admin/globalState";
 import { ADMIN_NAV } from "./nav";
 
 // ---------------------------------------------------------------------------
@@ -37,7 +38,7 @@ export default async function AdminLayout({
     // check too, so the admin area is reachable without any users-table row.
     const authDisabled =
         process.env.NEXT_PUBLIC_DISABLE_LOGIN_AUTHENTICATION === "true";
-    const user = await getCurrentUser();
+    const { user, events, activeEventCode } = await getAdminState();
     if (!authDisabled && (!user || user.role !== "admin")) {
         redirect("/");
     }
@@ -54,7 +55,10 @@ export default async function AdminLayout({
         <>
             <TopBar user={{ name: displayName, title: displayRole }} />
             <div className="admin-shell">
-                <AdminSidebar items={ADMIN_NAV} />
+                <div className="admin-sidebar-col">
+                    <EventSwitcher events={events} activeEventCode={activeEventCode} />
+                    <AdminSidebar items={ADMIN_NAV} />
+                </div>
                 <main className="admin-main">{children}</main>
             </div>
         </>

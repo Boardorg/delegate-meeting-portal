@@ -32,4 +32,10 @@ export const ADMIN_NAV: AdminNavItem[] = [
         icon: "📅",
         children: [],
     },
+    {
+        label: "Event settings",
+        href: "/admin/event-settings",
+        icon: "⚙️",
+        children: [],
+    },
 ];

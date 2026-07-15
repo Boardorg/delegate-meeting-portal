@@ -30,7 +30,6 @@ import type {
 // ---------------------------------------------------------------------------
 
 type Props = {
-    eventCodes: string[];
     selectedEvent: string | null;
     query: string;
     sortField: SponsorSortField;
@@ -41,7 +40,6 @@ type Props = {
 const COL_COUNT = 8;
 
 export default function SponsorsTable({
-    eventCodes,
     selectedEvent,
     query,
     sortField,
@@ -89,7 +87,6 @@ export default function SponsorsTable({
 
     // Generates a URL with the given query parameter overrides.
     function hrefWith(overrides: {
-        event?: string | null;
         q?: string;
         sort?: SponsorSortField;
         dir?: "asc" | "desc";
@@ -97,11 +94,6 @@ export default function SponsorsTable({
     }): string {
         // Get current parameters from the URL.
         const params = new URLSearchParams();
-
-        // Include the event parameter if it's defined.
-        const event =
-            overrides.event !== undefined ? overrides.event : selectedEvent;
-        if (event) params.set("event", event);
 
         // For search, only include the parameter if it's non-empty after trimming.
         const q = overrides.q !== undefined ? overrides.q : query;
@@ -192,15 +184,10 @@ export default function SponsorsTable({
     });
 
     // Handler for changing the selected event.
-    function changeEvent(code: string) {
-        router.push(hrefWith({ event: code, page: 1 }));
-    }
-
-    // Handler for navigating to a sponsor's detail page.
+    // Handler for navigating to a sponsor's detail page. The active event is
+    // global (cookie-backed), so no event param is needed on the URL.
     function goToSponsor(salesforceId: string) {
-        const base = `/admin/meetings/${encodeURIComponent(salesforceId)}`;
-        const event = selectedEvent ? `?event=${encodeURIComponent(selectedEvent)}` : "";
-        router.push(`${base}${event}`);
+        router.push(`/admin/meetings/${encodeURIComponent(salesforceId)}`);
     }
 
     // Render the table with toolbar and modals.
@@ -211,25 +198,6 @@ export default function SponsorsTable({
             </div>
 
             <div className="adm-toolbar">
-                <label className="adm-field">
-                    <span className="adm-field-label">Event</span>
-                    <select
-                        className="adm-input adm-select"
-                        value={selectedEvent ?? ""}
-                        onChange={(e) => changeEvent(e.target.value)}
-                        disabled={eventCodes.length === 0}
-                    >
-                        {eventCodes.length === 0 ? (
-                            <option value="">No events</option>
-                        ) : (
-                            eventCodes.map((code) => (
-                                <option key={code} value={code}>
-                                    {code}
-                                </option>
-                            ))
-                        )}
-                    </select>
-                </label>
                 <input
                     type="search"
                     className="adm-input adm-search"

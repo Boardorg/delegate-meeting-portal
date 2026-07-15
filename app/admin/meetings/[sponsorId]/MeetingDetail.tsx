@@ -37,7 +37,7 @@ type Props = {
 export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
     const router = useRouter();
     const total = sponsor.contracted + sponsor.bonus;
-    const listHref = `/admin/meetings?event=${encodeURIComponent(eventCode)}`;
+    const listHref = `/admin/meetings`;
 
     const [editTarget, setEditTarget] = useState<MeetingRow | null>(null);
     const [showCreate, setShowCreate] = useState(false);

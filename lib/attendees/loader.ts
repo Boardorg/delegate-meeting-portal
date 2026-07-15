@@ -7,6 +7,36 @@ import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventAttendees } from "@/lib/cvent/client";
 import { Attendee } from "@/types";
 
+// In EMAIL_SAFE_MODE, Cvent email addresses are obfuscated by wrapping the real
+// address in this marker — e.g. Salesforce "mary@site.com" appears in Cvent as
+// "xxmary@site.comxx". We strip the wrapper before matching. Used for non-prod
+// events where real contacts must not receive real communications.
+const EMAIL_SAFE_WRAP = "xx";
+
+/**
+ * Normalizes a Cvent contact email for matching against Salesforce: lowercased,
+ * and (in EMAIL_SAFE_MODE) with the obfuscation wrapper stripped so
+ * "xxmary@site.comxx" matches Salesforce's "mary@site.com".
+ *
+ * @param {string} email - The raw Cvent contact email.
+ * @returns {string} The comparison key.
+ */
+function normalizeCventEmail(email: string): string {
+    const lower = email.trim().toLowerCase();
+    if (process.env.EMAIL_SAFE_MODE !== "true") return lower;
+
+    // Only unwrap when the marker is present on both ends, so a stray un-obfuscated
+    // address still compares correctly.
+    if (
+        lower.startsWith(EMAIL_SAFE_WRAP) &&
+        lower.endsWith(EMAIL_SAFE_WRAP) &&
+        lower.length > EMAIL_SAFE_WRAP.length * 2
+    ) {
+        return lower.slice(EMAIL_SAFE_WRAP.length, lower.length - EMAIL_SAFE_WRAP.length);
+    }
+    return lower;
+}
+
 /**
  * Loads the full attendee list (delegates + sponsors) for the event and
  * applies display-layer profile formatting.
@@ -59,7 +89,7 @@ export async function loadAttendees(
         }
 
         const contactIdByEmail = new Map(
-            cventAttendees.map((c) => [c.email.toLowerCase(), c.contactId]),
+            cventAttendees.map((c) => [normalizeCventEmail(c.email), c.contactId]),
         );
         attendees = attendees
             .filter((a) => a.email && contactIdByEmail.has(a.email.toLowerCase()))

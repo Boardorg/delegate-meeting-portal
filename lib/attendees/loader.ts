@@ -4,6 +4,7 @@ import { formatProfile } from "@/lib/attendees/formatProfile";
 import { getMeetingDataByEvent } from "@/lib/salesforce/client";
 import { meetingDataToAttendees } from "@/lib/salesforce/attendeeMapper";
 import { getEventCode } from "@/lib/helpers/getEventCode";
+import { getEventAttendees } from "@/lib/cvent/client";
 import { Attendee } from "@/types";
 
 /**
@@ -40,6 +41,32 @@ export async function loadAttendees(
         // Load from Salesforce using the event code.
         const data = await getMeetingDataByEvent(resolvedEventCode);
         attendees = meetingDataToAttendees(data, false);
+
+        // Cross-check against Cvent: keep only attendees who also exist in Cvent
+        // for this event (matched by email), and enrich each with its real Cvent
+        // contact id (needed to push appointments). Cvent presence is required —
+        // if the lookup can't run (no Cvent Event ID, or the API fails), return
+        // no attendees rather than exposing/scheduling people we can't push.
+        let cventAttendees;
+        try {
+            cventAttendees = await getEventAttendees(resolvedEventCode);
+        } catch (err) {
+            console.warn(
+                `loadAttendees: Cvent attendee lookup failed for "${resolvedEventCode}" — ` +
+                    `returning no attendees. ${err instanceof Error ? err.message : String(err)}`,
+            );
+            return [];
+        }
+
+        const contactIdByEmail = new Map(
+            cventAttendees.map((c) => [c.email.toLowerCase(), c.contactId]),
+        );
+        attendees = attendees
+            .filter((a) => a.email && contactIdByEmail.has(a.email.toLowerCase()))
+            .map((a) => ({
+                ...a,
+                cventContactId: contactIdByEmail.get(a.email.toLowerCase())!,
+            }));
     }
 
     // Apply display-layer formatting to the profile data for each attendee.

@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -6,6 +7,7 @@ import { CventSDK } from "@cvent/sdk";
 import {
     locationsPaginatedResponseFromJSON,
     availableTimesPaginatedResponseFromJSON,
+    attendeePaginatedResponseFromJSON,
 } from "@cvent/sdk/models/components";
 import type { CventLocation, CventAvailableTime } from "@/lib/cvent/types";
 import { getEventSettings } from "@/lib/events/settings";
@@ -212,6 +214,74 @@ export async function getTimeslotsByEvent(
     }
     return out;
 }
+
+/** One Cvent attendee, reduced to what the cross-check needs. */
+export type CventEventAttendee = {
+    /** Cvent contact id — used as the appointment host/attendee id. */
+    contactId: string;
+    /** Contact email — the key used to match against Salesforce attendees. */
+    email: string;
+};
+
+/**
+ * Reduces raw Cvent attendee records to `{ contactId, email }`, dropping any
+ * record missing either field (both are required to match + push).
+ */
+function toCventEventAttendees(
+    data: Array<{ contact?: { id?: string; email?: string } }>,
+): CventEventAttendee[] {
+    const out: CventEventAttendee[] = [];
+    for (const a of data) {
+        const contactId = a.contact?.id;
+        const email = a.contact?.email;
+        if (contactId && email) out.push({ contactId, email });
+    }
+    return out;
+}
+
+/**
+ * Lists the event's Cvent attendees (contact id + email), following pagination
+ * to the end. Used by loadAttendees to cross-check Salesforce attendees against
+ * Cvent by email. Request-memoized so repeated attendee loads in one render
+ * share the fetch.
+ *
+ * @param {string} eventCode - Internal event code; resolved to the event's Cvent Event ID.
+ * @returns {Promise<CventEventAttendee[]>} All Cvent attendees for the event.
+ * @throws {Error} When the event has no Cvent Event ID configured.
+ */
+export const getEventAttendees = cache(
+    async (eventCode: string): Promise<CventEventAttendee[]> => {
+        if (isMock()) {
+            const raw = await fs.readFile(
+                path.join(MOCK_DIR, "attendees.json"),
+                "utf-8",
+            );
+            const parsed = attendeePaginatedResponseFromJSON(raw);
+            if (!parsed.ok) {
+                throw new Error(
+                    `Invalid Cvent mock fixture attendees.json: ${String(parsed.error)}`,
+                );
+            }
+            return toCventEventAttendees(parsed.value?.data ?? []);
+        }
+
+        const { cventEventId } = await requireEventSettings(eventCode);
+        if (!cventEventId) {
+            throw new Error(
+                `Event "${eventCode}" has no Cvent Event ID set (Admin → Event settings).`,
+            );
+        }
+
+        const out: CventEventAttendee[] = [];
+        const pages = await getClient().attendees.listAttendees({
+            filter: `event.id eq '${cventEventId}'`,
+        });
+        for await (const page of pages) {
+            out.push(...toCventEventAttendees(page.result.data ?? []));
+        }
+        return out;
+    },
+);
 
 // ---------------------------------------------------------------------------
 // Write operations

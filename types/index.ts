@@ -58,6 +58,9 @@ export interface Timeslot {
 
     /** Cvent location bound to this timeslot. Null when Cvent omits it. */
     locationId: string | null;
+
+    /** Cvent appointment-type id this timeslot belongs to (e.g. a specific networking break). */
+    appointmentTypeId: string;
 }
 
 /**

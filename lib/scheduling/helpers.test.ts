@@ -27,7 +27,7 @@ function makeRequest(requesterId: string, targetId: string): MeetingRequest {
  * @returns {Timeslot} A timeslot object with the specified properties.
  */
 function makeTimeslot(id: string, day: 1 | 2, startTime: string, capacity = 1): Timeslot {
-    return { id, day, startTime, endTime: startTime, capacity, locationId: null };
+    return { id, day, startTime, endTime: startTime, capacity, locationId: null, appointmentTypeId: 'type-1' };
 }
 
 /** Builds the remaining-capacity map findAvailableTimeslot expects. */

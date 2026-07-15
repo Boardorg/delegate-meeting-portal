@@ -40,7 +40,6 @@ export type EventSettingsInput = {
     name?: string | null;
     cventEventId?: string | null;
     cventAppointmentEventId?: string | null;
-    cventAppointmentTypeId?: string | null;
 };
 
 /** Maps input fields to a normalized (trimmed → null) column patch. */
@@ -49,7 +48,6 @@ function toPatch(input: EventSettingsInput) {
         name: trimToNull(input.name),
         cventEventId: trimToNull(input.cventEventId),
         cventAppointmentEventId: trimToNull(input.cventAppointmentEventId),
-        cventAppointmentTypeId: trimToNull(input.cventAppointmentTypeId),
     };
 }
 

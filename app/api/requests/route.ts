@@ -95,14 +95,20 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // Upsert on the (requester, target) unique constraint so re-ranking the
-    // same delegate updates the existing row instead of duplicating it.
+    // Upsert on the (requester, target, event) unique constraint so re-ranking
+    // the same delegate for this event updates the existing row instead of
+    // duplicating it. The target columns must match the DB constraint exactly
+    // (event_code is part of it, so the same pair can be requested per-event).
     const [row] = await db
         .insert(meetingRequests)
         .values({ requesterId, targetId, rank, eventCode })
         .onConflictDoUpdate({
-            target: [meetingRequests.requesterId, meetingRequests.targetId],
-            set: { rank, eventCode, updatedAt: sql`now()` },
+            target: [
+                meetingRequests.requesterId,
+                meetingRequests.targetId,
+                meetingRequests.eventCode,
+            ],
+            set: { rank, updatedAt: sql`now()` },
         })
         .returning();
 

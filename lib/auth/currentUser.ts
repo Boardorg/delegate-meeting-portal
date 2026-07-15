@@ -63,18 +63,23 @@ export const getCurrentIdentity = cache(
 );
 
 /**
- * Resolves the identity for the mock data.
+ * Resolves the identity for the mock/auth-disabled flow as the FIRST attendee in
+ * the mock data. Everything is derived from that record so the identity stays
+ * consistent with the mock file — in particular `salesforceId` is the first
+ * attendee's real id (used as the requester when saving requests), not a
+ * hardcoded value that drifts when the mock data changes.
  *
  * @returns {Promise<ResolvedIdentity>} The resolved mock identity.
  */
 async function resolveMockIdentity(): Promise<ResolvedIdentity> {
     const attendees = await loadAttendees(true);
+    const attendee = attendees[0];
     return {
-        phone: "+15555550101",
-        role: "sponsor",
+        phone: attendee.phone || "+15555550101",
+        role: attendee.role === "sponsor" ? "sponsor" : "user",
         source: "salesforce",
-        salesforceId: "a00PZ00000TMLocYAH",
+        salesforceId: attendee.salesforceId,
         user: null,
-        attendee: attendees[0],
+        attendee,
     };
 }

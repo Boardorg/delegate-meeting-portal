@@ -122,29 +122,18 @@ function LoginForm() {
     }
 
     return (
-        <main
-            style={{
-                fontFamily: "sans-serif",
-                maxWidth: 360,
-                margin: "80px auto",
-                padding: "0 24px",
-                textAlign: "center",
-            }}
-        >
+        <main className="login-main">
             <img
                 src="https://placehold.co/200x80?text=Logo"
                 alt="Logo"
                 width={200}
                 height={80}
-                style={{ marginBottom: 32 }}
+                className="login-logo"
             />
 
             {step === "phone" ? (
                 <form onSubmit={handleRequestCode}>
-                    <label
-                        htmlFor="phone"
-                        style={{ display: "block", marginBottom: 8 }}
-                    >
+                    <label htmlFor="phone" className="login-label">
                         Phone number
                     </label>
                     <input
@@ -156,35 +145,18 @@ function LoginForm() {
                         required
                         value={phoneInput}
                         onChange={(e) => setPhoneInput(e.target.value)}
-                        style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            fontSize: 16,
-                            boxSizing: "border-box",
-                        }}
+                        className="login-input"
                     />
-                    <button
-                        type="submit"
-                        disabled={pending}
-                        style={{
-                            marginTop: 16,
-                            width: "100%",
-                            padding: "10px 12px",
-                            fontSize: 16,
-                        }}
-                    >
+                    <button type="submit" disabled={pending} className="login-submit">
                         {pending ? "Sending…" : "Send code"}
                     </button>
                 </form>
             ) : (
                 <form onSubmit={handleVerifyCode}>
-                    <p style={{ marginBottom: 16, color: "#555" }}>
+                    <p className="login-hint">
                         Enter the code sent to {normalizedPhone}.
                     </p>
-                    <label
-                        htmlFor="code"
-                        style={{ display: "block", marginBottom: 8 }}
-                    >
+                    <label htmlFor="code" className="login-label">
                         One-time code
                     </label>
                     <input
@@ -197,25 +169,9 @@ function LoginForm() {
                         required
                         value={code}
                         onChange={(e) => setCode(e.target.value)}
-                        style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            fontSize: 16,
-                            boxSizing: "border-box",
-                            letterSpacing: 4,
-                            textAlign: "center",
-                        }}
+                        className="login-input login-input-code"
                     />
-                    <button
-                        type="submit"
-                        disabled={pending}
-                        style={{
-                            marginTop: 16,
-                            width: "100%",
-                            padding: "10px 12px",
-                            fontSize: 16,
-                        }}
-                    >
+                    <button type="submit" disabled={pending} className="login-submit">
                         {pending ? "Verifying…" : "Verify"}
                     </button>
                     <button
@@ -225,13 +181,7 @@ function LoginForm() {
                             setCode("");
                             setError(null);
                         }}
-                        style={{
-                            marginTop: 8,
-                            background: "none",
-                            border: "none",
-                            color: "#0070f3",
-                            cursor: "pointer",
-                        }}
+                        className="login-linkbtn"
                     >
                         Use a different phone number
                     </button>
@@ -239,7 +189,7 @@ function LoginForm() {
             )}
 
             {error && (
-                <p style={{ color: "#c00", marginTop: 16 }} role="alert">
+                <p className="login-error" role="alert">
                     {error}
                 </p>
             )}

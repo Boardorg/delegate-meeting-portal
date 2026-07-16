@@ -217,6 +217,22 @@
 .d-rank-pip.sel { background:var(--green-s); border-color:var(--green-b); color:var(--green); }
 .d-rank-pip:hover:not(.sel) { background:var(--s2); color:var(--text); }
 
+/* ── LOGIN ── */
+.login-main { font-family:sans-serif; max-width:360px; margin:80px auto; padding:0 24px; text-align:center; }
+.login-logo { margin-bottom:32px; }
+.login-label { display:block; margin-bottom:8px; }
+.login-input { width:100%; padding:10px 12px; font-size:16px; box-sizing:border-box; }
+.login-input-code { letter-spacing:4px; text-align:center; }
+.login-submit { margin-top:16px; width:100%; padding:10px 12px; font-size:16px; }
+.login-hint { margin-bottom:16px; color:#555; }
+.login-linkbtn { margin-top:8px; background:none; border:none; color:#0070f3; cursor:pointer; }
+.login-error { color:#c00; margin-top:16px; }
+
+/* ── EVENT-REQUIRED NOTICE (portal opened without an event link) ── */
+.event-notice { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; }
+.event-notice-title { font-size:20px; font-weight:600; margin:0 0 8px; color:#222; }
+.event-notice-text { max-width:420px; color:#555; line-height:1.5; margin:0; }
+
 /* ── MISC ── */
 .no-results { text-align:center; padding:48px; color:var(--t2); font-size:13px; }
 .cap-banner { display:flex; align-items:center; gap:10px; background:rgba(232,57,30,0.07); border:1px solid var(--red-b); border-radius:var(--r); padding:10px 14px; margin-bottom:16px; font-size:12px; color:var(--text); line-height:1.5; }

@@ -5,6 +5,7 @@ import { createSession } from "@/lib/auth/session";
 import { normalizePhone, toE164 } from "@/lib/auth/phone";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
+import { isTestingMode } from "@/lib/helpers/testingMode";
 
 // ---------------------------------------------------------------------------
 // POST /api/auth/verify — check the SMS code, then start a session.
@@ -32,7 +33,10 @@ export async function POST(request: NextRequest) {
     try {
         body = await request.json();
     } catch {
-        return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+        return NextResponse.json(
+            { error: "Invalid JSON body" },
+            { status: 400 },
+        );
     }
 
     // `phone` is the DB-canonical form used for session + lookup; `e164` is
@@ -40,7 +44,8 @@ export async function POST(request: NextRequest) {
     // the user didn't type a "+"). Re-deriving from `body.phone` here means
     // a client tampering with the echoed value can't smuggle a differently
     // formatted string past us.
-    const phone = typeof body.phone === "string" ? normalizePhone(body.phone) : null;
+    const phone =
+        typeof body.phone === "string" ? normalizePhone(body.phone) : null;
     const e164 = typeof body.phone === "string" ? toE164(body.phone) : null;
     const code = typeof body.code === "string" ? body.code.trim() : "";
     // Event code from the login URL — persisted to the session so getEventCode()
@@ -91,7 +96,8 @@ export async function POST(request: NextRequest) {
             .where(eq(users.phone, phone))
             .returning();
         if (user?.role === "admin") {
-            redirectTo = "/admin";
+            // In testing mode admins exercise the frontend, so land them on "/" instead.
+            redirectTo = isTestingMode() ? "/" : "/admin";
         }
     } catch (err) {
         // Don't let a DB hiccup block a freshly-verified login. Log and move on.

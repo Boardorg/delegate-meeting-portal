@@ -6,13 +6,14 @@ import { db } from "@/lib/db/client";
 import { meetingRequests, scheduledMeetings, type NewScheduledMeeting } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
+import { getEventAppointments } from "@/lib/cvent/client";
 import { pushMeetingRows, type PushSummary } from "@/lib/cvent/push";
-import { runScheduler } from "@/lib/scheduling/engine";
+import { runScheduler, type PreexistingSchedule } from "@/lib/scheduling/engine";
 import { pairKey } from "@/lib/scheduling/helpers";
 import { loadMockRequests } from "@/lib/scheduling/loader";
 import { paginate, type Page } from "@/lib/admin/pagination";
 import { contractedMeetings } from "@/lib/attendees/caps";
-import type { MeetingRequest } from "@/types";
+import type { Attendee, MeetingRequest } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Server actions for /admin/meetings — the sponsor list page.
@@ -152,6 +153,67 @@ export async function listSponsorsPage(params: {
 }
 
 /**
+ * Builds the engine's pre-existing schedule from the event's current Cvent
+ * appointments: which attendee pairs already meet, and the start times each
+ * attendee is already booked at. Cvent participant contact ids are mapped back
+ * to Salesforce ids via the loaded attendees; unrecognized participants are
+ * ignored. Returns an empty schedule (and logs) when Cvent is unavailable, so a
+ * run still proceeds and falls back to the DB-based reconciliation.
+ *
+ * @param {string} eventCode - The event to read existing Cvent appointments for.
+ * @param {Attendee[]} attendees - Loaded attendees, for contact-id → Salesforce-id mapping.
+ * @returns {Promise<PreexistingSchedule>} Pairs + per-attendee busy times to schedule around.
+ */
+async function buildPreexistingFromCvent(
+    eventCode: string,
+    attendees: Attendee[],
+): Promise<PreexistingSchedule> {
+    let appointments;
+    try {
+        appointments = await getEventAppointments(eventCode);
+    } catch (err) {
+        console.warn(
+            `runSchedulerForEvent: could not load existing Cvent appointments for "${eventCode}" — ` +
+                `scheduling without them. ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return {};
+    }
+
+    // Cvent contact id → our Salesforce id, to translate appointment participants.
+    const salesforceIdByContactId = new Map<string, string>();
+    for (const a of attendees) {
+        if (a.cventContactId) salesforceIdByContactId.set(a.cventContactId, a.salesforceId);
+    }
+
+    const busyStartTimesByAttendee = new Map<string, Set<string>>();
+    const pairs = new Set<string>();
+
+    for (const appt of appointments) {
+        // Map participants to the Salesforce ids we schedule with; ignore any
+        // Cvent participant we don't recognize.
+        const sfIds = appt.participantContactIds
+            .map((cid) => salesforceIdByContactId.get(cid))
+            .filter((id): id is string => !!id);
+
+        // Each participant is busy at this appointment's start time.
+        for (const sfId of sfIds) {
+            const set = busyStartTimesByAttendee.get(sfId) ?? new Set<string>();
+            set.add(appt.startTime);
+            busyStartTimesByAttendee.set(sfId, set);
+        }
+
+        // Every pair among the participants already meets — don't re-schedule it.
+        for (let i = 0; i < sfIds.length; i++) {
+            for (let j = i + 1; j < sfIds.length; j++) {
+                pairs.add(pairKey(sfIds[i], sfIds[j]));
+            }
+        }
+    }
+
+    return { pairs, busyStartTimesByAttendee };
+}
+
+/**
  * Runs the scheduling engine for an event and replaces all un-pushed portal meetings
  * with the fresh engine output. Meetings already pushed to Cvent are preserved via
  * post-reconciliation: the engine runs freely, then any fresh meeting that duplicates
@@ -194,13 +256,20 @@ export async function runSchedulerForEvent(
         rank: r.rank,
     }));
 
-    // Run the engine freely with no knowledge of pushed meetings. This keeps the output
-    // deterministic — pushed meetings influence it only via post-reconciliation below.
+    // Fetch meetings that already exist in Cvent for this event, so the engine
+    // schedules around them (no duplicate pairings, no double-booking an
+    // attendee against a Cvent time). Degrade gracefully if Cvent is
+    // unavailable — the DB-based reconciliation below still guards pushed rows.
+    const preexisting = await buildPreexistingFromCvent(eventCode, attendees);
+
+    // Run the engine. It avoids the pre-existing Cvent pairs/times; pushed DB
+    // meetings are additionally guarded via post-reconciliation below.
     const { schedule } = await runScheduler(
         attendees,
         engineRequests,
         scheduleData.timeslots,
         scheduleData.locations,
+        preexisting,
     );
 
     // Build reconciliation sets from pushed meetings. Salesforce IDs are used throughout

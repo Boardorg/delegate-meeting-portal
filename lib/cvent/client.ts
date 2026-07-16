@@ -283,6 +283,50 @@ export const getEventAttendees = cache(
     },
 );
 
+/** An existing Cvent appointment, reduced to what pre-blocking the scheduler needs. */
+export type CventExistingAppointment = {
+    /** ISO 8601 UTC start time of the appointment. */
+    startTime: string;
+    /** Cvent contact ids of the appointment's participants (hosts + attendees). */
+    participantContactIds: string[];
+};
+
+/**
+ * Lists the event's existing Cvent appointments (start time + participant
+ * contact ids), following pagination to the end. The scheduling engine uses
+ * these to avoid re-booking a pair that already meets, or putting an attendee
+ * in a time they're already booked. Deleted appointments are skipped.
+ *
+ * Mock mode returns none — mock events start with a clean slate.
+ *
+ * @param {string} eventCode - Internal event code; resolved to the appointment-event id.
+ * @returns {Promise<CventExistingAppointment[]>} Existing appointments for the event.
+ */
+export const getEventAppointments = cache(
+    async (eventCode: string): Promise<CventExistingAppointment[]> => {
+        if (isMock()) return [];
+
+        const eventId = await getAppointmentEventId(eventCode);
+        const out: CventExistingAppointment[] = [];
+        const pages = await getClient().appointments.listAppointments({
+            filter: `appointmentEvent.id eq '${eventId}'`,
+        });
+        for await (const page of pages) {
+            for (const appt of page.result.data ?? []) {
+                if (appt.deleted) continue;
+                const participantContactIds = (appt.participants ?? [])
+                    .map((p) => p.attendee?.contact?.id)
+                    .filter((id): id is string => !!id);
+                out.push({
+                    startTime: appt.start.toISOString(),
+                    participantContactIds,
+                });
+            }
+        }
+        return out;
+    },
+);
+
 // ---------------------------------------------------------------------------
 // Write operations
 // ---------------------------------------------------------------------------

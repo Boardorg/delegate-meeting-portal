@@ -145,6 +145,17 @@ function countMeetingsOnDay(
 }
 
 /**
+ * Meetings that already exist in Cvent, used to make the engine schedule around
+ * them rather than generate conflicts.
+ */
+export interface PreexistingSchedule {
+	/** Canonical pair keys (see pairKey) that already meet in Cvent. */
+	pairs?: Set<string>;
+	/** Per-attendee (Salesforce id) set of ISO start times already booked in Cvent. */
+	busyStartTimesByAttendee?: Map<string, Set<string>>;
+}
+
+/**
  * Runs the full multi-pass scheduling algorithm against a set of attendees and requests.
  *
  * Meetings are scheduled across seven passes in priority order. Caps are cumulative —
@@ -155,14 +166,17 @@ function countMeetingsOnDay(
  * timeslot's native Cvent location. Business rules (no duplicates, no self-meetings,
  * company diversity) are enforced on every candidate.
  *
- * The engine runs freely with no knowledge of previously pushed meetings. Callers are
- * responsible for post-reconciliation: drop any fresh meeting that duplicates or conflicts
- * with a pushed meeting before inserting into the DB.
+ * The engine avoids conflicting with meetings that already exist in Cvent when
+ * the caller passes `preexisting`: those pairs are treated as already scheduled
+ * and those attendee/time combinations as already busy, so the engine never
+ * generates a duplicate pairing or double-books someone against a Cvent booking.
+ * Callers still run post-reconciliation for anything not covered here.
  *
  * @param {Attendee[]} attendees - All attendees to schedule meetings for.
  * @param {MeetingRequest[]} requests - All submitted meeting requests.
  * @param {Timeslot[]} timeslots - The event's global, Cvent-sourced timeslots.
  * @param {Location[]} _locations - The event's locations (reserved for future location-aware assignment).
+ * @param {PreexistingSchedule} [preexisting] - Pairs/times already booked in Cvent to schedule around.
  * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }>}
  *   Resolves to the flat list of newly scheduled meetings and a per-attendee breakdown.
  */
@@ -171,6 +185,7 @@ export async function runScheduler(
 	requests: MeetingRequest[],
 	timeslots: Timeslot[],
 	_locations: Location[],
+	preexisting: PreexistingSchedule = {},
 ): Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }> {
 
 	// Index attendees by Salesforce ID for lookup throughout the algorithm.
@@ -182,13 +197,18 @@ export async function runScheduler(
 	// Pre-compute all mutual pairs once so each pass can check mutuality cheaply.
 	const mutualPairs = computeMutualPairs(requests);
 
-	// Initialize a set to track which pairs have already been scheduled to prevent duplicates.
-	const scheduledPairs = new Set<string>();
+	// Track which pairs are already scheduled (to prevent duplicates), seeded with
+	// pairs that already meet in Cvent so the engine won't re-create them.
+	const scheduledPairs = new Set<string>(preexisting.pairs);
 
 	// Per-attendee set of start times already booked, so nobody is double-booked
-	// at the same wall-clock time. Keyed by Salesforce ID.
+	// at the same wall-clock time. Keyed by Salesforce ID and seeded with the
+	// times each attendee is already booked at in Cvent.
 	const busyByAttendee = new Map<string, Set<string>>(
-		attendees.map(a => [a.salesforceId, new Set<string>()])
+		attendees.map(a => [
+			a.salesforceId,
+			new Set<string>(preexisting.busyStartTimesByAttendee?.get(a.salesforceId)),
+		])
 	);
 
 	// Remaining capacity per timeslot id, drawn down as meetings are booked.

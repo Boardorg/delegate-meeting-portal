@@ -1,27 +1,55 @@
 "use client";
 
 import "@/app/frontend.css";
-import { Suspense, useState, SubmitEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type SubmitEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Channel } from "@/types";
 
 // ---------------------------------------------------------------------------
-// /login — minimal two-step SMS one-time-code login.
+// /login — two-step one-time-code login over phone or email.
 //
-// Step 1 ("phone"): user enters a phone number; POST /api/auth/login asks
-//                   Twilio Verify to send an SMS code.
-// Step 2 ("code"):  user enters the code; POST /api/auth/verify checks it and
-//                   sets the session cookie on success.
+// Step "contact": a single field accepts either a phone number or an email
+//                 address. The channel is detected as the user types (an
+//                 "@" means email) and confirmed back in the helper text —
+//                 no separate toggle to tap. POST /api/auth/login sends the
+//                 code over whichever channel was detected.
+// Step "code":    the user enters the 6-digit code. A hidden input with
+//                 autoComplete="one-time-code" backs the boxes so browser/OS
+//                 SMS and email autofill still works, while the visible
+//                 boxes give the same at-a-glance affordance as a bank or
+//                 delivery app's code entry. POST /api/auth/verify checks it
+//                 and sets the session cookie on success.
 //
 // On success we navigate to the `next` query param (the originally-requested
-// page injected by proxy.ts) or "/" as a safe default.
+// page injected by proxy.ts) or the server's role-based default.
 // ---------------------------------------------------------------------------
 
-type Step = "phone" | "code";
+type Step = "contact" | "code";
+
+const RESEND_COOLDOWN_SECONDS = 30;
+const CODE_LENGTH = 6;
+
+/**
+ * Detects which channel a raw contact string looks like, or null while
+ * it's still ambiguous. An "@" means email. Letters with no "@" yet could
+ * still become an email address and can never be a phone number, so that
+ * case stays undetermined rather than guessing "sms". Digits and phone
+ * punctuation only (no letters, no "@") reads as an in-progress phone
+ * number.
+ *
+ * @param {string} value - The raw, untrimmed contact input.
+ * @returns {Channel | null} "email", "sms", or null while undetermined.
+ */
+function detectChannel(value: string): Channel | null {
+    if (value.includes("@")) return "email";
+    if (!value || /[a-zA-Z]/.test(value)) return null;
+    return "sms";
+}
 
 /**
  * The login page wraps the form in a Suspense boundary because the form reads
- * `useSearchParams()` (next/event), which Next requires to be suspense-bounded
- * so the rest of the route can still be prerendered.
+ * `useSearchParams()`, which Next requires to be suspense-bounded so the
+ * rest of the route can still be prerendered.
  */
 export default function LoginPage() {
     return (
@@ -38,8 +66,7 @@ function LoginForm() {
     // Where to send the user after a successful login. Proxy.ts adds `?next=`
     // when it redirects an unauthenticated request to /login, so if it's set
     // we honor it (the user was trying to go somewhere specific). Otherwise
-    // we fall back to the role-based default returned by /api/auth/verify
-    // (admins land on /admin, everyone else on /).
+    // we fall back to the role-based default returned by /api/auth/verify.
     const explicitNext = searchParams.get("next");
 
     // Event code captured from the first visit (`?event=`, carried onto /login
@@ -47,42 +74,71 @@ function LoginForm() {
     // match against the right event and persist the code to the session.
     const event = searchParams.get("event") ?? undefined;
 
-    // UI state machine: which step we're on, what was entered, what the server
-    // echoed back, and whether a request is in flight.
-    const [step, setStep] = useState<Step>("phone");
-    const [phoneInput, setPhoneInput] = useState("");
-    const [normalizedPhone, setNormalizedPhone] = useState("");
+    const [step, setStep] = useState<Step>("contact");
+    const [contactInput, setContactInput] = useState("");
+    const [sentContact, setSentContact] = useState("");
+    const [sentChannel, setSentChannel] = useState<Channel>("sms");
     const [code, setCode] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [pending, setPending] = useState(false);
+    const [resendSecondsLeft, setResendSecondsLeft] = useState(0);
+    const [justResent, setJustResent] = useState(false);
+
+    const codeInputRef = useRef<HTMLInputElement>(null);
+
+    // Counts the resend cooldown down to zero once a code has been sent.
+    useEffect(() => {
+        if (step !== "code" || resendSecondsLeft <= 0) return;
+        const timer = setTimeout(() => setResendSecondsLeft((s) => s - 1), 1000);
+        return () => clearTimeout(timer);
+    }, [step, resendSecondsLeft]);
+
+    const trimmedContact = contactInput.trim();
+    const detectedChannel = detectChannel(trimmedContact);
+    const helperText =
+        detectedChannel === "email"
+            ? "We'll email a code to this address."
+            : detectedChannel === "sms"
+              ? "We'll text a code to this number."
+              : "Enter your phone number or email to get a code.";
 
     /**
-     * Handles the phone-entry submit: requests an SMS code, then advances to
-     * the code-entry step using the server's normalized phone value.
+     * Calls /api/auth/login for the given contact + channel. Shared by the
+     * initial send and the resend button so both go through one code path.
+     *
+     * @param {string} contact - Raw or previously-confirmed contact value.
+     * @param {Channel} channel - Which channel to send the code over.
+     * @returns {Promise<boolean>} True if the code was sent successfully.
      */
+    async function requestCode(contact: string, channel: Channel): Promise<boolean> {
+        const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contact, channel, eventCode: event }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            setError(data.error ?? "Could not send code.");
+            return false;
+        }
+        setSentContact(data.contact);
+        setSentChannel(data.channel);
+        return true;
+    }
+
+    /** Handles the contact-entry submit: requests a code, then advances to the code step. */
     async function handleRequestCode(e: SubmitEvent<HTMLFormElement>) {
         e.preventDefault();
         setError(null);
         setPending(true);
         try {
-            const res = await fetch("/api/auth/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contact: phoneInput,
-                    channel: "sms",
-                    eventCode: event,
-                }),
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                setError(data.error ?? "Could not send code.");
-                return;
+            const ok = await requestCode(trimmedContact, detectedChannel ?? "sms");
+            if (ok) {
+                setCode("");
+                setStep("code");
+                setResendSecondsLeft(RESEND_COOLDOWN_SECONDS);
+                setTimeout(() => codeInputRef.current?.focus(), 0);
             }
-            // Use the server-normalized phone on the verify call so both
-            // requests reference the exact same E.164 string.
-            setNormalizedPhone(data.contact);
-            setStep("code");
         } catch {
             setError("Network error. Please try again.");
         } finally {
@@ -90,10 +146,22 @@ function LoginForm() {
         }
     }
 
-    /**
-     * Handles the code-entry submit: verifies the code, then navigates to the
-     * originally-requested page on success.
-     */
+    /** Re-sends a code to the already-confirmed contact and restarts the cooldown. */
+    async function handleResend() {
+        setError(null);
+        try {
+            const ok = await requestCode(sentContact, sentChannel);
+            if (ok) {
+                setResendSecondsLeft(RESEND_COOLDOWN_SECONDS);
+                setJustResent(true);
+                setTimeout(() => setJustResent(false), 2000);
+            }
+        } catch {
+            setError("Network error. Please try again.");
+        }
+    }
+
+    /** Handles the code-entry submit: verifies the code, then navigates on success. */
     async function handleVerifyCode(e: SubmitEvent<HTMLFormElement>) {
         e.preventDefault();
         setError(null);
@@ -103,8 +171,8 @@ function LoginForm() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    contact: normalizedPhone,
-                    channel: "sms",
+                    contact: sentContact,
+                    channel: sentChannel,
                     code,
                     eventCode: event,
                 }),
@@ -131,127 +199,132 @@ function LoginForm() {
     }
 
     return (
-        <main
-            style={{
-                fontFamily: "sans-serif",
-                maxWidth: 360,
-                margin: "80px auto",
-                padding: "0 24px",
-                textAlign: "center",
-            }}
-        >
-            <img
-                src="https://placehold.co/200x80?text=Logo"
-                alt="Logo"
-                width={200}
-                height={80}
-                style={{ marginBottom: 32 }}
-            />
+        <main className="login-page">
+            <div className="login-card">
+                <div className="login-brand">
+                    <div className="logo-mark">DM</div>
+                    Delegate Meeting Portal
+                </div>
 
-            {step === "phone" ? (
-                <form onSubmit={handleRequestCode}>
-                    <label
-                        htmlFor="phone"
-                        style={{ display: "block", marginBottom: 8 }}
-                    >
-                        Phone number
-                    </label>
-                    <input
-                        id="phone"
-                        name="phone"
-                        type="tel"
-                        autoComplete="tel"
-                        placeholder="+1 555 555 0123"
-                        required
-                        value={phoneInput}
-                        onChange={(e) => setPhoneInput(e.target.value)}
-                        style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            fontSize: 16,
-                            boxSizing: "border-box",
-                        }}
-                    />
-                    <button
-                        type="submit"
-                        disabled={pending}
-                        style={{
-                            marginTop: 16,
-                            width: "100%",
-                            padding: "10px 12px",
-                            fontSize: 16,
-                        }}
-                    >
-                        {pending ? "Sending…" : "Send code"}
-                    </button>
-                </form>
-            ) : (
-                <form onSubmit={handleVerifyCode}>
-                    <p style={{ marginBottom: 16, color: "#555" }}>
-                        Enter the code sent to {normalizedPhone}.
+                {step === "contact" ? (
+                    <>
+                        <div className="login-heading">
+                            <span className="login-eyebrow">Sign in</span>
+                            <h1 className="login-title">Access the meeting portal</h1>
+                        </div>
+                        <form className="login-form" onSubmit={handleRequestCode}>
+                            <div className="login-field">
+                                <label className="login-label" htmlFor="contact">
+                                    Phone or email
+                                </label>
+                                <input
+                                    id="contact"
+                                    name="contact"
+                                    type="text"
+                                    autoComplete="username"
+                                    placeholder="you@company.com or (555) 555-0123"
+                                    required
+                                    autoFocus
+                                    className="login-input"
+                                    value={contactInput}
+                                    onChange={(e) => setContactInput(e.target.value)}
+                                />
+                                <div
+                                    className={`login-helper${detectedChannel ? " detected" : ""}`}
+                                >
+                                    {helperText}
+                                </div>
+                            </div>
+                            <button
+                                type="submit"
+                                className="login-btn-primary"
+                                disabled={pending || !detectedChannel || trimmedContact.length < 4}
+                            >
+                                {pending ? "Sending…" : "Send code"}
+                            </button>
+                        </form>
+                    </>
+                ) : (
+                    <>
+                        <button
+                            type="button"
+                            className="login-back-link"
+                            onClick={() => {
+                                setStep("contact");
+                                setCode("");
+                                setError(null);
+                            }}
+                        >
+                            ← Use a different phone or email
+                        </button>
+                        <div className="login-heading">
+                            <span className="login-eyebrow">
+                                Check your {sentChannel === "email" ? "email" : "phone"}
+                            </span>
+                            <h1 className="login-title">Enter your code</h1>
+                            <p className="login-lede">Sent to {sentContact}</p>
+                        </div>
+                        <form className="login-form" onSubmit={handleVerifyCode}>
+                            <div className="login-otp-wrap">
+                                <input
+                                    ref={codeInputRef}
+                                    className="login-otp-native"
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    autoComplete="one-time-code"
+                                    maxLength={CODE_LENGTH}
+                                    aria-label="One-time code"
+                                    value={code}
+                                    onChange={(e) =>
+                                        setCode(e.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
+                                    }
+                                />
+                                <div className="login-otp-row" aria-hidden="true">
+                                    {Array.from({ length: CODE_LENGTH }).map((_, i) => (
+                                        <div
+                                            key={i}
+                                            className={`login-otp-box${i === code.length ? " is-active" : ""}`}
+                                        >
+                                            {code[i] ?? ""}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <button
+                                type="submit"
+                                className="login-btn-primary"
+                                disabled={pending || code.length < CODE_LENGTH}
+                            >
+                                {pending ? "Verifying…" : "Verify"}
+                            </button>
+                            <div className="login-resend-row">
+                                {resendSecondsLeft > 0 ? (
+                                    <span className="login-resend-timer">
+                                        Resend code in 0:{String(resendSecondsLeft).padStart(2, "0")}
+                                    </span>
+                                ) : (
+                                    <span />
+                                )}
+                                <button
+                                    type="button"
+                                    className="login-resend-btn"
+                                    disabled={resendSecondsLeft > 0}
+                                    onClick={handleResend}
+                                >
+                                    {justResent ? "Code resent" : "Resend code"}
+                                </button>
+                            </div>
+                        </form>
+                    </>
+                )}
+
+                {error && (
+                    <p className="login-error" role="alert">
+                        {error}
                     </p>
-                    <label
-                        htmlFor="code"
-                        style={{ display: "block", marginBottom: 8 }}
-                    >
-                        One-time code
-                    </label>
-                    <input
-                        id="code"
-                        name="code"
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        placeholder="123456"
-                        required
-                        value={code}
-                        onChange={(e) => setCode(e.target.value)}
-                        style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            fontSize: 16,
-                            boxSizing: "border-box",
-                            letterSpacing: 4,
-                            textAlign: "center",
-                        }}
-                    />
-                    <button
-                        type="submit"
-                        disabled={pending}
-                        style={{
-                            marginTop: 16,
-                            width: "100%",
-                            padding: "10px 12px",
-                            fontSize: 16,
-                        }}
-                    >
-                        {pending ? "Verifying…" : "Verify"}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setStep("phone");
-                            setCode("");
-                            setError(null);
-                        }}
-                        style={{
-                            marginTop: 8,
-                            background: "none",
-                            border: "none",
-                            color: "#0070f3",
-                            cursor: "pointer",
-                        }}
-                    >
-                        Use a different phone number
-                    </button>
-                </form>
-            )}
-
-            {error && (
-                <p style={{ color: "#c00", marginTop: 16 }} role="alert">
-                    {error}
-                </p>
-            )}
+                )}
+            </div>
         </main>
     );
 }

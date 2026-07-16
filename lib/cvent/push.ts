@@ -5,6 +5,7 @@ import { scheduledMeetings, type ScheduledMeetingRow } from "@/lib/db/schema";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { createAppointment, updateAppointment } from "@/lib/cvent/client";
+import { isTestingMode } from "@/lib/helpers/testingMode";
 
 // ---------------------------------------------------------------------------
 // Shared push-to-Cvent logic
@@ -40,6 +41,43 @@ export type PushSummary = {
     /** Per-meeting outcomes, in input order. */
     results: PushResult[];
 };
+
+/**
+ * Turns a thrown push error into a message for the result row. Normally this is
+ * just `err.message` (e.g. the Cvent SDK's terse "Response validation failed").
+ * In testing mode it expands that into the underlying detail the SDK hides — the
+ * pretty-printed validation issues, the HTTP status, and the raw response body —
+ * so failures are debuggable without production noise.
+ *
+ * @param {unknown} err - The thrown error.
+ * @returns {string} The (possibly expanded) error message.
+ */
+function describePushError(err: unknown): string {
+    const base = err instanceof Error ? err.message : String(err);
+    if (!isTestingMode() || !(err instanceof Error)) return base;
+
+    // Duck-typed against the Cvent SDK error shapes (ResponseValidationError /
+    // CventSDKError) so we don't hard-depend on their classes.
+    const e = err as {
+        pretty?: () => string;
+        statusCode?: number;
+        body?: string;
+        cause?: unknown;
+    };
+    const parts: string[] = [base];
+    if (typeof e.pretty === "function") {
+        const pretty = e.pretty();
+        if (pretty && pretty !== base) parts.push(pretty);
+    }
+    if (typeof e.statusCode === "number") parts.push(`HTTP ${e.statusCode}`);
+    if (typeof e.body === "string" && e.body.trim()) parts.push(`Response body: ${e.body}`);
+    if (e.cause && e.cause !== err) {
+        parts.push(
+            `Cause: ${e.cause instanceof Error ? e.cause.message : String(e.cause)}`,
+        );
+    }
+    return parts.join("\n");
+}
 
 /**
  * Pushes a set of scheduled-meeting rows to Cvent: creates a new appointment
@@ -134,7 +172,7 @@ export async function pushMeetingRows(
                 meetingId: row.id,
                 label,
                 ok: false,
-                error: err instanceof Error ? err.message : String(err),
+                error: describePushError(err),
             });
         }
     }

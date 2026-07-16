@@ -273,7 +273,13 @@ function PushResultBanner({
                             {failures.map((f) => (
                                 <li
                                     key={f.meetingId}
-                                    style={{ fontSize: 13, marginBottom: 4, color: "var(--red)" }}
+                                    style={{
+                                        fontSize: 13,
+                                        marginBottom: 4,
+                                        color: "var(--red)",
+                                        // Expanded (testing-mode) errors can be multi-line.
+                                        whiteSpace: "pre-wrap",
+                                    }}
                                 >
                                     <span style={{ color: "var(--text)", fontWeight: 500 }}>
                                         {f.label}:

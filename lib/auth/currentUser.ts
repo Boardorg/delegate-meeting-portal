@@ -7,6 +7,7 @@ import { getSession } from "./session";
 import { resolveIdentity } from "./identity";
 import type { ResolvedIdentity } from "@/types";
 import { loadAttendees } from "../attendees/loader";
+import { isTestingMode } from "@/lib/helpers/testingMode";
 
 // ---------------------------------------------------------------------------
 // getCurrentUser — bridges the session cookie to the users table.
@@ -58,7 +59,16 @@ export const getCurrentIdentity = cache(
         }
         const session = await getSession();
         if (!session) return null;
-        return resolveIdentity(session.phone);
+        const identity = await resolveIdentity(session.phone);
+
+        // In testing mode, let an admin exercise the frontend by standing in as
+        // the first mock attendee — this gives them a Salesforce id so meeting
+        // requests can be saved. (Outside testing mode, admins are redirected
+        // off the frontend to /admin.)
+        if (identity?.role === "admin" && isTestingMode()) {
+            return resolveMockIdentity();
+        }
+        return identity;
     },
 );
 

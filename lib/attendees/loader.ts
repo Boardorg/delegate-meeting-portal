@@ -5,9 +5,10 @@ import { getMeetingDataByEvent } from "@/lib/salesforce/client";
 import { meetingDataToAttendees } from "@/lib/salesforce/attendeeMapper";
 import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventAttendees } from "@/lib/cvent/client";
+import { isTestingMode } from "@/lib/helpers/testingMode";
 import { Attendee } from "@/types";
 
-// In EMAIL_SAFE_MODE, Cvent email addresses are obfuscated by wrapping the real
+// In TESTING_MODE, Cvent email addresses are obfuscated by wrapping the real
 // address in this marker — e.g. Salesforce "mary@site.com" appears in Cvent as
 // "xxmary@site.comxx". We strip the wrapper before matching. Used for non-prod
 // events where real contacts must not receive real communications.
@@ -15,7 +16,7 @@ const EMAIL_SAFE_WRAP = "xx";
 
 /**
  * Normalizes a Cvent contact email for matching against Salesforce: lowercased,
- * and (in EMAIL_SAFE_MODE) with the obfuscation wrapper stripped so
+ * and (in TESTING_MODE) with the obfuscation wrapper stripped so
  * "xxmary@site.comxx" matches Salesforce's "mary@site.com".
  *
  * @param {string} email - The raw Cvent contact email.
@@ -23,7 +24,7 @@ const EMAIL_SAFE_WRAP = "xx";
  */
 function normalizeCventEmail(email: string): string {
     const lower = email.trim().toLowerCase();
-    if (process.env.EMAIL_SAFE_MODE !== "true") return lower;
+    if (!isTestingMode()) return lower;
 
     // Only unwrap when the marker is present on both ends, so a stray un-obfuscated
     // address still compares correctly.

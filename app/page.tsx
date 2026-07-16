@@ -22,6 +22,8 @@ export default async function Home() {
     }
 
     if (!identity) redirect("/login");
+    // Admins can't act on the frontend — send them to the admin portal.
+    if (identity.role === "admin") redirect("/admin");
 
     const delegates = attendees.filter((a) => a.role === "delegate");
     return (

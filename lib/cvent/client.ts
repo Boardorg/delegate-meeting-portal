@@ -121,8 +121,11 @@ function getClient(): CventSDK {
                 // Required: the client-credentials token exchange. Without an
                 // explicit tokenURL the SDK posts the token request to the API
                 // base URL instead of the OAuth endpoint, so auth silently fails
-                // and calls come back as ResponseValidationError.
-                tokenURL: process.env.CVENT_TOKEN_URL ?? DEFAULT_TOKEN_URL,
+                // and calls come back as ResponseValidationError. `||` (not `??`)
+                // so an empty-but-present env var falls back too — the SDK treats
+                // an empty tokenURL as "credentials incomplete" and silently drops
+                // the Authorization header on every call.
+                tokenURL: process.env.CVENT_TOKEN_URL || DEFAULT_TOKEN_URL,
                 ...(scopes.length ? { scopes } : {}),
             },
         },

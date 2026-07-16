@@ -7,6 +7,7 @@ import { normalizeEmail } from "@/lib/auth/email";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import type { Channel } from "@/types";
+import { isTestingMode } from "@/lib/helpers/testingMode";
 
 // ---------------------------------------------------------------------------
 // POST /api/auth/verify — check the one-time code, then start a session.
@@ -40,7 +41,10 @@ export async function POST(request: NextRequest) {
     try {
         body = await request.json();
     } catch {
-        return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+        return NextResponse.json(
+            { error: "Invalid JSON body" },
+            { status: 400 },
+        );
     }
 
     const channel: Channel = body.channel === "email" ? "email" : "sms";
@@ -56,11 +60,7 @@ export async function POST(request: NextRequest) {
             ? normalizeEmail(raw)
             : normalizePhone(raw)
         : null;
-    const target = raw
-        ? channel === "email"
-            ? contact
-            : toE164(raw)
-        : null;
+    const target = raw ? (channel === "email" ? contact : toE164(raw)) : null;
     const code = typeof body.code === "string" ? body.code.trim() : "";
     // Event code from the login URL — persisted to the session so getEventCode()
     // can resolve it on later requests, once the `?event=` param is gone.
@@ -119,7 +119,8 @@ export async function POST(request: NextRequest) {
                       .where(eq(users.phone, contact))
                       .returning();
         if (user?.role === "admin") {
-            redirectTo = "/admin";
+            // In testing mode admins exercise the frontend, so land them on "/" instead.
+            redirectTo = isTestingMode() ? "/" : "/admin";
         }
     } catch (err) {
         // Don't let a DB hiccup block a freshly-verified login. Log and move on.

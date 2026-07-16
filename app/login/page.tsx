@@ -89,7 +89,10 @@ function LoginForm() {
     // Counts the resend cooldown down to zero once a code has been sent.
     useEffect(() => {
         if (step !== "code" || resendSecondsLeft <= 0) return;
-        const timer = setTimeout(() => setResendSecondsLeft((s) => s - 1), 1000);
+        const timer = setTimeout(
+            () => setResendSecondsLeft((s) => s - 1),
+            1000,
+        );
         return () => clearTimeout(timer);
     }, [step, resendSecondsLeft]);
 
@@ -110,7 +113,10 @@ function LoginForm() {
      * @param {Channel} channel - Which channel to send the code over.
      * @returns {Promise<boolean>} True if the code was sent successfully.
      */
-    async function requestCode(contact: string, channel: Channel): Promise<boolean> {
+    async function requestCode(
+        contact: string,
+        channel: Channel,
+    ): Promise<boolean> {
         const res = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -132,7 +138,10 @@ function LoginForm() {
         setError(null);
         setPending(true);
         try {
-            const ok = await requestCode(trimmedContact, detectedChannel ?? "sms");
+            const ok = await requestCode(
+                trimmedContact,
+                detectedChannel ?? "sms",
+            );
             if (ok) {
                 setCode("");
                 setStep("code");
@@ -186,7 +195,8 @@ function LoginForm() {
             // injected one) over the role-based default suggested by the
             // server.
             const target =
-                explicitNext || (typeof data.redirectTo === "string" ? data.redirectTo : "/");
+                explicitNext ||
+                (typeof data.redirectTo === "string" ? data.redirectTo : "/");
             // router.refresh() ensures any server components re-render against
             // the now-authenticated cookie before/after the push.
             router.push(target);
@@ -210,11 +220,19 @@ function LoginForm() {
                     <>
                         <div className="login-heading">
                             <span className="login-eyebrow">Sign in</span>
-                            <h1 className="login-title">Access the meeting portal</h1>
+                            <h1 className="login-title">
+                                Access the meeting portal
+                            </h1>
                         </div>
-                        <form className="login-form" onSubmit={handleRequestCode}>
+                        <form
+                            className="login-form"
+                            onSubmit={handleRequestCode}
+                        >
                             <div className="login-field">
-                                <label className="login-label" htmlFor="contact">
+                                <label
+                                    className="login-label"
+                                    htmlFor="contact"
+                                >
                                     Phone or email
                                 </label>
                                 <input
@@ -227,7 +245,9 @@ function LoginForm() {
                                     autoFocus
                                     className="login-input"
                                     value={contactInput}
-                                    onChange={(e) => setContactInput(e.target.value)}
+                                    onChange={(e) =>
+                                        setContactInput(e.target.value)
+                                    }
                                 />
                                 <div
                                     className={`login-helper${detectedChannel ? " detected" : ""}`}
@@ -238,7 +258,11 @@ function LoginForm() {
                             <button
                                 type="submit"
                                 className="login-btn-primary"
-                                disabled={pending || !detectedChannel || trimmedContact.length < 4}
+                                disabled={
+                                    pending ||
+                                    !detectedChannel ||
+                                    trimmedContact.length < 4
+                                }
                             >
                                 {pending ? "Sending…" : "Send code"}
                             </button>
@@ -259,12 +283,16 @@ function LoginForm() {
                         </button>
                         <div className="login-heading">
                             <span className="login-eyebrow">
-                                Check your {sentChannel === "email" ? "email" : "phone"}
+                                Check your{" "}
+                                {sentChannel === "email" ? "email" : "phone"}
                             </span>
                             <h1 className="login-title">Enter your code</h1>
                             <p className="login-lede">Sent to {sentContact}</p>
                         </div>
-                        <form className="login-form" onSubmit={handleVerifyCode}>
+                        <form
+                            className="login-form"
+                            onSubmit={handleVerifyCode}
+                        >
                             <div className="login-otp-wrap">
                                 <input
                                     ref={codeInputRef}
@@ -277,18 +305,27 @@ function LoginForm() {
                                     aria-label="One-time code"
                                     value={code}
                                     onChange={(e) =>
-                                        setCode(e.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
+                                        setCode(
+                                            e.target.value
+                                                .replace(/\D/g, "")
+                                                .slice(0, CODE_LENGTH),
+                                        )
                                     }
                                 />
-                                <div className="login-otp-row" aria-hidden="true">
-                                    {Array.from({ length: CODE_LENGTH }).map((_, i) => (
-                                        <div
-                                            key={i}
-                                            className={`login-otp-box${i === code.length ? " is-active" : ""}`}
-                                        >
-                                            {code[i] ?? ""}
-                                        </div>
-                                    ))}
+                                <div
+                                    className="login-otp-row"
+                                    aria-hidden="true"
+                                >
+                                    {Array.from({ length: CODE_LENGTH }).map(
+                                        (_, i) => (
+                                            <div
+                                                key={i}
+                                                className={`login-otp-box${i === code.length ? " is-active" : ""}`}
+                                            >
+                                                {code[i] ?? ""}
+                                            </div>
+                                        ),
+                                    )}
                                 </div>
                             </div>
                             <button
@@ -301,7 +338,11 @@ function LoginForm() {
                             <div className="login-resend-row">
                                 {resendSecondsLeft > 0 ? (
                                     <span className="login-resend-timer">
-                                        Resend code in 0:{String(resendSecondsLeft).padStart(2, "0")}
+                                        Resend code in 0:
+                                        {String(resendSecondsLeft).padStart(
+                                            2,
+                                            "0",
+                                        )}
                                     </span>
                                 ) : (
                                     <span />

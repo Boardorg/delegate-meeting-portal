@@ -7,6 +7,7 @@ import { getSession } from "./session";
 import { resolveIdentity } from "./identity";
 import type { ResolvedIdentity } from "@/types";
 import { loadAttendees } from "../attendees/loader";
+import { isTestingMode } from "@/lib/helpers/testingMode";
 
 // ---------------------------------------------------------------------------
 // getCurrentUser — bridges the session cookie to the users table.
@@ -32,8 +33,16 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
 
     const [user] =
         session.channel === "email"
-            ? await db.select().from(users).where(eq(users.email, session.contact)).limit(1)
-            : await db.select().from(users).where(eq(users.phone, session.contact)).limit(1);
+            ? await db
+                  .select()
+                  .from(users)
+                  .where(eq(users.email, session.contact))
+                  .limit(1)
+            : await db
+                  .select()
+                  .from(users)
+                  .where(eq(users.phone, session.contact))
+                  .limit(1);
     return user ?? null;
 });
 
@@ -57,24 +66,42 @@ export const getCurrentIdentity = cache(
         }
         const session = await getSession();
         if (!session) return null;
-        return resolveIdentity(session.contact, session.channel);
+
+        const identity = await resolveIdentity(
+            session.contact,
+            session.channel,
+        );
+
+        // In testing mode, let an admin exercise the frontend by standing in as
+        // the first mock attendee — this gives them a Salesforce id so meeting
+        // requests can be saved. (Outside testing mode, admins are redirected
+        // off the frontend to /admin.)
+        if (identity?.role === "admin" && isTestingMode()) {
+            return resolveMockIdentity();
+        }
+        return identity;
     },
 );
 
 /**
- * Resolves the identity for the mock data.
+ * Resolves the identity for the mock/auth-disabled flow as the FIRST attendee in
+ * the mock data. Everything is derived from that record so the identity stays
+ * consistent with the mock file — in particular `salesforceId` is the first
+ * attendee's real id (used as the requester when saving requests), not a
+ * hardcoded value that drifts when the mock data changes.
  *
  * @returns {Promise<ResolvedIdentity>} The resolved mock identity.
  */
 async function resolveMockIdentity(): Promise<ResolvedIdentity> {
     const attendees = await loadAttendees(true);
+    const attendee = attendees[0];
     return {
-        contact: "+15555550101",
+        contact: attendee.phone || "+15555550101",
+        role: attendee.role === "sponsor" ? "sponsor" : "user",
         channel: "sms",
-        role: "sponsor",
         source: "salesforce",
-        salesforceId: "a00PZ00000TMLocYAH",
+        salesforceId: attendee.salesforceId,
         user: null,
-        attendee: attendees[0],
+        attendee,
     };
 }

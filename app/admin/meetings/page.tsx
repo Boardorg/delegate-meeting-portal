@@ -1,6 +1,6 @@
 import { emptyPage } from "@/lib/admin/pagination";
+import { getActiveEventCode } from "@/lib/admin/globalState";
 import {
-    listMeetingsEventCodes,
     listSponsorsPage,
     type SponsorRow,
     type SponsorSortField,
@@ -35,7 +35,6 @@ export default async function AdminMeetingsPage({
     searchParams,
 }: {
     searchParams: Promise<{
-        event?: string;
         q?: string;
         sort?: string;
         dir?: string;
@@ -44,13 +43,9 @@ export default async function AdminMeetingsPage({
 }) {
     // Get query parameters from the URL.
     const sp = await searchParams;
-    const eventCodes = await listMeetingsEventCodes();
 
-    // Determine the selected event from the query parameters or default to the first event code.
-    const selectedEvent =
-        sp.event && eventCodes.includes(sp.event)
-            ? sp.event
-            : (eventCodes[0] ?? null);
+    // The active event is global (cookie-backed), shared with the sidebar switcher.
+    const selectedEvent = await getActiveEventCode();
 
     // Validate and sanitize other query parameters for search, sort, and pagination.
     const sortField: SponsorSortField = SORT_FIELDS.includes(
@@ -76,7 +71,6 @@ export default async function AdminMeetingsPage({
     // Render the sponsor table with the fetched data and query parameters.
     return (
         <SponsorsTable
-            eventCodes={eventCodes}
             selectedEvent={selectedEvent}
             query={query}
             sortField={sortField}

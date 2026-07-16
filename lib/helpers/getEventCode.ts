@@ -2,6 +2,20 @@ import "server-only";
 import { getSession } from "@/lib/auth/session";
 
 /**
+ * Thrown by getEventCode when no event code can be resolved. A dedicated type so
+ * callers (e.g. the frontend catalog page) can catch this specific case and show
+ * a "use your event link" notice, without swallowing unrelated errors.
+ */
+export class MissingEventCodeError extends Error {
+    constructor() {
+        super(
+            "No event code available — set SF_EVENT_CODE or log in with an `?event=` query param.",
+        );
+        this.name = "MissingEventCodeError";
+    }
+}
+
+/**
  * Resolves the active event code for a request that has session context
  * (server components, post-login route handlers).
  *
@@ -27,7 +41,5 @@ export async function getEventCode(): Promise<string> {
     // so code that keys off the event (e.g. saved requests) still works in dev.
     if (process.env.USE_MOCK === "true") return "MOCK";
 
-    throw new Error(
-        "No event code available — set SF_EVENT_CODE or log in with an `?event=` query param.",
-    );
+    throw new MissingEventCodeError();
 }

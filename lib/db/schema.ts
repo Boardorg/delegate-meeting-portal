@@ -188,3 +188,38 @@ export const scheduledMeetings = pgTable("scheduled_meetings", {
 
 export type ScheduledMeetingRow = typeof scheduledMeetings.$inferSelect;
 export type NewScheduledMeeting = typeof scheduledMeetings.$inferInsert;
+
+/**
+ * Per-event configuration, one row per event. Holds the Cvent identifiers the
+ * integration needs (event id and appointment-event id used in API paths).
+ *
+ * This table is also the registry that drives the global event dropdown, so an
+ * event must have a row here to be selectable in the admin UI.
+ */
+export const eventSettings = pgTable("event_settings", {
+    id: serial("id").primaryKey(),
+
+    // Internal event code (e.g. "BMWS"), matching meeting_requests.event_code
+    // and scheduled_meetings.event_code. Unique — one settings row per event.
+    code: text("code").notNull().unique(),
+
+    // Optional human-friendly label shown in the event dropdown.
+    name: text("name"),
+
+    // Cvent Event id (the overall event).
+    cventEventId: text("cvent_event_id"),
+
+    // Cvent appointment-event id — the `{id}` in /ea/appointment-events/{id}/...
+    // that every appointment API call uses.
+    cventAppointmentEventId: text("cvent_appointment_event_id"),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+});
+
+export type EventSettingsRow = typeof eventSettings.$inferSelect;
+export type NewEventSettings = typeof eventSettings.$inferInsert;

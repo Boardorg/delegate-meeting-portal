@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -6,8 +7,10 @@ import { CventSDK } from "@cvent/sdk";
 import {
     locationsPaginatedResponseFromJSON,
     availableTimesPaginatedResponseFromJSON,
+    attendeePaginatedResponseFromJSON,
 } from "@cvent/sdk/models/components";
 import type { CventLocation, CventAvailableTime } from "@/lib/cvent/types";
+import { getEventSettings } from "@/lib/events/settings";
 
 /**
  * Client for the Cvent Appointments API, built on the official `@cvent/sdk`.
@@ -36,30 +39,43 @@ function isMock(): boolean {
     return process.env.USE_MOCK === "true";
 }
 
-// Maps our internal event codes to their Cvent appointment-event id (the `{id}`
-// in /ea/appointment-events/{id}/...). Add an entry per event.
-// TODO: replace the placeholder with BMWS's real Cvent appointment-event id.
-const CVENT_EVENT_IDS: Record<string, string> = {
-    BMWS: "05b5b30f-72c9-4aa1-8d24-1c201ff0a5a4",
-};
-
 /**
- * Translates an internal event code to its Cvent appointment-event id.
- * Only used on the live path; mock mode never calls this.
+ * Loads an event's settings row (managed in /admin/event-settings), throwing a
+ * clear error if the event has no configuration row. Only used on the live
+ * path; mock mode never calls this.
  *
  * @param {string} eventCode - The internal event code (e.g. "BMWS").
- * @returns {string} The Cvent appointment-event id.
- * @throws {Error} When the event code has no mapping.
+ * @returns {Promise<import("@/lib/db/schema").EventSettingsRow>} The settings row.
+ * @throws {Error} When the event has no settings row.
  */
-function eventCodeToCventId(eventCode: string): string {
-    const id = CVENT_EVENT_IDS[eventCode];
-    if (!id) {
+async function requireEventSettings(eventCode: string) {
+    const settings = await getEventSettings(eventCode);
+    if (!settings) {
         throw new Error(
-            `No Cvent appointment-event id mapped for event code "${eventCode}". ` +
-                "Add it to CVENT_EVENT_IDS in lib/cvent/client.ts.",
+            `No Cvent settings configured for event "${eventCode}". ` +
+                "Add them in Admin → Event settings.",
         );
     }
-    return id;
+    return settings;
+}
+
+/**
+ * Resolves an event's Cvent appointment-event id (the `{id}` in
+ * /ea/appointment-events/{id}/...) from its settings row.
+ *
+ * @param {string} eventCode - The internal event code.
+ * @returns {Promise<string>} The Cvent appointment-event id.
+ * @throws {Error} When the event has no settings row or no appointment-event id.
+ */
+async function getAppointmentEventId(eventCode: string): Promise<string> {
+    const { cventAppointmentEventId } = await requireEventSettings(eventCode);
+    if (!cventAppointmentEventId) {
+        throw new Error(
+            `Event "${eventCode}" has no Cvent Appointment Event ID set ` +
+                "(Admin → Event settings).",
+        );
+    }
+    return cventAppointmentEventId;
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +177,7 @@ export async function getLocationsByEvent(
         );
     }
 
-    const id = eventCodeToCventId(eventCode);
+    const id = await getAppointmentEventId(eventCode);
     const out: CventLocation[] = [];
 
     // The SDK returns a PageIterator; `for await` walks every page for us.
@@ -189,7 +205,7 @@ export async function getTimeslotsByEvent(
         );
     }
 
-    const id = eventCodeToCventId(eventCode);
+    const id = await getAppointmentEventId(eventCode);
     const out: CventAvailableTime[] = [];
 
     const pages = await getClient().appointments.listAvailableTimes({ id });
@@ -198,6 +214,74 @@ export async function getTimeslotsByEvent(
     }
     return out;
 }
+
+/** One Cvent attendee, reduced to what the cross-check needs. */
+export type CventEventAttendee = {
+    /** Cvent contact id — used as the appointment host/attendee id. */
+    contactId: string;
+    /** Contact email — the key used to match against Salesforce attendees. */
+    email: string;
+};
+
+/**
+ * Reduces raw Cvent attendee records to `{ contactId, email }`, dropping any
+ * record missing either field (both are required to match + push).
+ */
+function toCventEventAttendees(
+    data: Array<{ contact?: { id?: string; email?: string } }>,
+): CventEventAttendee[] {
+    const out: CventEventAttendee[] = [];
+    for (const a of data) {
+        const contactId = a.contact?.id;
+        const email = a.contact?.email;
+        if (contactId && email) out.push({ contactId, email });
+    }
+    return out;
+}
+
+/**
+ * Lists the event's Cvent attendees (contact id + email), following pagination
+ * to the end. Used by loadAttendees to cross-check Salesforce attendees against
+ * Cvent by email. Request-memoized so repeated attendee loads in one render
+ * share the fetch.
+ *
+ * @param {string} eventCode - Internal event code; resolved to the event's Cvent Event ID.
+ * @returns {Promise<CventEventAttendee[]>} All Cvent attendees for the event.
+ * @throws {Error} When the event has no Cvent Event ID configured.
+ */
+export const getEventAttendees = cache(
+    async (eventCode: string): Promise<CventEventAttendee[]> => {
+        if (isMock()) {
+            const raw = await fs.readFile(
+                path.join(MOCK_DIR, "attendees.json"),
+                "utf-8",
+            );
+            const parsed = attendeePaginatedResponseFromJSON(raw);
+            if (!parsed.ok) {
+                throw new Error(
+                    `Invalid Cvent mock fixture attendees.json: ${String(parsed.error)}`,
+                );
+            }
+            return toCventEventAttendees(parsed.value?.data ?? []);
+        }
+
+        const { cventEventId } = await requireEventSettings(eventCode);
+        if (!cventEventId) {
+            throw new Error(
+                `Event "${eventCode}" has no Cvent Event ID set (Admin → Event settings).`,
+            );
+        }
+
+        const out: CventEventAttendee[] = [];
+        const pages = await getClient().attendees.listAttendees({
+            filter: `event.id eq '${cventEventId}'`,
+        });
+        for await (const page of pages) {
+            out.push(...toCventEventAttendees(page.result.data ?? []));
+        }
+        return out;
+    },
+);
 
 // ---------------------------------------------------------------------------
 // Write operations
@@ -211,30 +295,17 @@ export type CventAppointmentInput = {
     startTime: Date;
     /** Appointment end (UTC). */
     endTime: Date;
+    /** Cvent contact id of the appointment host (the meeting's requester). */
+    hostContactId: string;
+    /** Cvent appointment-type id, taken from the booked timeslot. Required on create; Cvent's update endpoint doesn't accept it. */
+    appointmentTypeId: string;
     /** Cvent location id. Omitted from the request when null/undefined. */
     locationId?: string | null;
-    /** Cvent contact ids of the meeting participants. */
+    /** Cvent contact ids of the appointment attendees (the non-host participant). */
     attendeeContactIds?: string[];
     /** External reference code (we pass our meeting id) for traceability. */
     code?: string;
 };
-
-/**
- * Reads the appointment host + type ids required to create appointments in
- * Cvent, throwing a single combined error if either is missing.
- *
- * @returns {{ hostId: string; appointmentTypeId: string }} The validated ids.
- */
-function readAppointmentEnv(): { hostId: string; appointmentTypeId: string } {
-    const hostId = process.env.CVENT_APPOINTMENT_HOST_ID;
-    const appointmentTypeId = process.env.CVENT_APPOINTMENT_TYPE_ID;
-    if (!hostId || !appointmentTypeId) {
-        throw new Error(
-            "Missing Cvent env vars: CVENT_APPOINTMENT_HOST_ID, CVENT_APPOINTMENT_TYPE_ID",
-        );
-    }
-    return { hostId, appointmentTypeId };
-}
 
 /** Maps a list of Cvent contact ids into the SDK's `{ id }[]` attendee/host shape. */
 function toUuidList(ids: string[]): Array<{ id: string }> {
@@ -265,8 +336,7 @@ export async function createAppointment(
     // Mock mode never hits Cvent; hand back a synthetic appointment id.
     if (isMock()) return `mock-appt-${randomUUID()}`;
 
-    const { hostId, appointmentTypeId } = readAppointmentEnv();
-    const id = eventCodeToCventId(eventCode);
+    const id = await getAppointmentEventId(eventCode);
 
     const res = await getClient().appointments.createAppointment({
         id,
@@ -275,8 +345,8 @@ export async function createAppointment(
             subject: input.subject,
             startTime: input.startTime,
             endTime: input.endTime,
-            hosts: [{ id: hostId }],
-            appointmentTypeId,
+            hosts: [{ id: input.hostContactId }],
+            appointmentTypeId: input.appointmentTypeId,
             ...(input.locationId ? { location: input.locationId } : {}),
             ...(input.attendeeContactIds?.length
                 ? { attendees: toUuidList(input.attendeeContactIds) }
@@ -304,8 +374,7 @@ export async function updateAppointment(
 ): Promise<string> {
     if (isMock()) return apptId;
 
-    const { hostId } = readAppointmentEnv();
-    const id = eventCodeToCventId(eventCode);
+    const id = await getAppointmentEventId(eventCode);
 
     const res = await getClient().appointments.updateAppointment({
         id,
@@ -316,7 +385,7 @@ export async function updateAppointment(
             subject: input.subject,
             startTime: input.startTime,
             endTime: input.endTime,
-            hosts: [{ id: hostId }],
+            hosts: [{ id: input.hostContactId }],
             ...(input.locationId ? { location: input.locationId } : {}),
             ...(input.attendeeContactIds?.length
                 ? { attendees: toUuidList(input.attendeeContactIds) }

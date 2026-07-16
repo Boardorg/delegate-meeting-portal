@@ -381,7 +381,15 @@ export interface SchedulerRunResult {
 }
 
 /**
- * The resolved owner of a phone number, produced by lib/auth/identity.ts.
+ * The one-time-code delivery channel a login contact was submitted through.
+ * Shared by the login/verify routes, session payload, identity resolution,
+ * and Twilio Verify wrapper so the union is defined in exactly one place.
+ */
+export type Channel = "sms" | "email";
+
+/**
+ * The resolved owner of a phone number or email address, produced by
+ * lib/auth/identity.ts.
  *
  * - `source: "users"`  → `user` is the DB row; `attendee` is a thin Attendee
  *   shaped from that row.
@@ -390,8 +398,11 @@ export interface SchedulerRunResult {
  * `attendee` is always populated so callers always have one shape to render.
  */
 export type ResolvedIdentity = {
-    /** Normalized phone the identity was resolved for. */
-    phone: string;
+    /** Normalized phone or email the identity was resolved for. */
+    contact: string;
+
+    /** Which login channel `contact` was resolved through. */
+    channel: Channel;
 
     /** Application role driving where the user lands. */
     role: "admin" | "user" | "sponsor";

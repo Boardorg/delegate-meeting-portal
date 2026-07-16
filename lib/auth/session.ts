@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
+import type { Channel } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Module configuration and constants
@@ -14,7 +15,10 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Shape of the data we sign into the session JWT.
 export type SessionPayload = JWTPayload & {
-    phone: string;
+    // The normalized phone or email the user logged in with.
+    contact: string;
+    // Which channel `contact` was verified through.
+    channel: Channel;
     issuedAt: number;
     // Event code captured from the `?event=` query param at login.
     eventCode?: string;
@@ -95,20 +99,22 @@ export async function getSession(): Promise<SessionPayload | null> {
 // ---------------------------------------------------------------------------
 
 /**
- * Creates a new session for the given phone number and writes the signed JWT
+ * Creates a new session for the given contact and writes the signed JWT
  * to the `session` cookie. Called from the verify route after Twilio confirms
  * the one-time code.
  *
- * @param {string} phone - E.164-normalized phone number to associate with the session.
+ * @param {string} contact - Normalized phone (E.164) or email to associate with the session.
+ * @param {Channel} channel - Which channel `contact` was verified through.
  * @param {string} [eventCode] - Event code from the login URL to persist for the session's lifetime.
  * @returns {Promise<void>}
  */
 export async function createSession(
-    phone: string,
+    contact: string,
+    channel: Channel,
     eventCode?: string,
 ): Promise<void> {
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-    const token = await encryptSession({ phone, issuedAt: Date.now(), eventCode });
+    const token = await encryptSession({ contact, channel, issuedAt: Date.now(), eventCode });
 
     // HttpOnly so client JS can't read it; Secure so it only goes over HTTPS
     // in production; SameSite=lax keeps it out of cross-site POSTs while still

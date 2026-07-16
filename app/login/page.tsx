@@ -68,7 +68,11 @@ function LoginForm() {
             const res = await fetch("/api/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ phone: phoneInput, eventCode: event }),
+                body: JSON.stringify({
+                    contact: phoneInput,
+                    channel: "sms",
+                    eventCode: event,
+                }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -77,7 +81,7 @@ function LoginForm() {
             }
             // Use the server-normalized phone on the verify call so both
             // requests reference the exact same E.164 string.
-            setNormalizedPhone(data.phone);
+            setNormalizedPhone(data.contact);
             setStep("code");
         } catch {
             setError("Network error. Please try again.");
@@ -98,7 +102,12 @@ function LoginForm() {
             const res = await fetch("/api/auth/verify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ phone: normalizedPhone, code, eventCode: event }),
+                body: JSON.stringify({
+                    contact: normalizedPhone,
+                    channel: "sms",
+                    code,
+                    eventCode: event,
+                }),
             });
             const data = await res.json();
             if (!res.ok) {

@@ -11,15 +11,15 @@ import { loadAttendees } from "../attendees/loader";
 // ---------------------------------------------------------------------------
 // getCurrentUser — bridges the session cookie to the users table.
 //
-// The session JWT only carries `phone` (the SMS login key); everything else
-// — id, role, username, email, last_login — lives in the DB and is looked up
-// fresh on each render. Wrapped in React's `cache` so multiple server
-// components in the same request share one query.
+// The session JWT only carries `contact` + `channel` (the login key);
+// everything else — id, role, username, email, last_login — lives in the DB
+// and is looked up fresh on each render. Wrapped in React's `cache` so
+// multiple server components in the same request share one query.
 // ---------------------------------------------------------------------------
 
 /**
  * Reads the session cookie and returns the matching DB user, or null if no
- * session exists or the phone doesn't map to a user row.
+ * session exists or the contact doesn't map to a user row.
  *
  * Call from server components, server actions, and route handlers. Safe to
  * call repeatedly inside a single request — the result is memoized.
@@ -30,11 +30,10 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
     const session = await getSession();
     if (!session) return null;
 
-    const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.phone, session.phone))
-        .limit(1);
+    const [user] =
+        session.channel === "email"
+            ? await db.select().from(users).where(eq(users.email, session.contact)).limit(1)
+            : await db.select().from(users).where(eq(users.phone, session.contact)).limit(1);
     return user ?? null;
 });
 
@@ -58,7 +57,7 @@ export const getCurrentIdentity = cache(
         }
         const session = await getSession();
         if (!session) return null;
-        return resolveIdentity(session.phone);
+        return resolveIdentity(session.contact, session.channel);
     },
 );
 
@@ -70,7 +69,8 @@ export const getCurrentIdentity = cache(
 async function resolveMockIdentity(): Promise<ResolvedIdentity> {
     const attendees = await loadAttendees(true);
     return {
-        phone: "+15555550101",
+        contact: "+15555550101",
+        channel: "sms",
         role: "sponsor",
         source: "salesforce",
         salesforceId: "a00PZ00000TMLocYAH",

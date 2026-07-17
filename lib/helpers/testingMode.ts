@@ -1,4 +1,7 @@
-import "server-only";
+// Intentionally not `server-only`: this is a pure env-var read used by server
+// code, but keeping it guard-free lets it be imported in unit tests without a
+// `server-only` shim. TESTING_MODE isn't a NEXT_PUBLIC var, so on the client it
+// reads as undefined and this returns false — a safe default.
 
 /**
  * Testing mode relaxes production safeguards for non-prod / dry-run events.

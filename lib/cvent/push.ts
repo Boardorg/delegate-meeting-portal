@@ -43,18 +43,42 @@ export type PushSummary = {
 };
 
 /**
- * Turns a thrown push error into a message for the result row. Normally this is
- * just `err.message` (e.g. the Cvent SDK's terse "Response validation failed").
- * In testing mode it expands that into the underlying detail the SDK hides — the
- * pretty-printed validation issues, the HTTP status, and the raw response body —
- * so failures are debuggable without production noise.
+ * Extracts Cvent's human-readable error message from a raw HTTP response body.
+ * Cvent error responses are JSON like `{ "message": "...", "code": "..." }`;
+ * this returns the `message` when present, or null when the body is missing /
+ * not JSON / has no message.
+ *
+ * @param {unknown} body - The raw response body (a string on SDK errors).
+ * @returns {string | null} The Cvent message, or null.
+ */
+function extractCventMessage(body: unknown): string | null {
+    if (typeof body !== "string" || !body.trim()) return null;
+    try {
+        const parsed = JSON.parse(body) as { message?: unknown };
+        if (typeof parsed.message === "string" && parsed.message.trim()) {
+            return parsed.message.trim();
+        }
+    } catch {
+        // Not JSON — nothing to extract.
+    }
+    return null;
+}
+
+/**
+ * Turns a thrown push error into a message for the result row.
+ *
+ * In all modes it surfaces Cvent's human-readable message from the response body
+ * when present (e.g. a 409 "no more appointments at this time"), since those are
+ * actionable for admins. In testing mode it further expands into the detail the
+ * SDK hides — pretty-printed validation issues, HTTP status, and the raw body —
+ * for debugging. Otherwise it falls back to the terse `err.message`.
  *
  * @param {unknown} err - The thrown error.
  * @returns {string} The (possibly expanded) error message.
  */
 function describePushError(err: unknown): string {
     const base = err instanceof Error ? err.message : String(err);
-    if (!isTestingMode() || !(err instanceof Error)) return base;
+    if (!(err instanceof Error)) return base;
 
     // Duck-typed against the Cvent SDK error shapes (ResponseValidationError /
     // CventSDKError) so we don't hard-depend on their classes.
@@ -64,7 +88,17 @@ function describePushError(err: unknown): string {
         body?: string;
         cause?: unknown;
     };
+
+    const cventMessage = extractCventMessage(e.body);
+
+    // Outside testing mode: prefer Cvent's message when there is one; otherwise
+    // keep it terse and don't leak raw responses into the admin UI.
+    if (!isTestingMode()) {
+        return cventMessage ?? base;
+    }
+
     const parts: string[] = [base];
+    if (cventMessage) parts.push(cventMessage);
     if (typeof e.pretty === "function") {
         const pretty = e.pretty();
         if (pretty && pretty !== base) parts.push(pretty);

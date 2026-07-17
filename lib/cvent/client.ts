@@ -325,6 +325,38 @@ function suppressNotifications(): boolean {
 }
 
 /**
+ * Recovers a created/updated appointment id from a thrown SDK error.
+ *
+ * Cvent's appointment responses can omit fields the SDK's response schema marks
+ * required (e.g. `type`), so the SDK throws `ResponseValidationError` even when
+ * the appointment was actually created/updated (HTTP 2xx with a valid body). In
+ * that case we pull the `id` from the raw response body and treat it as success
+ * — otherwise a real success would be recorded as a failure and re-pushing would
+ * create a duplicate in Cvent. Anything that isn't a 2xx-with-id is re-thrown.
+ *
+ * @param {unknown} err - The error thrown by the SDK call.
+ * @returns {string} The appointment id parsed from the successful response body.
+ * @throws {unknown} The original error when it isn't a recoverable 2xx response.
+ */
+function recoverAppointmentId(err: unknown): string {
+    const e = err as { statusCode?: number; body?: string };
+    if (
+        typeof e.statusCode === "number" &&
+        e.statusCode >= 200 &&
+        e.statusCode < 300 &&
+        typeof e.body === "string"
+    ) {
+        try {
+            const parsed = JSON.parse(e.body) as { id?: unknown };
+            if (typeof parsed.id === "string" && parsed.id) return parsed.id;
+        } catch {
+            // Body wasn't JSON with an id — fall through and re-throw.
+        }
+    }
+    throw err;
+}
+
+/**
  * Creates a Cvent appointment for a scheduled meeting and returns its Cvent
  * appointment id. In mock mode returns a synthetic id without any network call.
  *
@@ -341,23 +373,28 @@ export async function createAppointment(
 
     const id = await getAppointmentEventId(eventCode);
 
-    const res = await getClient().appointments.createAppointment({
-        id,
-        suppressNotifications: suppressNotifications(),
-        createAppointmentRequest: {
-            subject: input.subject,
-            startTime: input.startTime,
-            endTime: input.endTime,
-            hosts: [{ id: input.hostContactId }],
-            appointmentTypeId: input.appointmentTypeId,
-            ...(input.locationId ? { location: input.locationId } : {}),
-            ...(input.attendeeContactIds?.length
-                ? { attendees: toUuidList(input.attendeeContactIds) }
-                : {}),
-            ...(input.code ? { code: input.code } : {}),
-        },
-    });
-    return res.id;
+    try {
+        const res = await getClient().appointments.createAppointment({
+            id,
+            suppressNotifications: suppressNotifications(),
+            createAppointmentRequest: {
+                subject: input.subject,
+                startTime: input.startTime,
+                endTime: input.endTime,
+                hosts: [{ id: input.hostContactId }],
+                appointmentTypeId: input.appointmentTypeId,
+                ...(input.locationId ? { location: input.locationId } : {}),
+                ...(input.attendeeContactIds?.length
+                    ? { attendees: toUuidList(input.attendeeContactIds) }
+                    : {}),
+                ...(input.code ? { code: input.code } : {}),
+            },
+        });
+        return res.id;
+    } catch (err) {
+        // Treat an over-strict response-validation failure on a real 2xx as success.
+        return recoverAppointmentId(err);
+    }
 }
 
 /**
@@ -379,21 +416,26 @@ export async function updateAppointment(
 
     const id = await getAppointmentEventId(eventCode);
 
-    const res = await getClient().appointments.updateAppointment({
-        id,
-        apptId,
-        suppressNotifications: suppressNotifications(),
-        updateAppointmentRequest: {
-            id: apptId,
-            subject: input.subject,
-            startTime: input.startTime,
-            endTime: input.endTime,
-            hosts: [{ id: input.hostContactId }],
-            ...(input.locationId ? { location: input.locationId } : {}),
-            ...(input.attendeeContactIds?.length
-                ? { attendees: toUuidList(input.attendeeContactIds) }
-                : {}),
-        },
-    });
-    return res.id;
+    try {
+        const res = await getClient().appointments.updateAppointment({
+            id,
+            apptId,
+            suppressNotifications: suppressNotifications(),
+            updateAppointmentRequest: {
+                id: apptId,
+                subject: input.subject,
+                startTime: input.startTime,
+                endTime: input.endTime,
+                hosts: [{ id: input.hostContactId }],
+                ...(input.locationId ? { location: input.locationId } : {}),
+                ...(input.attendeeContactIds?.length
+                    ? { attendees: toUuidList(input.attendeeContactIds) }
+                    : {}),
+            },
+        });
+        return res.id;
+    } catch (err) {
+        // Treat an over-strict response-validation failure on a real 2xx as success.
+        return recoverAppointmentId(err);
+    }
 }

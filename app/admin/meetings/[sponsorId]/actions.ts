@@ -69,12 +69,14 @@ function getSyncStatus(m: ScheduledMeetingRow): SyncStatus {
  * the event (triggers a 404 in the page component).
  *
  * @param {{ sponsorId: string; eventCode: string }} params
- * @returns {Promise<{ sponsor: SponsorDetail; meetings: MeetingRow[] } | null>}
+ * @returns {Promise<{ sponsor: SponsorDetail; meetings: MeetingRow[]; timezone: string } | null>}
  */
 export async function getMeetingDetail(params: {
     sponsorId: string;
     eventCode: string;
-}): Promise<{ sponsor: SponsorDetail; meetings: MeetingRow[] } | null> {
+}): Promise<
+    { sponsor: SponsorDetail; meetings: MeetingRow[]; timezone: string } | null
+> {
     const [attendees, meetingRows, requestRows, scheduleData] =
         await Promise.all([
             loadAttendees(false, params.eventCode),
@@ -156,6 +158,7 @@ export async function getMeetingDetail(params: {
             scheduledCount: meetingRows.length,
         },
         meetings,
+        timezone: scheduleData.timezone,
     };
 }
 

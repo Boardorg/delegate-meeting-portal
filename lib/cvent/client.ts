@@ -8,8 +8,13 @@ import {
     locationsPaginatedResponseFromJSON,
     availableTimesPaginatedResponseFromJSON,
     attendeePaginatedResponseFromJSON,
+    appointmentEventFromJSON,
 } from "@cvent/sdk/models/components";
-import type { CventLocation, CventAvailableTime } from "@/lib/cvent/types";
+import type {
+    CventLocation,
+    CventAvailableTime,
+    CventAppointmentEvent,
+} from "@/lib/cvent/types";
 import { getEventSettings } from "@/lib/events/settings";
 
 /**
@@ -217,6 +222,37 @@ export async function getTimeslotsByEvent(
     }
     return out;
 }
+
+/**
+ * Fetches an event's Cvent appointment-event record, which carries the IANA
+ * `timezone` its appointment times are scheduled against. Needed for display:
+ * Cvent's timeslot timestamps are genuine UTC, and converting them to the
+ * viewer's local time (rather than a hardcoded zone) requires knowing this.
+ * Request-memoized like getEventAttendees.
+ *
+ * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
+ * @returns {Promise<CventAppointmentEvent>} The appointment-event record.
+ */
+export const getAppointmentEvent = cache(
+    async (eventCode: string): Promise<CventAppointmentEvent> => {
+        if (isMock()) {
+            const raw = await fs.readFile(
+                path.join(MOCK_DIR, "appointment-event.json"),
+                "utf-8",
+            );
+            const parsed = appointmentEventFromJSON(raw);
+            if (!parsed.ok || !parsed.value) {
+                throw new Error(
+                    `Invalid Cvent mock fixture appointment-event.json: ${String(parsed.error)}`,
+                );
+            }
+            return parsed.value;
+        }
+
+        const id = await getAppointmentEventId(eventCode);
+        return getClient().appointments.getAppointmentEventById({ id });
+    },
+);
 
 /** One Cvent attendee, reduced to what the cross-check needs. */
 export type CventEventAttendee = {

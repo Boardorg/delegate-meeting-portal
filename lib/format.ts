@@ -35,18 +35,21 @@ export function fmtDateTime(d: Date): string {
 }
 
 /**
- * Formats an ISO 8601 UTC string as a short time, e.g. "9:00 AM".
- * Interprets the string in UTC so display matches the stored slot time
- * regardless of the viewer's local timezone.
+ * Formats an ISO 8601 UTC string as a short time, e.g. "9:00 AM", in a given
+ * IANA timezone. Pass the event's real timezone (from
+ * lib/cvent/mapper.ts's EventScheduleData.timezone) so display matches the
+ * venue's local time regardless of the viewer's own timezone. Defaults to UTC
+ * only as a fallback for callers that don't have an event timezone in scope.
  *
  * @param {string | null} iso - ISO 8601 string, or null.
+ * @param {string} [timeZone] - IANA timezone to display in. Defaults to "UTC".
  * @returns {string} Formatted time, or "—" for null.
  */
-export function fmtTime(iso: string | null): string {
+export function fmtTime(iso: string | null, timeZone: string = "UTC"): string {
     if (!iso) return "—";
     return new Date(iso).toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
-        timeZone: "UTC",
+        timeZone,
     });
 }

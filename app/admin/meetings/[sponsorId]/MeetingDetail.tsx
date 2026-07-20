@@ -32,9 +32,10 @@ type Props = {
     sponsor: SponsorDetail;
     meetings: MeetingRow[];
     eventCode: string;
+    timezone: string; // The event's real IANA timezone (e.g. "America/New_York"), for displaying slot times.
 };
 
-export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
+export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }: Props) {
     const router = useRouter();
     const total = sponsor.contracted + sponsor.bonus;
     const listHref = `/admin/meetings`;
@@ -195,6 +196,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
                                 <MeetingTableRow
                                     key={m.id}
                                     meeting={m}
+                                    timezone={timezone}
                                     hasConflict={conflictCompanies.has(m.delegateCompany)}
                                     isPending={isPending}
                                     isConfirmingRemove={confirmRemoveId === m.id}
@@ -215,6 +217,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
                 <EditMeetingModal
                     meeting={editTarget}
                     eventCode={eventCode}
+                    timezone={timezone}
                     onClose={() => setEditTarget(null)}
                     onSaved={() => { setEditTarget(null); router.refresh(); }}
                 />
@@ -225,6 +228,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode }: Props) {
                 <CreateMeetingModal
                     sponsorId={sponsor.salesforceId}
                     eventCode={eventCode}
+                    timezone={timezone}
                     scheduledCount={sponsor.scheduledCount}
                     meetingTarget={total}
                     onClose={() => setShowCreate(false)}
@@ -305,6 +309,7 @@ function PushResultBanner({
 
 function MeetingTableRow({
     meeting: m,
+    timezone,
     hasConflict,
     isPending,
     isConfirmingRemove,
@@ -315,6 +320,7 @@ function MeetingTableRow({
     onPush,
 }: {
     meeting: MeetingRow;
+    timezone: string;
     hasConflict: boolean;
     isPending: boolean;
     isConfirmingRemove: boolean;
@@ -357,7 +363,7 @@ function MeetingTableRow({
             {/* Time slot */}
             <td>
                 <span className={m.startTime ? "adm-mono-sm" : "adm-mono-sm adm-dim"}>
-                    {fmtTime(m.startTime)}
+                    {fmtTime(m.startTime, timezone)}
                 </span>
             </td>
 
@@ -444,11 +450,13 @@ function MeetingTableRow({
 function EditMeetingModal({
     meeting,
     eventCode,
+    timezone,
     onClose,
     onSaved,
 }: {
     meeting: MeetingRow;
     eventCode: string;
+    timezone: string;
     onClose: () => void;
     onSaved: () => void;
 }) {
@@ -523,7 +531,7 @@ function EditMeetingModal({
                             >
                                 {options.map((o) => (
                                     <option key={slotKey(o)} value={slotKey(o)}>
-                                        Day {o.day} – {fmtTime(o.startTime)}
+                                        Day {o.day} – {fmtTime(o.startTime, timezone)}
                                         {o.locationName ? ` · ${o.locationName}` : ""}
                                     </option>
                                 ))}
@@ -576,6 +584,7 @@ function EditMeetingModal({
 function CreateMeetingModal({
     sponsorId,
     eventCode,
+    timezone,
     scheduledCount,
     meetingTarget,
     onClose,
@@ -583,6 +592,7 @@ function CreateMeetingModal({
 }: {
     sponsorId: string;
     eventCode: string;
+    timezone: string;
     scheduledCount: number;
     meetingTarget: number;
     onClose: () => void;
@@ -757,7 +767,7 @@ function CreateMeetingModal({
                                 >
                                     {(slotOptions ?? []).map((o) => (
                                         <option key={o.timeslotId} value={o.timeslotId}>
-                                            Day {o.day} – {fmtTime(o.startTime)}
+                                            Day {o.day} – {fmtTime(o.startTime, timezone)}
                                             {o.locationName ? ` · ${o.locationName}` : ""}
                                         </option>
                                     ))}

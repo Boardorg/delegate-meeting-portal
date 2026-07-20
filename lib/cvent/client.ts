@@ -475,3 +475,26 @@ export async function updateAppointment(
         return recoverAppointmentId(err);
     }
 }
+
+/**
+ * Cancels an existing Cvent appointment (used when a pushed portal meeting is
+ * deleted, so the Cvent side doesn't end up with an orphaned appointment). In
+ * mock mode is a no-op.
+ *
+ * Note: cancelling does not free the appointment's `code` for reuse — Cvent
+ * keeps it reserved even after cancellation, so a deleted meeting's id must
+ * never be handed out again (see reserveMeetingIds in lib/events/settings.ts).
+ *
+ * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
+ * @param {string} apptId - The Cvent appointment id to cancel.
+ * @returns {Promise<void>}
+ */
+export async function cancelAppointment(
+    eventCode: string,
+    apptId: string,
+): Promise<void> {
+    if (isMock()) return;
+
+    const id = await getAppointmentEventId(eventCode);
+    await getClient().appointments.cancelAppointment({ id, apptId });
+}

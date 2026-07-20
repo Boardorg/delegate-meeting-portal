@@ -11,6 +11,7 @@ import {
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { pushMeetingRows } from "@/lib/cvent/push";
+import { cancelAppointment } from "@/lib/cvent/client";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail, Timeslot, Location } from "@/types";
@@ -340,9 +341,35 @@ export async function editMeeting(params: {
  * Deletes a portal meeting. The source guard prevents accidentally deleting
  * Cvent-native meetings, which are read-only in the portal.
  *
+ * If the meeting was already pushed to Cvent, its appointment is cancelled
+ * there first — otherwise Cvent is left with an orphaned appointment holding
+ * this meeting's id as its `code`, and since Cvent never frees a `code` even
+ * after cancellation, that id could never be reused by a future scheduler run
+ * (it would fail to push with APPT_CODE_ALREADY_EXISTS). If the cancel call
+ * fails, the DB row is left in place rather than deleted, so the meeting
+ * doesn't silently become an untracked orphan.
+ *
  * @param {{ id: string }} params
  */
 export async function removeMeeting(params: { id: string }): Promise<void> {
+    const [row] = await db
+        .select({
+            eventCode: scheduledMeetings.eventCode,
+            cventAppointmentId: scheduledMeetings.cventAppointmentId,
+        })
+        .from(scheduledMeetings)
+        .where(
+            and(
+                eq(scheduledMeetings.id, params.id),
+                eq(scheduledMeetings.source, "portal"),
+            ),
+        )
+        .limit(1);
+
+    if (row?.cventAppointmentId) {
+        await cancelAppointment(row.eventCode, row.cventAppointmentId);
+    }
+
     await db
         .delete(scheduledMeetings)
         .where(

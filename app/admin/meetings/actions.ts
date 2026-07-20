@@ -6,6 +6,7 @@ import { db } from "@/lib/db/client";
 import { meetingRequests, scheduledMeetings, type NewScheduledMeeting } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
+import { reserveMeetingIds } from "@/lib/events/settings";
 import { pushMeetingRows, type PushSummary } from "@/lib/cvent/push";
 import { runScheduler } from "@/lib/scheduling/engine";
 import { pairKey } from "@/lib/scheduling/helpers";
@@ -215,12 +216,24 @@ export async function runSchedulerForEvent(
 
     // Drop any fresh meeting that duplicates a pushed pair or reuses a timeslot already
     // held by a pushed meeting for either attendee. Everything else is safe to insert.
-    const reconciledSchedule = schedule.filter((m) => {
+    const filteredSchedule = schedule.filter((m) => {
         if (pushedPairs.has(pairKey(m.attendeeA, m.attendeeB))) return false;
         if (blockedSlots.has(`${m.attendeeA}:${m.timeslotId}`)) return false;
         if (blockedSlots.has(`${m.attendeeB}:${m.timeslotId}`)) return false;
         return true;
     });
+
+    // The engine assigns its own "mtg-001"-style ids per run, restarting from 1
+    // every time — fine as internal working ids, but not safe to push to Cvent
+    // as-is, since Cvent never frees an appointment's `code` even after it's
+    // cancelled. Replace them with ids from the event's persistent, never-reused
+    // counter right before insert so a deleted-and-repushed meeting can never
+    // collide with a still-reserved Cvent code.
+    const reservedIds = await reserveMeetingIds(eventCode, filteredSchedule.length);
+    const reconciledSchedule = filteredSchedule.map((m, i) => ({
+        ...m,
+        id: reservedIds[i],
+    }));
 
     // Replace all un-pushed portal meetings for this event with the reconciled output.
     await db.delete(scheduledMeetings).where(

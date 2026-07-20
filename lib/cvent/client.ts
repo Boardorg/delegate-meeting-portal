@@ -561,49 +561,6 @@ export async function createAppointment(
 }
 
 /**
- * Updates an existing Cvent appointment (used when a meeting was edited after
- * its last push). Returns the appointment id. In mock mode is a no-op that
- * returns the given apptId.
- *
- * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
- * @param {string} apptId - The existing Cvent appointment id to update.
- * @param {CventAppointmentInput} input - The updated appointment fields.
- * @returns {Promise<string>} The appointment's Cvent id.
- */
-export async function updateAppointment(
-    eventCode: string,
-    apptId: string,
-    input: CventAppointmentInput,
-): Promise<string> {
-    if (isMock()) return apptId;
-
-    const id = await getAppointmentEventId(eventCode);
-
-    try {
-        const res = await getClient().appointments.updateAppointment({
-            id,
-            apptId,
-            suppressNotifications: suppressNotifications(),
-            updateAppointmentRequest: {
-                id: apptId,
-                subject: input.subject,
-                startTime: input.startTime,
-                endTime: input.endTime,
-                hosts: [{ id: input.hostContactId }],
-                ...(input.locationId ? { location: input.locationId } : {}),
-                ...(input.attendeeContactIds?.length
-                    ? { attendees: toUuidList(input.attendeeContactIds) }
-                    : {}),
-            },
-        });
-        return res.id;
-    } catch (err) {
-        // Treat an over-strict response-validation failure on a real 2xx as success.
-        return recoverAppointmentId(err);
-    }
-}
-
-/**
  * Cancels an existing Cvent appointment (used when a pushed portal meeting is
  * deleted, so the Cvent side doesn't end up with an orphaned appointment). In
  * mock mode is a no-op.

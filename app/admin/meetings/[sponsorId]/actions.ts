@@ -184,12 +184,6 @@ export type SlotOption = {
     locationName: string | null;
 };
 
-/** One option in the location picker. */
-export type LocationOption = {
-    id: string;
-    name: string;
-};
-
 /**
  * Builds the set of timeslot ids an attendee is already booked into, from a list
  * of meetings (excluding the meeting being edited, if any).
@@ -241,24 +235,18 @@ function buildSlotOptions(
         );
 }
 
-/** Maps the event's locations into picker options, sorted by name. */
-function toLocationOptions(locations: Location[]): LocationOption[] {
-    return locations
-        .map((l) => ({ id: l.id, name: l.name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-}
-
 /**
- * Returns the available timeslot options for a meeting edit, the meeting's
- * current assignment, and the event's location options. Used to populate the
- * dropdowns in the edit modal.
+ * Returns the available timeslot options for a meeting edit and the meeting's
+ * current assignment. Used to populate the Time Slot dropdown in the edit
+ * modal — each option carries its own native location, so there's no separate
+ * location picker to keep in sync.
  *
  * Timeslots already taken by other meetings for either attendee are excluded.
  * The current meeting's own timeslot is always included so the admin can save
  * without changing the time.
  *
  * @param {{ meetingId: string; eventCode: string }} params
- * @returns {Promise<{ current: SlotOption | null; options: SlotOption[]; locations: LocationOption[] }>}
+ * @returns {Promise<{ current: SlotOption | null; options: SlotOption[] }>}
  */
 export async function getSlotOptions(params: {
     meetingId: string;
@@ -266,7 +254,6 @@ export async function getSlotOptions(params: {
 }): Promise<{
     current: SlotOption | null;
     options: SlotOption[];
-    locations: LocationOption[];
 }> {
     const [meetingRows, otherMeetings, scheduleData] = await Promise.all([
         db
@@ -287,10 +274,9 @@ export async function getSlotOptions(params: {
     ]);
 
     const meeting = meetingRows[0];
-    if (!meeting) return { current: null, options: [], locations: [] };
+    if (!meeting) return { current: null, options: [] };
 
-    const { timeslots, locations, timeslotById, locationById } = scheduleData;
-    const locationOptions = toLocationOptions(locations);
+    const { timeslots, timeslotById, locationById } = scheduleData;
 
     const bookedA = bookedTimeslotIds(otherMeetings, meeting.attendeeA);
     const bookedB = bookedTimeslotIds(otherMeetings, meeting.attendeeB);
@@ -314,7 +300,7 @@ export async function getSlotOptions(params: {
         options.unshift(current);
     }
 
-    return { current, options, locations: locationOptions };
+    return { current, options };
 }
 
 /**
@@ -489,18 +475,19 @@ export async function listDelegates(params: {
 }
 
 /**
- * Returns the available timeslot options for a new sponsor-delegate meeting,
- * plus the event's location options. Timeslots already taken by either
- * attendee's existing meetings are excluded.
+ * Returns the available timeslot options for a new sponsor-delegate meeting.
+ * Timeslots already taken by either attendee's existing meetings are
+ * excluded. Each option carries its own native location — there's no separate
+ * location picker to keep in sync.
  *
  * @param {{ sponsorId: string; delegateId: string; eventCode: string }} params
- * @returns {Promise<{ options: SlotOption[]; locations: LocationOption[] }>}
+ * @returns {Promise<{ options: SlotOption[] }>}
  */
 export async function getNewMeetingSlots(params: {
     sponsorId: string;
     delegateId: string;
     eventCode: string;
-}): Promise<{ options: SlotOption[]; locations: LocationOption[] }> {
+}): Promise<{ options: SlotOption[] }> {
     const [allMeetings, scheduleData] = await Promise.all([
         db
             .select()
@@ -509,7 +496,7 @@ export async function getNewMeetingSlots(params: {
         loadEventScheduleData(params.eventCode),
     ]);
 
-    const { timeslots, locations, locationById } = scheduleData;
+    const { timeslots, locationById } = scheduleData;
     const bookedSponsor = bookedTimeslotIds(allMeetings, params.sponsorId);
     const bookedDelegate = bookedTimeslotIds(allMeetings, params.delegateId);
 
@@ -520,7 +507,6 @@ export async function getNewMeetingSlots(params: {
             bookedSponsor,
             bookedDelegate,
         ),
-        locations: toLocationOptions(locations),
     };
 }
 

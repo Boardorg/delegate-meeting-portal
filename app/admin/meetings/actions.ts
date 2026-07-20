@@ -272,11 +272,12 @@ export async function runSchedulerForEvent(
 
 /**
  * Pushes all un-synced portal meetings for an entire event to Cvent. Covers
- * both not-yet-pushed meetings (createAppointment) and meetings edited since
- * their last push (updateAppointment). Each meeting's time is resolved from its
- * Cvent timeslot, and participants are mapped from Salesforce ids to Cvent
- * contact ids. Per-meeting failures are logged and skipped so one bad row
- * doesn't abort the whole push.
+ * both not-yet-pushed meetings (a fresh createAppointment) and meetings edited
+ * since their last push (a replacement createAppointment, then the old
+ * appointment is cancelled). Each meeting's time is resolved from its Cvent
+ * timeslot, and participants are mapped from Salesforce ids to Cvent contact
+ * ids. Per-meeting failures are logged and skipped so one bad row doesn't
+ * abort the whole push.
  *
  * @param {string} eventCode - The event to push meetings for.
  * @returns {Promise<{ pushed: number }>} Count of meetings successfully pushed.

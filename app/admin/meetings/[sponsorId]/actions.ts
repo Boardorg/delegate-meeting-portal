@@ -11,7 +11,7 @@ import {
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { pushMeetingRows } from "@/lib/cvent/push";
-import { cancelAppointment } from "@/lib/cvent/client";
+import { cancelAppointment, getAppointmentsByEvent } from "@/lib/cvent/client";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail, Timeslot, Location } from "@/types";
@@ -78,7 +78,7 @@ export async function getMeetingDetail(params: {
 }): Promise<
     { sponsor: SponsorDetail; meetings: MeetingRow[]; timezone: string } | null
 > {
-    const [attendees, meetingRows, requestRows, scheduleData] =
+    const [attendees, meetingRows, requestRows, scheduleData, appointments] =
         await Promise.all([
             loadAttendees(false, params.eventCode),
             db
@@ -103,7 +103,12 @@ export async function getMeetingDetail(params: {
                     ),
                 ),
             loadEventScheduleData(params.eventCode),
+            getAppointmentsByEvent(params.eventCode),
         ]);
+
+    // A pushed meeting's Cvent timeslot drops out of listAvailableTimes once booked.
+    // Look synced meetings up by their Cvent appointment instead, which keeps the real time and location.
+    const appointmentById = new Map(appointments.map((a) => [a.id, a]));
 
     const sponsor = attendees.find(
         (a) => a.salesforceId === params.sponsorId && a.role === "sponsor",
@@ -120,7 +125,12 @@ export async function getMeetingDetail(params: {
             const delegateId =
                 m.attendeeA === params.sponsorId ? m.attendeeB : m.attendeeA;
             const delegate = attendeeMap.get(delegateId);
-            // Resolve display values from the event's Cvent timeslots/locations.
+            // Once pushed, prefer the Cvent appointment itself for time/location
+            // (see appointmentById above). Otherwise resolve from the event's
+            // Cvent timeslots/locations, same as before.
+            const appointment = m.cventAppointmentId
+                ? appointmentById.get(m.cventAppointmentId)
+                : undefined;
             const timeslot = scheduleData.timeslotById.get(m.timeslotId);
             const location = m.locationId
                 ? scheduleData.locationById.get(m.locationId)
@@ -134,9 +144,9 @@ export async function getMeetingDetail(params: {
                 rank: m.rank,
                 timeslotId: m.timeslotId,
                 locationId: m.locationId,
-                startTime: timeslot?.startTime ?? null,
-                endTime: timeslot?.endTime ?? null,
-                location: location?.name ?? null,
+                startTime: appointment?.startTime.toISOString() ?? timeslot?.startTime ?? null,
+                endTime: appointment?.endTime.toISOString() ?? timeslot?.endTime ?? null,
+                location: appointment?.locationName ?? location?.name ?? null,
                 syncStatus: getSyncStatus(m),
                 source: m.source as MeetingSource,
                 cventAppointmentId: m.cventAppointmentId,

@@ -11,6 +11,7 @@ import {
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { pushMeetingRows } from "@/lib/cvent/push";
+import { cancelAppointment, getAppointmentsByEvent } from "@/lib/cvent/client";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail, Timeslot, Location } from "@/types";
@@ -77,7 +78,7 @@ export async function getMeetingDetail(params: {
 }): Promise<
     { sponsor: SponsorDetail; meetings: MeetingRow[]; timezone: string } | null
 > {
-    const [attendees, meetingRows, requestRows, scheduleData] =
+    const [attendees, meetingRows, requestRows, scheduleData, appointments] =
         await Promise.all([
             loadAttendees(false, params.eventCode),
             db
@@ -102,7 +103,12 @@ export async function getMeetingDetail(params: {
                     ),
                 ),
             loadEventScheduleData(params.eventCode),
+            getAppointmentsByEvent(params.eventCode),
         ]);
+
+    // A pushed meeting's Cvent timeslot drops out of listAvailableTimes once booked.
+    // Look synced meetings up by their Cvent appointment instead, which keeps the real time and location.
+    const appointmentById = new Map(appointments.map((a) => [a.id, a]));
 
     const sponsor = attendees.find(
         (a) => a.salesforceId === params.sponsorId && a.role === "sponsor",
@@ -119,7 +125,12 @@ export async function getMeetingDetail(params: {
             const delegateId =
                 m.attendeeA === params.sponsorId ? m.attendeeB : m.attendeeA;
             const delegate = attendeeMap.get(delegateId);
-            // Resolve display values from the event's Cvent timeslots/locations.
+            // Once pushed, prefer the Cvent appointment itself for time/location
+            // (see appointmentById above). Otherwise resolve from the event's
+            // Cvent timeslots/locations, same as before.
+            const appointment = m.cventAppointmentId
+                ? appointmentById.get(m.cventAppointmentId)
+                : undefined;
             const timeslot = scheduleData.timeslotById.get(m.timeslotId);
             const location = m.locationId
                 ? scheduleData.locationById.get(m.locationId)
@@ -133,9 +144,9 @@ export async function getMeetingDetail(params: {
                 rank: m.rank,
                 timeslotId: m.timeslotId,
                 locationId: m.locationId,
-                startTime: timeslot?.startTime ?? null,
-                endTime: timeslot?.endTime ?? null,
-                location: location?.name ?? null,
+                startTime: appointment?.startTime.toISOString() ?? timeslot?.startTime ?? null,
+                endTime: appointment?.endTime.toISOString() ?? timeslot?.endTime ?? null,
+                location: appointment?.locationName ?? location?.name ?? null,
                 syncStatus: getSyncStatus(m),
                 source: m.source as MeetingSource,
                 cventAppointmentId: m.cventAppointmentId,
@@ -171,12 +182,6 @@ export type SlotOption = {
     /** The timeslot's native Cvent location, used as the default when booking. */
     locationId: string | null;
     locationName: string | null;
-};
-
-/** One option in the location picker. */
-export type LocationOption = {
-    id: string;
-    name: string;
 };
 
 /**
@@ -230,24 +235,18 @@ function buildSlotOptions(
         );
 }
 
-/** Maps the event's locations into picker options, sorted by name. */
-function toLocationOptions(locations: Location[]): LocationOption[] {
-    return locations
-        .map((l) => ({ id: l.id, name: l.name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-}
-
 /**
- * Returns the available timeslot options for a meeting edit, the meeting's
- * current assignment, and the event's location options. Used to populate the
- * dropdowns in the edit modal.
+ * Returns the available timeslot options for a meeting edit and the meeting's
+ * current assignment. Used to populate the Time Slot dropdown in the edit
+ * modal — each option carries its own native location, so there's no separate
+ * location picker to keep in sync.
  *
  * Timeslots already taken by other meetings for either attendee are excluded.
  * The current meeting's own timeslot is always included so the admin can save
  * without changing the time.
  *
  * @param {{ meetingId: string; eventCode: string }} params
- * @returns {Promise<{ current: SlotOption | null; options: SlotOption[]; locations: LocationOption[] }>}
+ * @returns {Promise<{ current: SlotOption | null; options: SlotOption[] }>}
  */
 export async function getSlotOptions(params: {
     meetingId: string;
@@ -255,7 +254,6 @@ export async function getSlotOptions(params: {
 }): Promise<{
     current: SlotOption | null;
     options: SlotOption[];
-    locations: LocationOption[];
 }> {
     const [meetingRows, otherMeetings, scheduleData] = await Promise.all([
         db
@@ -276,10 +274,9 @@ export async function getSlotOptions(params: {
     ]);
 
     const meeting = meetingRows[0];
-    if (!meeting) return { current: null, options: [], locations: [] };
+    if (!meeting) return { current: null, options: [] };
 
-    const { timeslots, locations, timeslotById, locationById } = scheduleData;
-    const locationOptions = toLocationOptions(locations);
+    const { timeslots, timeslotById, locationById } = scheduleData;
 
     const bookedA = bookedTimeslotIds(otherMeetings, meeting.attendeeA);
     const bookedB = bookedTimeslotIds(otherMeetings, meeting.attendeeB);
@@ -303,7 +300,7 @@ export async function getSlotOptions(params: {
         options.unshift(current);
     }
 
-    return { current, options, locations: locationOptions };
+    return { current, options };
 }
 
 /**
@@ -340,9 +337,35 @@ export async function editMeeting(params: {
  * Deletes a portal meeting. The source guard prevents accidentally deleting
  * Cvent-native meetings, which are read-only in the portal.
  *
+ * If the meeting was already pushed to Cvent, its appointment is cancelled
+ * there first — otherwise Cvent is left with an orphaned appointment holding
+ * this meeting's id as its `code`, and since Cvent never frees a `code` even
+ * after cancellation, that id could never be reused by a future scheduler run
+ * (it would fail to push with APPT_CODE_ALREADY_EXISTS). If the cancel call
+ * fails, the DB row is left in place rather than deleted, so the meeting
+ * doesn't silently become an untracked orphan.
+ *
  * @param {{ id: string }} params
  */
 export async function removeMeeting(params: { id: string }): Promise<void> {
+    const [row] = await db
+        .select({
+            eventCode: scheduledMeetings.eventCode,
+            cventAppointmentId: scheduledMeetings.cventAppointmentId,
+        })
+        .from(scheduledMeetings)
+        .where(
+            and(
+                eq(scheduledMeetings.id, params.id),
+                eq(scheduledMeetings.source, "portal"),
+            ),
+        )
+        .limit(1);
+
+    if (row?.cventAppointmentId) {
+        await cancelAppointment(row.eventCode, row.cventAppointmentId);
+    }
+
     await db
         .delete(scheduledMeetings)
         .where(
@@ -452,18 +475,19 @@ export async function listDelegates(params: {
 }
 
 /**
- * Returns the available timeslot options for a new sponsor-delegate meeting,
- * plus the event's location options. Timeslots already taken by either
- * attendee's existing meetings are excluded.
+ * Returns the available timeslot options for a new sponsor-delegate meeting.
+ * Timeslots already taken by either attendee's existing meetings are
+ * excluded. Each option carries its own native location — there's no separate
+ * location picker to keep in sync.
  *
  * @param {{ sponsorId: string; delegateId: string; eventCode: string }} params
- * @returns {Promise<{ options: SlotOption[]; locations: LocationOption[] }>}
+ * @returns {Promise<{ options: SlotOption[] }>}
  */
 export async function getNewMeetingSlots(params: {
     sponsorId: string;
     delegateId: string;
     eventCode: string;
-}): Promise<{ options: SlotOption[]; locations: LocationOption[] }> {
+}): Promise<{ options: SlotOption[] }> {
     const [allMeetings, scheduleData] = await Promise.all([
         db
             .select()
@@ -472,7 +496,7 @@ export async function getNewMeetingSlots(params: {
         loadEventScheduleData(params.eventCode),
     ]);
 
-    const { timeslots, locations, locationById } = scheduleData;
+    const { timeslots, locationById } = scheduleData;
     const bookedSponsor = bookedTimeslotIds(allMeetings, params.sponsorId);
     const bookedDelegate = bookedTimeslotIds(allMeetings, params.delegateId);
 
@@ -483,7 +507,6 @@ export async function getNewMeetingSlots(params: {
             bookedSponsor,
             bookedDelegate,
         ),
-        locations: toLocationOptions(locations),
     };
 }
 

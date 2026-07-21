@@ -4,6 +4,7 @@ import { loadAttendees } from "@/lib/attendees/loader";
 import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import { MissingEventCodeError } from "@/lib/helpers/getEventCode";
 import SponsorCatalog from "@/app/components/SponsorCatalog";
+import EventCodeForm from "@/app/components/EventCodeForm";
 
 export default async function Home() {
     // The session must resolve to a known identity to view the catalog; the
@@ -35,16 +36,27 @@ export default async function Home() {
 }
 
 /**
- * Shown when someone opens the portal without an event code — they arrived
- * without following their emailed event link.
+ * Shown when a logged-in session has no event code attached.
+ * Lets the user enter their event code directly.
  */
 function EventRequiredNotice() {
     return (
-        <main className="event-notice">
-            <h1 className="event-notice-title">Event not found</h1>
-            <p className="event-notice-text">
-                Please use the event link in your email to access the portal.
-            </p>
+        <main className="login-page">
+            <div className="login-card">
+                <div className="login-brand">
+                    <div className="logo-mark">DM</div>
+                    Delegate Meeting Portal
+                </div>
+                <div className="login-heading">
+                    <span className="login-eyebrow">One more step</span>
+                    <h1 className="login-title">Enter your event code</h1>
+                    <p className="login-lede">
+                        You can find this in the event email, or use the link
+                        there to skip this step next time.
+                    </p>
+                </div>
+                <EventCodeForm />
+            </div>
         </main>
     );
 }

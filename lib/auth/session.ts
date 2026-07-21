@@ -10,6 +10,14 @@ import type { Channel } from "@/types";
 // Name of the cookie that carries the signed session JWT.
 export const SESSION_COOKIE = "dmp_session";
 
+// Admin-shell UI cookies (not auth, but kept here alongside SESSION_COOKIE so all
+// cookie names live in one place). ACTIVE_EVENT_COOKIE holds the admin's selected
+// event code (drives the sidebar event switcher and, in testing mode, the
+// frontend event). SPOOF_SPONSOR_COOKIE holds the Salesforce id of the sponsor an
+// admin spoofs on the frontend while testing; empty/absent means "first sponsor".
+export const ACTIVE_EVENT_COOKIE = "admin_event";
+export const SPOOF_SPONSOR_COOKIE = "admin_spoof_sponsor";
+
 // Session lifetime, 1 week.
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -114,7 +122,12 @@ export async function createSession(
     eventCode?: string,
 ): Promise<void> {
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-    const token = await encryptSession({ contact, channel, issuedAt: Date.now(), eventCode });
+    const token = await encryptSession({
+        contact,
+        channel,
+        issuedAt: Date.now(),
+        eventCode,
+    });
 
     // HttpOnly so client JS can't read it; Secure so it only goes over HTTPS
     // in production; SameSite=lax keeps it out of cross-site POSTs while still

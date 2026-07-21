@@ -1,0 +1,12 @@
+{
+    "id": "mock-appointment-event-id",
+    "code": "MOCKEVT1",
+    "apptEventType": "STANDARD",
+    "status": "ACTIVE",
+    "title": "Mock Appointment Event",
+    "start": "2026-10-31T00:00:00.000Z",
+    "end": "2026-11-02T00:00:00.000Z",
+    "timezone": "UTC",
+    "deleted": false,
+    "archived": false
+}

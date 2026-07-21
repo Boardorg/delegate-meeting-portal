@@ -1,27 +1,31 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { sendVerificationCode } from "@/lib/auth/twilio";
 import { normalizePhone, toE164 } from "@/lib/auth/phone";
+import { normalizeEmail } from "@/lib/auth/email";
 import { resolveIdentity } from "@/lib/auth/identity";
+import type { Channel } from "@/types";
 
 // ---------------------------------------------------------------------------
-// POST /api/auth/login — start the SMS one-time-code flow.
+// POST /api/auth/login — start the one-time-code flow, over SMS or email.
 //
-// Body: { phone: string }  (user-entered, any format we can normalize)
-// Returns: { phone: string } — the cleaned (NOT E.164) phone the user
-// entered, which the client echoes back on verify. This is the form stored
-// in the users table; the route converts to E.164 internally just for the
-// Twilio call.
+// Body: { contact: string, channel: "sms" | "email" }  (user-entered, any
+// format we can normalize)
+// Returns: { contact: string, channel: "sms" | "email" } — the cleaned
+// (NOT E.164 for phone) contact the user entered, which the client echoes
+// back on verify. This is the form stored in the users table; the route
+// converts phone to E.164 internally just for the Twilio call.
 // ---------------------------------------------------------------------------
 
 /**
- * Triggers Twilio Verify to send an SMS code to the supplied phone number.
+ * Triggers Twilio Verify to send a one-time code to the supplied phone
+ * number or email address.
  *
- * @param {NextRequest} request - The incoming request carrying `{ phone }` JSON.
- * @returns {Promise<NextResponse>} 200 with the cleaned phone, or 400 on bad input.
+ * @param {NextRequest} request - The incoming request carrying `{ contact, channel }` JSON.
+ * @returns {Promise<NextResponse>} 200 with the cleaned contact, or 400 on bad input.
  */
 export async function POST(request: NextRequest) {
     // Parse defensively — a non-JSON body shouldn't 500 the route.
-    let body: { phone?: unknown; eventCode?: unknown };
+    let body: { contact?: unknown; channel?: unknown; eventCode?: unknown };
     try {
         body = await request.json();
     } catch {
@@ -31,17 +35,33 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // `normalizePhone` is the DB-canonical form (cleaned, no auto country
-    // code) — what we echo back to the client and what verify will use to
-    // look the user up. `toE164` is the same number forced into E.164 so
-    // Twilio Verify accepts it. We validate both here so a bad input fails
-    // before paying for an SMS.
-    const phone =
-        typeof body.phone === "string" ? normalizePhone(body.phone) : null;
-    const e164 = typeof body.phone === "string" ? toE164(body.phone) : null;
-    if (!phone || !e164) {
+    const channel: Channel = body.channel === "email" ? "email" : "sms";
+    const raw = typeof body.contact === "string" ? body.contact : null;
+
+    // `contact` is the DB-canonical form (cleaned, no auto country code for
+    // phone; trimmed + lowercased for email) — what we echo back to the
+    // client and what verify will use to look the user up. `target` is the
+    // form Twilio Verify wants for the given channel (E.164 for phone, same
+    // as `contact` for email). We validate both here so a bad input fails
+    // before paying for a send.
+    const contact = raw
+        ? channel === "email"
+            ? normalizeEmail(raw)
+            : normalizePhone(raw)
+        : null;
+    const target = raw
+        ? channel === "email"
+            ? contact
+            : toE164(raw)
+        : null;
+    if (!contact || !target) {
         return NextResponse.json(
-            { error: "A valid phone number is required." },
+            {
+                error:
+                    channel === "email"
+                        ? "A valid email address is required."
+                        : "A valid phone number is required.",
+            },
             { status: 400 },
         );
     }
@@ -51,14 +71,14 @@ export async function POST(request: NextRequest) {
     const eventCode =
         typeof body.eventCode === "string" ? body.eventCode : undefined;
 
-    // Only send a code to numbers we recognize — either a local users-table
+    // Only send a code to contacts we recognize — either a local users-table
     // row (admins / managed users) or a live Salesforce attendee/sponsor for
-    // the current event. Unknown numbers are rejected here so we never pay for
-    // an SMS to someone who couldn't log in anyway. (This intentionally reveals
-    // whether a number is known — an accepted tradeoff for this portal.)
+    // the current event. Unknown contacts are rejected here so we never pay
+    // for a send to someone who couldn't log in anyway. (This intentionally
+    // reveals whether a contact is known — an accepted tradeoff for this portal.)
     let identity;
     try {
-        identity = await resolveIdentity(phone, eventCode);
+        identity = await resolveIdentity(contact, channel, eventCode);
     } catch (err) {
         console.error("resolveIdentity failed", err);
         return NextResponse.json(
@@ -68,15 +88,17 @@ export async function POST(request: NextRequest) {
     }
     if (!identity) {
         return NextResponse.json(
-            { error: "We couldn't find that phone number for this event." },
+            {
+                error: `We couldn't find that ${channel === "email" ? "email address" : "phone number"} for this event.`,
+            },
             { status: 403 },
         );
     }
 
-    // Twilio handles code generation, delivery, expiry, and per-number rate
-    // limiting — we just kick it off with the E.164 form.
+    // Twilio handles code generation, delivery, expiry, and per-recipient
+    // rate limiting — we just kick it off with the channel-appropriate form.
     try {
-        await sendVerificationCode(e164);
+        await sendVerificationCode(target, channel);
     } catch (err) {
         console.error("Twilio sendVerificationCode failed", err);
         return NextResponse.json(
@@ -85,6 +107,6 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // Echo back the DB-canonical phone so the client sends the same value on verify.
-    return NextResponse.json({ phone });
+    // Echo back the DB-canonical contact so the client sends the same value on verify.
+    return NextResponse.json({ contact, channel });
 }

@@ -47,6 +47,7 @@ export default async function SponsorMeetingsPage({
             sponsor={detail.sponsor}
             meetings={detail.meetings}
             eventCode={event}
+            timezone={detail.timezone}
         />
     );
 }

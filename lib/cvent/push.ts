@@ -4,7 +4,7 @@ import { db } from "@/lib/db/client";
 import { scheduledMeetings, type ScheduledMeetingRow } from "@/lib/db/schema";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { loadAttendees } from "@/lib/attendees/loader";
-import { createAppointment, updateAppointment } from "@/lib/cvent/client";
+import { createAppointment, cancelAppointment } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,8 @@ export type PushResult = {
     cventAppointmentId?: string | null;
     /** The error message on failure (from Cvent or validation). */
     error?: string;
+    /** Set on success when repushing created the new appointment fine but failed to cancel the old one. */
+    warning?: string;
 };
 
 /** Aggregate result of a push-all operation. */
@@ -114,12 +116,18 @@ function describePushError(err: unknown): string {
 }
 
 /**
- * Pushes a set of scheduled-meeting rows to Cvent: creates a new appointment
- * for rows not yet synced, updates the existing appointment for rows edited
- * since their last push. Resolves each meeting's time from its Cvent timeslot
- * and maps participants from Salesforce ids to Cvent contact ids. On success it
- * writes back the appointment id + push time; failures are captured per row so
- * one bad meeting doesn't abort the batch.
+ * Pushes a set of scheduled-meeting rows to Cvent.
+ * 
+ * A row not yet synced gets a new appointment.
+ * A row already synced and edited since gets a replacement appointment instead.
+ * The new appointment is created first. The old one is only cancelled after that succeeds.
+ * This way a failed push still leaves the meeting with a working appointment.
+ * The replacement gets a timestamp-suffixed code, since Cvent keeps the old code reserved even after cancellation.
+ *
+ * Resolves each meeting's time from its Cvent timeslot and maps participants
+ * from Salesforce ids to Cvent contact ids. On success it writes back the
+ * appointment id + push time; failures are captured per row so one bad
+ * meeting doesn't abort the batch.
  *
  * @param {string} eventCode - The event the meetings belong to.
  * @param {ScheduledMeetingRow[]} rows - The meeting rows to push.
@@ -178,6 +186,12 @@ export async function pushMeetingRows(
             ? [target.cventContactId]
             : [];
 
+        // A never-pushed row can reuse its own id as the code, since it's unused.
+        // A repushed row needs a fresh code, since Cvent keeps the old one attached to the appointment being cancelled.
+        // A timestamp suffix is enough to make it fresh without a DB round trip.
+        const oldAppointmentId = row.cventAppointmentId;
+        const code = oldAppointmentId ? `${row.id}-${Date.now()}` : row.id;
+
         const input = {
             subject: label,
             startTime: new Date(timeslot.startTime),
@@ -186,21 +200,30 @@ export async function pushMeetingRows(
             appointmentTypeId: timeslot.appointmentTypeId,
             locationId: row.locationId,
             attendeeContactIds,
-            code: row.id,
+            code,
         };
 
         try {
-            // Update in place when already pushed; otherwise create a new appointment.
-            const cventAppointmentId = row.cventAppointmentId
-                ? await updateAppointment(eventCode, row.cventAppointmentId, input)
-                : await createAppointment(eventCode, input);
+            const cventAppointmentId = await createAppointment(eventCode, input);
+
+            // Only cancel the old appointment once the replacement exists.
+            // This can't undo the create, so a failure here is reported as a
+            // warning rather than failing a push that otherwise succeeded.
+            let warning: string | undefined;
+            if (oldAppointmentId) {
+                try {
+                    await cancelAppointment(eventCode, oldAppointmentId);
+                } catch (cancelErr) {
+                    warning = `Created the new appointment, but failed to cancel the previous one (${oldAppointmentId}): ${describePushError(cancelErr)}`;
+                }
+            }
 
             await db
                 .update(scheduledMeetings)
                 .set({ cventAppointmentId, lastPushedAt: new Date() })
                 .where(eq(scheduledMeetings.id, row.id));
 
-            results.push({ meetingId: row.id, label, ok: true, cventAppointmentId });
+            results.push({ meetingId: row.id, label, ok: true, cventAppointmentId, warning });
         } catch (err) {
             results.push({
                 meetingId: row.id,

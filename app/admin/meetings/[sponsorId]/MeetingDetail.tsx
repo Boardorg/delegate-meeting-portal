@@ -17,7 +17,6 @@ import {
     pushMeeting,
     removeMeeting,
     type DelegateOption,
-    type LocationOption,
     type MeetingRow,
     type SlotOption,
     type SyncStatus,
@@ -253,6 +252,7 @@ function PushResultBanner({
     const allOk = result.failed === 0 && result.total > 0;
     const nothing = result.total === 0;
     const failures = result.results.filter((r) => !r.ok);
+    const warnings = result.results.filter((r) => r.ok && r.warning);
 
     // Accent color: green (all pushed), red (any failed), muted (nothing to push).
     const accent = nothing ? "var(--border)" : allOk ? "var(--green)" : "var(--red)";
@@ -289,6 +289,27 @@ function PushResultBanner({
                                         {f.label}:
                                     </span>{" "}
                                     {f.error ?? "Unknown error"}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+
+                    {warnings.length > 0 && (
+                        <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                            {warnings.map((w) => (
+                                <li
+                                    key={w.meetingId}
+                                    style={{
+                                        fontSize: 13,
+                                        marginBottom: 4,
+                                        color: "var(--gold)",
+                                        whiteSpace: "pre-wrap",
+                                    }}
+                                >
+                                    <span style={{ color: "var(--text)", fontWeight: 500 }}>
+                                        {w.label}:
+                                    </span>{" "}
+                                    {w.warning}
                                 </li>
                             ))}
                         </ul>
@@ -462,18 +483,15 @@ function EditMeetingModal({
 }) {
     const [options, setOptions] = useState<SlotOption[] | null>(null);
     const [selectedKey, setSelectedKey] = useState<string>("");
-    const [locations, setLocations] = useState<LocationOption[]>([]);
-    const [locationId, setLocationId] = useState(meeting.locationId ?? "");
     const [loadError, setLoadError] = useState<string | null>(null);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
-    // Load available timeslot + location options when the modal opens.
+    // Load available timeslot options when the modal opens.
     useEffect(() => {
         getSlotOptions({ meetingId: meeting.id, eventCode })
-            .then(({ current, options: opts, locations: locs }) => {
+            .then(({ current, options: opts }) => {
                 setOptions(opts);
-                setLocations(locs);
                 if (current) setSelectedKey(slotKey(current));
             })
             .catch(() => setLoadError("Failed to load slot options."));
@@ -486,6 +504,7 @@ function EditMeetingModal({
     }
 
     // Handler for saving the edited meeting.
+    // Location comes from the chosen slot, since each option carries its own location.
     function handleSave() {
         const opt = options?.find((o) => slotKey(o) === selectedKey);
         if (!opt) return;
@@ -496,7 +515,7 @@ function EditMeetingModal({
                     id: meeting.id,
                     timeslotId: opt.timeslotId,
                     day: opt.day,
-                    locationId: locationId || null,
+                    locationId: opt.locationId,
                 });
                 onSaved();
             } catch (e) {
@@ -520,41 +539,22 @@ function EditMeetingModal({
                 ) : options === null ? (
                     <div className="adm-modal-loading">Loading slots…</div>
                 ) : (
-                    <>
-                        <label className="adm-field adm-field-mb">
-                            <span className="adm-field-label">Time Slot</span>
-                            <select
-                                className="adm-input adm-select"
-                                value={selectedKey}
-                                onChange={(e) => setSelectedKey(e.target.value)}
-                                disabled={isPending}
-                            >
-                                {options.map((o) => (
-                                    <option key={slotKey(o)} value={slotKey(o)}>
-                                        Day {o.day} – {fmtTime(o.startTime, timezone)}
-                                        {o.locationName ? ` · ${o.locationName}` : ""}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label className="adm-field adm-field-mb-lg">
-                            <span className="adm-field-label">Location</span>
-                            <select
-                                className="adm-input adm-select"
-                                value={locationId}
-                                onChange={(e) => setLocationId(e.target.value)}
-                                disabled={isPending}
-                            >
-                                <option value="">— No location —</option>
-                                {locations.map((l) => (
-                                    <option key={l.id} value={l.id}>
-                                        {l.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                    </>
+                    <label className="adm-field adm-field-mb-lg">
+                        <span className="adm-field-label">Time Slot</span>
+                        <select
+                            className="adm-input adm-select"
+                            value={selectedKey}
+                            onChange={(e) => setSelectedKey(e.target.value)}
+                            disabled={isPending}
+                        >
+                            {options.map((o) => (
+                                <option key={slotKey(o)} value={slotKey(o)}>
+                                    Day {o.day} – {fmtTime(o.startTime, timezone)}
+                                    {o.locationName ? ` · ${o.locationName}` : ""}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
                 )}
 
                 {saveError && <div className="adm-modal-error">{saveError}</div>}
@@ -605,8 +605,6 @@ function CreateMeetingModal({
     const [slotOptions, setSlotOptions] = useState<SlotOption[] | null>(null);
     const [slotsLoading, setSlotsLoading] = useState(false);
     const [selectedKey, setSelectedKey] = useState("");
-    const [locations, setLocations] = useState<LocationOption[]>([]);
-    const [locationId, setLocationId] = useState("");
     const [saveError, setSaveError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
@@ -630,9 +628,8 @@ function CreateMeetingModal({
         setSelectedKey("");
         setSlotsLoading(true);
         getNewMeetingSlots({ sponsorId, delegateId: d.salesforceId, eventCode })
-            .then(({ options, locations: locs }) => {
+            .then(({ options }) => {
                 setSlotOptions(options);
-                setLocations(locs);
                 if (options.length > 0) setSelectedKey(slotKey(options[0]));
             })
             .catch(() => setSlotOptions([]))
@@ -640,6 +637,7 @@ function CreateMeetingModal({
     }
 
     // Handler for creating a new meeting.
+    // Location comes from the chosen slot, since each option carries its own location.
     function handleCreate() {
         const opt = slotOptions?.find((o) => slotKey(o) === selectedKey);
         if (!opt || !selected) return;
@@ -652,7 +650,7 @@ function CreateMeetingModal({
                     delegateId: selected.salesforceId,
                     timeslotId: opt.timeslotId,
                     day: opt.day,
-                    locationId: locationId || null,
+                    locationId: opt.locationId,
                 });
                 onCreated();
             } catch (e) {
@@ -747,51 +745,32 @@ function CreateMeetingModal({
                     )}
                 </div>
 
-                {/* Slot + location (shown after delegate selected) */}
+                {/* Time slot (shown after delegate selected) */}
                 {selected && (
-                    <>
-                        <label className="adm-field">
-                            <span className="adm-field-label">Time Slot</span>
-                            {slotsLoading ? (
-                                <span className="adm-dim">Loading slots…</span>
-                            ) : slotOptions && slotOptions.length === 0 ? (
-                                <span className="adm-gold-sm">
-                                    No mutual available timeslots for this pair.
-                                </span>
-                            ) : (
-                                <select
-                                    className="adm-input adm-select"
-                                    value={selectedKey}
-                                    onChange={(e) => setSelectedKey(e.target.value)}
-                                    disabled={isPending || !slotOptions}
-                                >
-                                    {(slotOptions ?? []).map((o) => (
-                                        <option key={o.timeslotId} value={o.timeslotId}>
-                                            Day {o.day} – {fmtTime(o.startTime, timezone)}
-                                            {o.locationName ? ` · ${o.locationName}` : ""}
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
-                        </label>
-
-                        <label className="adm-field">
-                            <span className="adm-field-label">Location</span>
+                    <label className="adm-field">
+                        <span className="adm-field-label">Time Slot</span>
+                        {slotsLoading ? (
+                            <span className="adm-dim">Loading slots…</span>
+                        ) : slotOptions && slotOptions.length === 0 ? (
+                            <span className="adm-gold-sm">
+                                No mutual available timeslots for this pair.
+                            </span>
+                        ) : (
                             <select
                                 className="adm-input adm-select"
-                                value={locationId}
-                                onChange={(e) => setLocationId(e.target.value)}
-                                disabled={isPending}
+                                value={selectedKey}
+                                onChange={(e) => setSelectedKey(e.target.value)}
+                                disabled={isPending || !slotOptions}
                             >
-                                <option value="">— No location —</option>
-                                {locations.map((l) => (
-                                    <option key={l.id} value={l.id}>
-                                        {l.name}
+                                {(slotOptions ?? []).map((o) => (
+                                    <option key={o.timeslotId} value={o.timeslotId}>
+                                        Day {o.day} – {fmtTime(o.startTime, timezone)}
+                                        {o.locationName ? ` · ${o.locationName}` : ""}
                                     </option>
                                 ))}
                             </select>
-                        </label>
-                    </>
+                        )}
+                    </label>
                 )}
 
                 {saveError && <div className="adm-modal-error">{saveError}</div>}

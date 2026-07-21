@@ -213,10 +213,6 @@ export const eventSettings = pgTable("event_settings", {
     // that every appointment API call uses.
     cventAppointmentEventId: text("cvent_appointment_event_id"),
 
-    // Always-increasing counter used to generate scheduled_meetings ids (mtg-XXX).
-    // Cvent never frees a cancelled appointment's code, so ids are never reused.
-    nextMeetingSeq: integer("next_meeting_seq").notNull().default(1),
-
     createdAt: timestamp("created_at", { withTimezone: true })
         .notNull()
         .defaultNow(),

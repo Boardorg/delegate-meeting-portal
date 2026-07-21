@@ -566,8 +566,9 @@ export async function createAppointment(
  * mock mode is a no-op.
  *
  * Note: cancelling does not free the appointment's `code` for reuse — Cvent
- * keeps it reserved even after cancellation, so a deleted meeting's id must
- * never be handed out again (see reserveMeetingIds in lib/events/settings.ts).
+ * keeps it reserved even after cancellation, so callers must mint a fresh
+ * code rather than reusing a cancelled appointment's (see the timestamp
+ * suffix in lib/cvent/push.ts and the engine's id generation).
  *
  * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
  * @param {string} apptId - The Cvent appointment id to cancel.

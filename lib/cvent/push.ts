@@ -5,7 +5,6 @@ import { scheduledMeetings, type ScheduledMeetingRow } from "@/lib/db/schema";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { createAppointment, cancelAppointment } from "@/lib/cvent/client";
-import { reserveMeetingIds } from "@/lib/events/settings";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 
 // ---------------------------------------------------------------------------
@@ -123,7 +122,7 @@ function describePushError(err: unknown): string {
  * A row already synced and edited since gets a replacement appointment instead.
  * The new appointment is created first. The old one is only cancelled after that succeeds.
  * This way a failed push still leaves the meeting with a working appointment.
- * The replacement gets a freshly reserved code, since Cvent keeps the old code reserved even after cancellation.
+ * The replacement gets a timestamp-suffixed code, since Cvent keeps the old code reserved even after cancellation.
  *
  * Resolves each meeting's time from its Cvent timeslot and maps participants
  * from Salesforce ids to Cvent contact ids. On success it writes back the
@@ -189,10 +188,9 @@ export async function pushMeetingRows(
 
         // A never-pushed row can reuse its own id as the code, since it's unused.
         // A repushed row needs a fresh code, since Cvent keeps the old one attached to the appointment being cancelled.
+        // A timestamp suffix is enough to make it fresh without a DB round trip.
         const oldAppointmentId = row.cventAppointmentId;
-        const code = oldAppointmentId
-            ? (await reserveMeetingIds(eventCode, 1))[0]
-            : row.id;
+        const code = oldAppointmentId ? `${row.id}-${Date.now()}` : row.id;
 
         const input = {
             subject: label,

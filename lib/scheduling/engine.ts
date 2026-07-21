@@ -297,8 +297,12 @@ export async function runScheduler(
 
 			// Build the ScheduledMeeting record with all required fields. Location defaults
 			// to the timeslot's native Cvent location; an admin can reassign it later.
+			// A timestamp suffix keeps ids unique across scheduler runs, since Cvent
+			// never frees an appointment's code even after it's cancelled, so a
+			// counter that restarts from 1 each run could otherwise reuse an id
+			// still attached to an old, deleted-but-cancelled Cvent appointment.
 			const meeting: ScheduledMeeting = {
-				id: `mtg-${String(meetingCounter++).padStart(3, '0')}`,
+				id: `mtg-${String(meetingCounter++).padStart(3, '0')}-${Date.now()}`,
 				attendeeA: req.requesterId,
 				attendeeB: req.targetId,
 				day,

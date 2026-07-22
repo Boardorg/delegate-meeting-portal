@@ -37,7 +37,9 @@ const REASON_LABEL: Record<SchedulerFailureReason, string> = {
     cap_reached: "Cap reached",
     no_availability: "No availability",
     company_diversity: "Company diversity limit",
-    not_eligible: "Not eligible",
+    self_request: "Self request",
+    not_an_attendee: "Not in attendee list",
+    no_pass_match: "No matching pass",
     conflict_existing: "Conflicts with pushed meeting",
 };
 
@@ -54,6 +56,12 @@ export default function SchedulerReportPanel({
         Scheduled: b.scheduled,
         Unscheduled: b.unscheduled,
     }));
+
+    // Show the pass-rules explainer only when at least one request matched no
+    // pass, since that's the reason that needs the extra context.
+    const hasNoPassMatch = report.unscheduledRequests.some(
+        (u) => u.reason === "no_pass_match",
+    );
 
     return (
         <div className="adm-card">
@@ -192,6 +200,21 @@ export default function SchedulerReportPanel({
                             ))}
                         </tbody>
                     </table>
+                )}
+
+                {hasNoPassMatch && (
+                    <p className="adm-help-note">
+                        <strong>“No matching pass”</strong> means the request fit
+                        none of the scheduling passes, so it was never
+                        considered. Meetings are placed in priority order:
+                        mutual sponsor–delegate pairs, high-interest (rank ≥ 4)
+                        sponsor→delegate and delegate→sponsor requests, all
+                        remaining sponsor→delegate requests, then mutual and
+                        remaining delegate–delegate requests on day 2. Requests
+                        outside these rules — most commonly a low-interest
+                        (rank &lt; 4) delegate→sponsor request or a
+                        sponsor→sponsor request — are never scheduled.
+                    </p>
                 )}
             </div>
         </div>

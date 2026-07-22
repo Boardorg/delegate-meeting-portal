@@ -153,6 +153,8 @@
 
 /* ── Section title within a report card ── */
 .adm-chart-title { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--t3); margin-bottom:10px; }
+.adm-help-note { margin-top:12px; padding:10px 14px; background:var(--s2); border:1px solid var(--border); border-radius:var(--r); font-size:12px; line-height:1.5; color:var(--t2); }
+.adm-help-note strong { color:var(--text); font-weight:600; }
 
 /* ── Stat chip (StatChip component) ── */
 .adm-stat-chip  { background:var(--s2); border:1px solid var(--border); border-radius:var(--r); padding:8px 14px; display:flex; flex-direction:column; gap:1px; }

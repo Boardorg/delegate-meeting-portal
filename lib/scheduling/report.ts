@@ -16,10 +16,19 @@ import { pairKey } from "./helpers";
  * Why a requested meeting was not scheduled. A closed set of stable string
  * codes so the value is safe to store and to switch on in the UI.
  *
+ * The engine *attempted* the pair but couldn't place it:
  * - cap_reached: an attendee had already hit their per-day meeting cap.
  * - no_availability: no timeslot left where both parties were free.
  * - company_diversity: scheduling it would break the same-company meeting limit.
- * - not_eligible: the pair never matched any pass filter (no attempt reason).
+ *
+ * The engine never attempted the pair (rejected during candidate collection):
+ * - self_request: the request targets the requester themselves.
+ * - not_an_attendee: requester and/or target isn't in the attendee list.
+ * - no_pass_match: a valid pair that matched none of the scheduling passes'
+ *   role/rank/mutuality filters (e.g. a low-interest delegate→sponsor request,
+ *   or a sponsor→sponsor request), so it was never a candidate.
+ *
+ * Placed then dropped:
  * - conflict_existing: engine scheduled it, but reconciliation dropped it for
  *   conflicting with an already-pushed/Cvent meeting.
  */
@@ -27,7 +36,9 @@ export type SchedulerFailureReason =
     | "cap_reached"
     | "no_availability"
     | "company_diversity"
-    | "not_eligible"
+    | "self_request"
+    | "not_an_attendee"
+    | "no_pass_match"
     | "conflict_existing";
 
 /** A single request that did not result in a scheduled meeting. */
@@ -140,12 +151,12 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
                 targetId: req.targetId,
                 targetName: nameById.get(req.targetId) ?? req.targetId,
                 rank: req.rank,
-                // A meeting dropped in reconciliation outranks a skip reason;
-                // otherwise fall back to the engine's recorded skip, or
-                // "not_eligible" if the pair never matched a pass filter.
-                reason: reconciledOutPairs.has(pair)
-                    ? "conflict_existing"
-                    : (skipReasons.get(pair) ?? "not_eligible"),
+                reason: classifyUnscheduled(req, {
+                    nameById,
+                    reconciledOutPairs,
+                    skipReasons,
+                    pair,
+                }),
             });
         }
     }
@@ -173,4 +184,46 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         meetingsByPass,
         unscheduledRequests,
     };
+}
+
+/**
+ * Determines why a single unscheduled request failed, in precedence order:
+ * dropped-in-reconciliation → engine-recorded skip → collection-phase reason
+ * (self-request / non-attendee / no matching pass). The last three mirror the
+ * `continue` branches the engine takes while collecting candidates, before any
+ * skip reason is recorded — so they're reconstructed here from the request and
+ * attendee data rather than reported by the engine.
+ *
+ * @param {MeetingRequest} req - The unscheduled request.
+ * @param {object} ctx - Lookups: attendee names, dropped pairs, engine skips, and this request's pairKey.
+ * @returns {SchedulerFailureReason} The classified reason.
+ */
+function classifyUnscheduled(
+    req: MeetingRequest,
+    ctx: {
+        nameById: Map<string, string>;
+        reconciledOutPairs: Set<string>;
+        skipReasons: Map<string, SchedulerFailureReason>;
+        pair: string;
+    },
+): SchedulerFailureReason {
+    const { nameById, reconciledOutPairs, skipReasons, pair } = ctx;
+
+    // Placed by the engine, then dropped for conflicting with a pushed meeting.
+    if (reconciledOutPairs.has(pair)) return "conflict_existing";
+
+    // The engine attempted the pair but couldn't place it (cap / availability /
+    // company diversity).
+    const skip = skipReasons.get(pair);
+    if (skip) return skip;
+
+    // Never attempted — reconstruct the candidate-collection rejection. A
+    // self-request is checked first as the most specific case, then whether
+    // both parties are known attendees; anything else is a valid pair that
+    // simply matched none of the scheduling passes.
+    if (req.requesterId === req.targetId) return "self_request";
+    if (!nameById.has(req.requesterId) || !nameById.has(req.targetId)) {
+        return "not_an_attendee";
+    }
+    return "no_pass_match";
 }

@@ -288,12 +288,23 @@ export async function runSchedulerForEvent(
     // held by a pushed meeting for either attendee. Everything else is safe to insert.
     // The engine's own ids are timestamp-suffixed (see lib/scheduling/engine.ts), so
     // they stay unique across runs and are safe to push to Cvent as-is.
-    const reconciledSchedule = schedule.filter((m) => {
-        if (pushedPairs.has(pairKey(m.attendeeA, m.attendeeB))) return false;
-        if (blockedSlots.has(`${m.attendeeA}:${m.timeslotId}`)) return false;
-        if (blockedSlots.has(`${m.attendeeB}:${m.timeslotId}`)) return false;
-        return true;
-    });
+    //
+    // Dropped pairs are also collected here as reconciledOutPairs: the report
+    // attributes these to "conflict_existing" rather than an engine skip reason.
+    const reconciledSchedule: typeof schedule = [];
+    const reconciledOutPairs = new Set<string>();
+    for (const m of schedule) {
+        const pair = pairKey(m.attendeeA, m.attendeeB);
+        const dropped =
+            pushedPairs.has(pair) ||
+            blockedSlots.has(`${m.attendeeA}:${m.timeslotId}`) ||
+            blockedSlots.has(`${m.attendeeB}:${m.timeslotId}`);
+        if (dropped) {
+            reconciledOutPairs.add(pair);
+        } else {
+            reconciledSchedule.push(m);
+        }
+    }
 
     // Replace all un-pushed portal meetings for this event with the reconciled output.
     await db.delete(scheduledMeetings).where(
@@ -323,18 +334,6 @@ export async function runSchedulerForEvent(
             lastPushedAt: null,
         }));
         await db.insert(scheduledMeetings).values(toInsert);
-    }
-
-    // Pairs the engine scheduled but reconciliation dropped (duplicate of, or
-    // conflicting with, an already-pushed/Cvent meeting). The report attributes
-    // these to "conflict_existing" rather than an engine skip reason.
-    const reconciledKept = new Set(
-        reconciledSchedule.map((m) => pairKey(m.attendeeA, m.attendeeB)),
-    );
-    const reconciledOutPairs = new Set<string>();
-    for (const m of schedule) {
-        const key = pairKey(m.attendeeA, m.attendeeB);
-        if (!reconciledKept.has(key)) reconciledOutPairs.add(key);
     }
 
     // Revalidate the admin meetings page to reflect the new schedule.

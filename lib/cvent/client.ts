@@ -442,6 +442,45 @@ export type CventExistingAppointment = {
 };
 
 /**
+ * Loose shape of a Cvent appointment as seen by toExistingAppointments —
+ * covers both the SDK-parsed record (`start` is a Date) and a raw JSON body
+ * recovered from a response-validation failure (`start` is an ISO string).
+ */
+type RawCventAppointment = {
+    start?: Date | string;
+    deleted?: boolean;
+    participants?: Array<{ attendee?: { contact?: { id?: string } } }>;
+};
+
+/**
+ * Maps raw Cvent appointment records to the reduced CventExistingAppointment
+ * shape, skipping deleted ones and any missing a start time. Handles a `start`
+ * that's either a Date (SDK-parsed) or an ISO string (recovered raw body).
+ *
+ * @param {RawCventAppointment[]} data - Appointment records from the SDK or a recovered body.
+ * @returns {CventExistingAppointment[]} The reduced appointments.
+ */
+function toExistingAppointments(
+    data: RawCventAppointment[],
+): CventExistingAppointment[] {
+    const out: CventExistingAppointment[] = [];
+    for (const appt of data) {
+        if (appt.deleted || !appt.start) continue;
+        const participantContactIds = (appt.participants ?? [])
+            .map((p) => p.attendee?.contact?.id)
+            .filter((id): id is string => !!id);
+        out.push({
+            startTime:
+                typeof appt.start === "string"
+                    ? appt.start
+                    : appt.start.toISOString(),
+            participantContactIds,
+        });
+    }
+    return out;
+}
+
+/**
  * Lists the event's existing Cvent appointments (start time + participant
  * contact ids), following pagination to the end. The scheduling engine uses
  * these to avoid re-booking a pair that already meets, or putting an attendee
@@ -458,19 +497,28 @@ export const getEventAppointments = cache(
 
         const eventId = await getAppointmentEventId(eventCode);
         const out: CventExistingAppointment[] = [];
-        const pages = await getClient().appointments.listAppointments({
-            filter: `appointmentEvent.id eq '${eventId}'`,
-        });
-        for await (const page of pages) {
-            for (const appt of page.result.data ?? []) {
-                if (appt.deleted) continue;
-                const participantContactIds = (appt.participants ?? [])
-                    .map((p) => p.attendee?.contact?.id)
-                    .filter((id): id is string => !!id);
-                out.push({
-                    startTime: appt.start.toISOString(),
-                    participantContactIds,
-                });
+        try {
+            const pages = await getClient().appointments.listAppointments({
+                filter: `appointmentEvent.id eq '${eventId}'`,
+            });
+            for await (const page of pages) {
+                out.push(...toExistingAppointments(page.result.data ?? []));
+            }
+        } catch (err) {
+            // Cvent list responses can omit fields the SDK marks required (e.g.
+            // `type`), making it throw on an otherwise-successful 2xx. Recover the
+            // page's records from the raw body; re-throw genuine failures.
+            // (Best-effort: recovers the page that failed validation; any pages
+            // already read are kept.)
+            const body = recoverableResponseBody(err);
+            if (body === null) throw err;
+            try {
+                const parsed = JSON.parse(body) as {
+                    data?: RawCventAppointment[];
+                };
+                out.push(...toExistingAppointments(parsed.data ?? []));
+            } catch {
+                throw err;
             }
         }
         return out;

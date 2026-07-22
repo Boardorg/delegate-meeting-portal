@@ -39,7 +39,7 @@ type Props = {
     data: SponsorsPage;
 };
 
-const COL_COUNT = 8;
+const COL_COUNT = 7;
 
 export default function SponsorsTable({
     selectedEvent,
@@ -146,7 +146,6 @@ export default function SponsorsTable({
             { id: "tier", header: "Tier" },
             { id: "contracted", header: "Contracted", enableSorting: false },
             { id: "bonus", header: "Bonus", enableSorting: false },
-            { id: "total", header: "Total", enableSorting: false },
             { id: "requestCount", header: "Requests" },
             { id: "scheduledCount", header: "Scheduled" },
         ],
@@ -298,21 +297,13 @@ function SponsorRow({
     row: SponsorRow;
     onView: () => void;
 }) {
-    // Calculate the total meetings (contracted + bonus) and the percentage of scheduled meetings for the progress bar.
+    // Calculate the total meetings (contracted + bonus) for both progress bars.
     const total = row.contracted + row.bonus;
+    const requestPercent = total > 0 ? Math.round((row.requestCount / total) * 100) : 0;
     const scheduledPercent = total > 0 ? Math.round((row.scheduledCount / total) * 100) : 0;
 
-    // Check if the sponsor is over their meeting target.
-    const isOver = row.scheduledCount > total;
-    const barColor = isOver
-        ? "var(--red)"
-        : scheduledPercent >= 100
-          ? "var(--green)"
-          : scheduledPercent >= 85
-            ? "var(--gold)"
-            : "var(--blue)";
-
-    // Render the sponsor row with company, contact, tier, contracted/bonus totals, request/scheduled counts, and a progress bar for scheduled meetings.
+    // Render the sponsor row with company, contact, tier, contracted/bonus totals, and
+    // progress bars for requested vs. scheduled meetings against the total.
     return (
         <tr className="adm-row adm-row-clickable" onClick={onView}>
             <td>
@@ -327,20 +318,50 @@ function SponsorRow({
             </td>
             <td className="adm-mono">{row.contracted}</td>
             <td className="adm-mono-dim">{row.bonus > 0 ? `+${row.bonus}` : "—"}</td>
-            <td className="adm-mono">{total}</td>
-            <td className="adm-mono-dim">{row.requestCount}</td>
             <td>
-                <div className="adm-progress">
-                    <div className="adm-progress-track">
-                        <div
-                            className="adm-progress-bar"
-                            style={{ width: `${Math.min(scheduledPercent, 100)}%`, background: barColor }}
-                        />
-                    </div>
-                    <span className="adm-progress-label">{row.scheduledCount} / {total}</span>
-                </div>
+                <ProgressCell count={row.requestCount} total={total} percent={requestPercent} />
+            </td>
+            <td>
+                <ProgressCell count={row.scheduledCount} total={total} percent={scheduledPercent} />
             </td>
         </tr>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ProgressCell — a "count / total" bar shared by the Requests and Scheduled
+// columns. Color reflects standing against the target: blue while under 80%,
+// gold from 80-99%, green at exactly 100%, red once over.
+// ---------------------------------------------------------------------------
+
+function ProgressCell({
+    count,
+    total,
+    percent,
+}: {
+    count: number;
+    total: number;
+    percent: number;
+}) {
+    const isOver = count > total;
+    const barColor = isOver
+        ? "var(--red)"
+        : percent >= 100
+          ? "var(--green)"
+          : percent >= 80
+            ? "var(--gold)"
+            : "var(--blue)";
+
+    return (
+        <div className="adm-progress">
+            <div className="adm-progress-track">
+                <div
+                    className="adm-progress-bar"
+                    style={{ width: `${Math.min(percent, 100)}%`, background: barColor }}
+                />
+            </div>
+            <span className="adm-progress-label">{count} / {total}</span>
+        </div>
     );
 }
 

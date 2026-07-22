@@ -14,6 +14,7 @@ import type {
     SchedulerFailureReason,
     SchedulerReport,
 } from "@/lib/scheduling/report";
+import { StatChip } from "./_components/StatChip";
 
 // ---------------------------------------------------------------------------
 // SchedulerReportPanel — post-run summary shown above the meetings table.
@@ -218,28 +219,6 @@ export default function SchedulerReportPanel({
                     </p>
                 )}
             </div>
-        </div>
-    );
-}
-
-function StatChip({
-    label,
-    value,
-    valueColor,
-}: {
-    label: string;
-    value: string;
-    valueColor?: string;
-}) {
-    return (
-        <div className="adm-stat-chip">
-            <span className="adm-stat-label">{label}</span>
-            <span
-                className="adm-stat-value"
-                style={valueColor ? { color: valueColor } : undefined}
-            >
-                {value}
-            </span>
         </div>
     );
 }

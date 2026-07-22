@@ -151,6 +151,9 @@
 .adm-card-sub   { font-size:13px; color:var(--t2); margin-top:3px; }
 .adm-card-row   { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
 
+/* ── Section title within a report card ── */
+.adm-chart-title { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--t3); margin-bottom:10px; }
+
 /* ── Stat chip (StatChip component) ── */
 .adm-stat-chip  { background:var(--s2); border:1px solid var(--border); border-radius:var(--r); padding:8px 14px; display:flex; flex-direction:column; gap:1px; }
 .adm-stat-label { font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:var(--t3); }

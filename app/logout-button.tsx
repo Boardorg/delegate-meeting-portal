@@ -10,9 +10,11 @@ import { useRouter } from "next/navigation";
  * is no session to log out of in that mode, so the button would be a no-op.
  * The variable is `NEXT_PUBLIC_` so Next.js inlines it into the client bundle.
  *
+ * @param {string} [className] - When provided, replaces the default inline
+ *   styling so the button can match a surrounding design (e.g. login-btn-primary).
  * @returns {JSX.Element | null} The rendered button, or null when auth is bypassed.
  */
-export default function LogoutButton() {
+export default function LogoutButton({ className }: { className?: string } = {}) {
     const router = useRouter();
     const [pending, setPending] = useState(false);
 
@@ -38,11 +40,12 @@ export default function LogoutButton() {
             type="button"
             onClick={handleLogout}
             disabled={pending || authDisabled}
-            style={{
-                padding: "6px 12px",
-                fontSize: 14,
-                cursor: "pointer",
-            }}
+            className={className}
+            style={
+                className
+                    ? undefined
+                    : { padding: "6px 12px", fontSize: 14, cursor: "pointer" }
+            }
         >
             {pending ? "Logging out…" : "Log out"}
         </button>

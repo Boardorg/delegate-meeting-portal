@@ -4,7 +4,7 @@ import { loadAttendees } from "@/lib/attendees/loader";
 import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import { MissingEventCodeError } from "@/lib/helpers/getEventCode";
 import SponsorCatalog from "@/app/components/SponsorCatalog";
-import EventCodeForm from "@/app/components/EventCodeForm";
+import LogoutButton from "@/app/logout-button";
 
 export default async function Home() {
     // The session must resolve to a known identity to view the catalog; the
@@ -36,8 +36,9 @@ export default async function Home() {
 }
 
 /**
- * Shown when a logged-in session has no event code attached.
- * Lets the user enter their event code directly.
+ * Shown when a logged-in session has no event code attached — normally only
+ * an existing session issued before /login started collecting one. Logging
+ * out and back in re-runs that flow.
  */
 function EventRequiredNotice() {
     return (
@@ -48,14 +49,14 @@ function EventRequiredNotice() {
                     Delegate Meeting Portal
                 </div>
                 <div className="login-heading">
-                    <span className="login-eyebrow">One more step</span>
-                    <h1 className="login-title">Enter your event code</h1>
+                    <span className="login-eyebrow">Event not found</span>
+                    <h1 className="login-title">Please log in again</h1>
                     <p className="login-lede">
-                        You can find this in the event email, or use the link
-                        there to skip this step next time.
+                        Your session is missing an event code. Log out
+                        and back in to enter it directly.
                     </p>
                 </div>
-                <EventCodeForm />
+                <LogoutButton className="login-btn-primary" />
             </div>
         </main>
     );

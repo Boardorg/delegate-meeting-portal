@@ -72,7 +72,7 @@ function LoginForm() {
     // Event code captured from the first visit (`?event=`, carried onto /login
     // by proxy.ts). Sent in the body of the auth requests so the server can
     // match against the right event and persist the code to the session.
-    const event = searchParams.get("event") ?? undefined;
+    const event = searchParams.get("event")?.trim() || undefined;
 
     const [step, setStep] = useState<Step>("contact");
     const [contactInput, setContactInput] = useState("");
@@ -84,7 +84,19 @@ function LoginForm() {
     const [resendSecondsLeft, setResendSecondsLeft] = useState(0);
     const [justResent, setJustResent] = useState(false);
 
+    // Whether to show the event-code field on the contact step. Most logins
+    // arrive via `?event=` and never need it; it's only revealed once the
+    // server tells us the contact has no row in the portal's own users table
+    // and can't be checked against Salesforce without one (see requestCode
+    // below).
+    const [needsEventCode, setNeedsEventCode] = useState(false);
+    const [eventCodeInput, setEventCodeInput] = useState("");
+    // The code link's event wins when present; otherwise fall back to
+    // whatever the user typed once the field is revealed.
+    const effectiveEventCode = event ?? (eventCodeInput.trim() || undefined);
+
     const codeInputRef = useRef<HTMLInputElement>(null);
+    const eventCodeInputRef = useRef<HTMLInputElement>(null);
 
     // Counts the resend cooldown down to zero once a code has been sent.
     useEffect(() => {
@@ -95,6 +107,11 @@ function LoginForm() {
         );
         return () => clearTimeout(timer);
     }, [step, resendSecondsLeft]);
+
+    // Focus the event-code field the moment it's revealed.
+    useEffect(() => {
+        if (needsEventCode) eventCodeInputRef.current?.focus();
+    }, [needsEventCode]);
 
     const trimmedContact = contactInput.trim();
     const detectedChannel = detectChannel(trimmedContact);
@@ -120,10 +137,11 @@ function LoginForm() {
         const res = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contact, channel, eventCode: event }),
+            body: JSON.stringify({ contact, channel, eventCode: effectiveEventCode }),
         });
         const data = await res.json();
         if (!res.ok) {
+            if (data.eventCodeRequired) setNeedsEventCode(true);
             setError(data.error ?? "Could not send code.");
             return false;
         }
@@ -183,7 +201,7 @@ function LoginForm() {
                     contact: sentContact,
                     channel: sentChannel,
                     code,
-                    eventCode: event,
+                    eventCode: effectiveEventCode,
                 }),
             });
             const data = await res.json();
@@ -255,13 +273,43 @@ function LoginForm() {
                                     {helperText}
                                 </div>
                             </div>
+                            {needsEventCode && (
+                                <div className="login-field">
+                                    <label
+                                        className="login-label"
+                                        htmlFor="eventCode"
+                                    >
+                                        Event code
+                                    </label>
+                                    <input
+                                        ref={eventCodeInputRef}
+                                        id="eventCode"
+                                        name="eventCode"
+                                        type="text"
+                                        autoComplete="off"
+                                        placeholder="e.g. SPRING2026"
+                                        required
+                                        className="login-input"
+                                        value={eventCodeInput}
+                                        onChange={(e) =>
+                                            setEventCodeInput(e.target.value)
+                                        }
+                                    />
+                                    <div className="login-helper detected">
+                                        We couldn&apos;t find you without an
+                                        event code.
+                                    </div>
+                                </div>
+                            )}
                             <button
                                 type="submit"
                                 className="login-btn-primary"
                                 disabled={
                                     pending ||
                                     !detectedChannel ||
-                                    trimmedContact.length < 4
+                                    trimmedContact.length < 4 ||
+                                    (needsEventCode &&
+                                        !eventCodeInput.trim())
                                 }
                             >
                                 {pending ? "Sending…" : "Send code"}

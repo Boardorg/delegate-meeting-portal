@@ -348,6 +348,7 @@ export async function runSchedulerForEvent(
         reconciled: reconciledSchedule,
         skipReasons,
         reconciledOutPairs,
+        preexistingPairs: preexisting.pairs ?? new Set(),
     });
 }
 

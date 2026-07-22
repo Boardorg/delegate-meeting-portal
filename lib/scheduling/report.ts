@@ -24,6 +24,8 @@ import { pairKey } from "./helpers";
  * The engine never attempted the pair (rejected during candidate collection):
  * - self_request: the request targets the requester themselves.
  * - not_an_attendee: requester and/or target isn't in the attendee list.
+ * - already_scheduled: the pair already meets in Cvent, so the engine treated
+ *   it as pre-booked and never considered it a candidate.
  * - no_pass_match: a valid pair that matched none of the scheduling passes'
  *   role/rank/mutuality filters (e.g. a low-interest delegate→sponsor request,
  *   or a sponsor→sponsor request), so it was never a candidate.
@@ -38,6 +40,7 @@ export type SchedulerFailureReason =
     | "company_diversity"
     | "self_request"
     | "not_an_attendee"
+    | "already_scheduled"
     | "no_pass_match"
     | "conflict_existing";
 
@@ -88,6 +91,8 @@ export interface BuildReportArgs {
     skipReasons: Map<string, SchedulerFailureReason>;
     /** Pairs the engine scheduled but reconciliation later dropped, keyed by pairKey. */
     reconciledOutPairs: Set<string>;
+    /** Pairs that already meet in Cvent, keyed by pairKey (see PreexistingSchedule.pairs). */
+    preexistingPairs: Set<string>;
 }
 
 // Interest levels the chart always shows a bar for, lowest to highest.
@@ -112,6 +117,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         reconciled,
         skipReasons,
         reconciledOutPairs,
+        preexistingPairs,
     } = args;
 
     // Name lookup for rendering the unscheduled list without extra queries.
@@ -155,6 +161,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
                     nameById,
                     reconciledOutPairs,
                     skipReasons,
+                    preexistingPairs,
                     pair,
                 }),
             });
@@ -204,10 +211,11 @@ function classifyUnscheduled(
         nameById: Map<string, string>;
         reconciledOutPairs: Set<string>;
         skipReasons: Map<string, SchedulerFailureReason>;
+        preexistingPairs: Set<string>;
         pair: string;
     },
 ): SchedulerFailureReason {
-    const { nameById, reconciledOutPairs, skipReasons, pair } = ctx;
+    const { nameById, reconciledOutPairs, skipReasons, preexistingPairs, pair } = ctx;
 
     // Placed by the engine, then dropped for conflicting with a pushed meeting.
     if (reconciledOutPairs.has(pair)) return "conflict_existing";
@@ -219,11 +227,13 @@ function classifyUnscheduled(
 
     // Never attempted — reconstruct the candidate-collection rejection. A
     // self-request is checked first as the most specific case, then whether
-    // both parties are known attendees; anything else is a valid pair that
-    // simply matched none of the scheduling passes.
+    // both parties are known attendees, then whether the pair already meets
+    // in Cvent; anything else is a valid pair that simply matched none of the
+    // scheduling passes.
     if (req.requesterId === req.targetId) return "self_request";
     if (!nameById.has(req.requesterId) || !nameById.has(req.targetId)) {
         return "not_an_attendee";
     }
+    if (preexistingPairs.has(pair)) return "already_scheduled";
     return "no_pass_match";
 }

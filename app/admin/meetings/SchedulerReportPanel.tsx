@@ -39,6 +39,7 @@ const REASON_LABEL: Record<SchedulerFailureReason, string> = {
     company_diversity: "Company diversity limit",
     self_request: "Self request",
     not_an_attendee: "Not in attendee list",
+    already_scheduled: "Already meets in Cvent",
     no_pass_match: "No matching pass",
     conflict_existing: "Conflicts with pushed meeting",
 };

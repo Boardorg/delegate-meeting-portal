@@ -449,13 +449,16 @@ export type CventExistingAppointment = {
 type RawCventAppointment = {
     start?: Date | string;
     deleted?: boolean;
+    /** e.g. "ACTIVE", "CONFIRMED", "CANCELLED" — see AppointmentStatusJson. */
+    status?: string;
     participants?: Array<{ attendee?: { contact?: { id?: string } } }>;
 };
 
 /**
  * Maps raw Cvent appointment records to the reduced CventExistingAppointment
- * shape, skipping deleted ones and any missing a start time. Handles a `start`
- * that's either a Date (SDK-parsed) or an ISO string (recovered raw body).
+ * shape, skipping deleted/cancelled ones and any missing a start time. Handles
+ * a `start` that's either a Date (SDK-parsed) or an ISO string (recovered raw
+ * body).
  *
  * @param {RawCventAppointment[]} data - Appointment records from the SDK or a recovered body.
  * @returns {CventExistingAppointment[]} The reduced appointments.
@@ -465,7 +468,7 @@ function toExistingAppointments(
 ): CventExistingAppointment[] {
     const out: CventExistingAppointment[] = [];
     for (const appt of data) {
-        if (appt.deleted || !appt.start) continue;
+        if (appt.deleted || appt.status === "CANCELLED" || !appt.start) continue;
         const participantContactIds = (appt.participants ?? [])
             .map((p) => p.attendee?.contact?.id)
             .filter((id): id is string => !!id);

@@ -9,6 +9,7 @@ import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { getEventAppointments } from "@/lib/cvent/client";
 import { pushMeetingRows, type PushSummary } from "@/lib/cvent/push";
 import { runScheduler, type PreexistingSchedule } from "@/lib/scheduling/engine";
+import { buildSchedulerReport, type SchedulerReport } from "@/lib/scheduling/report";
 import { pairKey } from "@/lib/scheduling/helpers";
 import { loadMockRequests } from "@/lib/scheduling/loader";
 import { paginate, type Page } from "@/lib/admin/pagination";
@@ -223,11 +224,12 @@ async function buildPreexistingFromCvent(
  * translation is needed in either mock or production mode.
  *
  * @param {string} eventCode - The event to schedule meetings for.
- * @returns {Promise<{ inserted: number }>} Count of newly scheduled meetings written to the DB.
+ * @returns {Promise<SchedulerReport>} A DB-friendly summary of the run: counts,
+ *   per-interest-level breakdown, and unscheduled requests with reasons.
  */
 export async function runSchedulerForEvent(
     eventCode: string,
-): Promise<{ inserted: number }> {
+): Promise<SchedulerReport> {
     const isMock = process.env.USE_MOCK === "true";
     const mockRequestsPath = `${process.cwd()}/data/mock/requests.json`;
 
@@ -264,7 +266,7 @@ export async function runSchedulerForEvent(
 
     // Run the engine. It avoids the pre-existing Cvent pairs/times; pushed DB
     // meetings are additionally guarded via post-reconciliation below.
-    const { schedule } = await runScheduler(
+    const { schedule, skipReasons } = await runScheduler(
         attendees,
         engineRequests,
         scheduleData.timeslots,
@@ -286,12 +288,23 @@ export async function runSchedulerForEvent(
     // held by a pushed meeting for either attendee. Everything else is safe to insert.
     // The engine's own ids are timestamp-suffixed (see lib/scheduling/engine.ts), so
     // they stay unique across runs and are safe to push to Cvent as-is.
-    const reconciledSchedule = schedule.filter((m) => {
-        if (pushedPairs.has(pairKey(m.attendeeA, m.attendeeB))) return false;
-        if (blockedSlots.has(`${m.attendeeA}:${m.timeslotId}`)) return false;
-        if (blockedSlots.has(`${m.attendeeB}:${m.timeslotId}`)) return false;
-        return true;
-    });
+    //
+    // Dropped pairs are also collected here as reconciledOutPairs: the report
+    // attributes these to "conflict_existing" rather than an engine skip reason.
+    const reconciledSchedule: typeof schedule = [];
+    const reconciledOutPairs = new Set<string>();
+    for (const m of schedule) {
+        const pair = pairKey(m.attendeeA, m.attendeeB);
+        const dropped =
+            pushedPairs.has(pair) ||
+            blockedSlots.has(`${m.attendeeA}:${m.timeslotId}`) ||
+            blockedSlots.has(`${m.attendeeB}:${m.timeslotId}`);
+        if (dropped) {
+            reconciledOutPairs.add(pair);
+        } else {
+            reconciledSchedule.push(m);
+        }
+    }
 
     // Replace all un-pushed portal meetings for this event with the reconciled output.
     await db.delete(scheduledMeetings).where(
@@ -325,7 +338,17 @@ export async function runSchedulerForEvent(
 
     // Revalidate the admin meetings page to reflect the new schedule.
     revalidatePath("/admin/meetings");
-    return { inserted: reconciledSchedule.length };
+
+    return buildSchedulerReport({
+        eventCode,
+        generatedAt: new Date().toISOString(),
+        attendees,
+        requests: engineRequests,
+        reconciled: reconciledSchedule,
+        skipReasons,
+        reconciledOutPairs,
+        preexistingPairs: preexisting.pairs ?? new Set(),
+    });
 }
 
 /**

@@ -14,6 +14,7 @@ import {
     findAvailableTimeslot,
     wouldViolateCompanyDiversity,
 } from "./helpers";
+import type { SchedulerFailureReason } from "./report";
 
 // Defines the configuration for each pass of the scheduling algorithm, including caps and filters.
 interface PassConfig {
@@ -188,8 +189,10 @@ export interface PreexistingSchedule {
  * @param {Timeslot[]} timeslots - The event's global, Cvent-sourced timeslots.
  * @param {Location[]} _locations - The event's locations (reserved for future location-aware assignment).
  * @param {PreexistingSchedule} [preexisting] - Pairs/times already booked in Cvent to schedule around.
- * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }>}
- *   Resolves to the flat list of newly scheduled meetings and a per-attendee breakdown.
+ * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[]; skipReasons: Map<string, SchedulerFailureReason> }>}
+ *   Resolves to the flat list of newly scheduled meetings, a per-attendee
+ *   breakdown, and — for the run report — why each attempted-but-unscheduled
+ *   pair was skipped, keyed by canonical pairKey.
  */
 export async function runScheduler(
 	attendees: Attendee[],
@@ -197,7 +200,11 @@ export async function runScheduler(
 	timeslots: Timeslot[],
 	_locations: Location[],
 	preexisting: PreexistingSchedule = {},
-): Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }> {
+): Promise<{
+	schedule: ScheduledMeeting[];
+	attendeeSchedules: AttendeeSchedule[];
+	skipReasons: Map<string, SchedulerFailureReason>;
+}> {
 
 	// Index attendees by Salesforce ID for lookup throughout the algorithm.
 	const attendeeMap = new Map(attendees.map(a => [a.salesforceId, a]));
@@ -230,6 +237,11 @@ export async function runScheduler(
 
 	// Auto-increment counter for generating unique meeting IDs.
 	let meetingCounter = 1;
+
+	// Records why each attempted pair was skipped, keyed by canonical pairKey.
+	// The run report uses this to explain unscheduled requests. Later passes
+	// overwrite earlier ones so the most-progressed reason wins.
+	const skipReasons = new Map<string, SchedulerFailureReason>();
 
 	// Loop through each pass in order, applying its specific filters and caps.
 	for (const pass of PASSES) {
@@ -306,20 +318,20 @@ export async function runScheduler(
 			const targetCap    = Math.min(getCap(target,    pass), countAvailable(targetBusy)    + targetDayCount);
 
 			// Skip if either attendee has already reached their cumulative cap for this pass.
-			if (requesterDayCount >= requesterCap) continue;
-			if (targetDayCount    >= targetCap)    continue;
+			if (requesterDayCount >= requesterCap) { skipReasons.set(key, "cap_reached"); continue; }
+			if (targetDayCount    >= targetCap)    { skipReasons.set(key, "cap_reached"); continue; }
 
 			// Skip if this meeting would violate the company diversity rule for either attendee.
 			const requesterMaxSame = requester.scheduling.maxSameCompanyMeetings ?? 2;
 			const targetMaxSame    = target.scheduling.maxSameCompanyMeetings    ?? 2;
-			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.requesterId, req.targetId, requesterMaxSame)) continue;
-			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.targetId, req.requesterId, targetMaxSame))    continue;
+			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.requesterId, req.targetId, requesterMaxSame)) { skipReasons.set(key, "company_diversity"); continue; }
+			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.targetId, req.requesterId, targetMaxSame))    { skipReasons.set(key, "company_diversity"); continue; }
 
 			// Find a timeslot on this day where both attendees are free and capacity remains.
 			const timeslot = findAvailableTimeslot(timeslots, day, requesterBusy, targetBusy, timeslotRemaining);
 
 			// Skip this pair if no usable timeslot exists.
-			if (!timeslot) continue;
+			if (!timeslot) { skipReasons.set(key, "no_availability"); continue; }
 
 			// Book the timeslot: mark both attendees busy at its start time and draw down capacity.
 			requesterBusy.add(timeslot.startTime);
@@ -375,5 +387,5 @@ export async function runScheduler(
 			.sort((x, y) => startTimeOf(x).localeCompare(startTimeOf(y))),
 	}));
 
-	return { schedule: allMeetings, attendeeSchedules };
+	return { schedule: allMeetings, attendeeSchedules, skipReasons };
 }

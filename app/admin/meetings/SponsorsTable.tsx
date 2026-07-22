@@ -14,12 +14,14 @@ import { useDebounce } from "use-debounce";
 import { SortableHeaders } from "../_components/SortableHeaders";
 import { TablePagination } from "../_components/TablePagination";
 import { TierPill } from "./_components/TierPill";
+import SchedulerReportPanel from "./SchedulerReportPanel";
 import { pushAllForEvent, runSchedulerForEvent } from "./actions";
 import type {
     SponsorRow,
     SponsorSortField,
     SponsorsPage,
 } from "./actions";
+import type { SchedulerReport } from "@/lib/scheduling/report";
 
 // ---------------------------------------------------------------------------
 // SponsorsTable — sponsor list for /admin/meetings.
@@ -53,6 +55,7 @@ export default function SponsorsTable({
     const [runError, setRunError] = useState<string | null>(null);
     const [showPushAllModal, setShowPushAllModal] = useState(false);
     const [pushAllError, setPushAllError] = useState<string | null>(null);
+    const [report, setReport] = useState<SchedulerReport | null>(null);
     const [isPending, startTransition] = useTransition();
 
     // Handler for running the scheduling engine for the selected event.
@@ -61,7 +64,8 @@ export default function SponsorsTable({
         startTransition(async () => {
             try {
                 setRunError(null);
-                await runSchedulerForEvent(selectedEvent);
+                const result = await runSchedulerForEvent(selectedEvent);
+                setReport(result);
                 setShowRunModal(false);
                 router.refresh();
             } catch (e) {
@@ -206,14 +210,14 @@ export default function SponsorsTable({
                 />
                 <button
                     className="adm-new-btn"
-                    disabled={!selectedEvent}
+                    disabled={!selectedEvent || isPending}
                     onClick={() => { setRunError(null); setShowRunModal(true); }}
                 >
-                    Run Scheduling Engine
+                    {isPending ? "Running…" : "Run Scheduling Engine"}
                 </button>
                 <button
                     className="adm-new-btn"
-                    disabled={!selectedEvent}
+                    disabled={!selectedEvent || isPending}
                     onClick={() => { setPushAllError(null); setShowPushAllModal(true); }}
                 >
                     Push All to Cvent
@@ -237,6 +241,13 @@ export default function SponsorsTable({
                     error={pushAllError}
                     onConfirm={handlePushAll}
                     onCancel={() => setShowPushAllModal(false)}
+                />
+            )}
+
+            {report && (
+                <SchedulerReportPanel
+                    report={report}
+                    onDismiss={() => setReport(null)}
                 />
             )}
 

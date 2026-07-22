@@ -14,6 +14,7 @@ const COOKIE_OPTS = {
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
+    secure: process.env.NODE_ENV === "production",
 } as const;
 
 /**

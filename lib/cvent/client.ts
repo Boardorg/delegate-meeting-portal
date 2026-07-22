@@ -480,6 +480,74 @@ function toExistingAppointments(
     return out;
 }
 
+/** One page of existing-appointments data, reduced to what we need plus the next page token. */
+type ExistingAppointmentsPage = {
+    data: CventExistingAppointment[];
+    nextToken?: string;
+};
+
+/**
+ * Parses a raw listAppointments response body (as delivered by Cvent, before
+ * any SDK validation) into one page's worth of existing appointments. Shared
+ * by the success path and the validation-error recovery path in
+ * fetchExistingAppointmentsPage, since both need to read the same wire shape.
+ *
+ * @param {unknown} parsed - The JSON-parsed response body.
+ * @returns {ExistingAppointmentsPage} The page's appointments and next token, if any.
+ */
+function toExistingAppointmentsPage(parsed: unknown): ExistingAppointmentsPage {
+    const body = parsed as {
+        data?: RawCventAppointment[];
+        paging?: { nextToken?: string };
+    };
+    return {
+        data: toExistingAppointments(body.data ?? []),
+        nextToken: body.paging?.nextToken,
+    };
+}
+
+/**
+ * Fetches one page of an event's existing appointments for a given pagination
+ * token. Driven manually (an explicit token per call) rather than through the
+ * SDK's own for-await pagination helper: that helper's generator throws and
+ * dies on the first page whose validation fails, which loses every later page
+ * too. Calling the operation directly per page keeps each page independent,
+ * so a validation failure on one page doesn't stop us from still fetching the
+ * next. Mirrors fetchAppointmentsPage above.
+ *
+ * @param {string} eventId - The Cvent appointment-event id.
+ * @param {string | undefined} token - The page token, or undefined for the first page.
+ * @returns {Promise<ExistingAppointmentsPage>} That page's appointments and next token, if any.
+ */
+async function fetchExistingAppointmentsPage(
+    eventId: string,
+    token: string | undefined,
+): Promise<ExistingAppointmentsPage> {
+    try {
+        const page = await getClient().appointments.listAppointments({
+            filter: `appointmentEvent.id eq '${eventId}'`,
+            ...(token ? { token } : {}),
+        });
+        return {
+            data: toExistingAppointments(page.result.data ?? []),
+            nextToken: page.result.paging.nextToken,
+        };
+    } catch (err) {
+        // Cvent list responses can omit fields the SDK marks required (e.g.
+        // `type`), making it throw on an otherwise-successful 2xx. Recover the
+        // page's records from the raw body; re-throw genuine failures.
+        const body = recoverableResponseBody(err);
+        if (body) {
+            try {
+                return toExistingAppointmentsPage(JSON.parse(body));
+            } catch {
+                // Body wasn't parseable JSON — fall through and re-throw.
+            }
+        }
+        throw err;
+    }
+}
+
 /**
  * Lists the event's existing Cvent appointments (start time + participant
  * contact ids), following pagination to the end. The scheduling engine uses
@@ -497,30 +565,14 @@ export const getEventAppointments = cache(
 
         const eventId = await getAppointmentEventId(eventCode);
         const out: CventExistingAppointment[] = [];
-        try {
-            const pages = await getClient().appointments.listAppointments({
-                filter: `appointmentEvent.id eq '${eventId}'`,
-            });
-            for await (const page of pages) {
-                out.push(...toExistingAppointments(page.result.data ?? []));
-            }
-        } catch (err) {
-            // Cvent list responses can omit fields the SDK marks required (e.g.
-            // `type`), making it throw on an otherwise-successful 2xx. Recover the
-            // page's records from the raw body; re-throw genuine failures.
-            // (Best-effort: recovers the page that failed validation; any pages
-            // already read are kept.)
-            const body = recoverableResponseBody(err);
-            if (body === null) throw err;
-            try {
-                const parsed = JSON.parse(body) as {
-                    data?: RawCventAppointment[];
-                };
-                out.push(...toExistingAppointments(parsed.data ?? []));
-            } catch {
-                throw err;
-            }
-        }
+        let token: string | undefined;
+
+        do {
+            const page = await fetchExistingAppointmentsPage(eventId, token);
+            out.push(...page.data);
+            token = page.nextToken;
+        } while (token);
+
         return out;
     },
 );

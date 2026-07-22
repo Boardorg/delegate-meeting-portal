@@ -225,15 +225,15 @@ function classifyUnscheduled(
     const skip = skipReasons.get(pair);
     if (skip) return skip;
 
-    // Never attempted — reconstruct the candidate-collection rejection. A
-    // self-request is checked first as the most specific case, then whether
-    // both parties are known attendees, then whether the pair already meets
-    // in Cvent; anything else is a valid pair that simply matched none of the
+    // Never attempted — reconstruct the candidate-collection rejection, in the
+    // same order the engine checks them: whether both parties are known
+    // attendees, then self-request, then whether the pair already meets in
+    // Cvent; anything else is a valid pair that simply matched none of the
     // scheduling passes.
-    if (req.requesterId === req.targetId) return "self_request";
     if (!nameById.has(req.requesterId) || !nameById.has(req.targetId)) {
         return "not_an_attendee";
     }
+    if (req.requesterId === req.targetId) return "self_request";
     if (preexistingPairs.has(pair)) return "already_scheduled";
     return "no_pass_match";
 }

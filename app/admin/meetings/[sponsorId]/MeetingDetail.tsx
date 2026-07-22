@@ -21,6 +21,7 @@ import {
     type SlotOption,
     type SyncStatus,
 } from "./actions";
+import { StatChip } from "../_components/StatChip";
 import { TierPill } from "../_components/TierPill";
 
 // ---------------------------------------------------------------------------
@@ -832,17 +833,6 @@ function SourceChip({ source }: { source: MeetingSource }) {
         <span className={`adm-chip ${source === "portal" ? "adm-chip-portal" : "adm-chip-cvent"}`}>
             {source === "portal" ? "Portal" : "Cvent"}
         </span>
-    );
-}
-
-function StatChip({ label, value, valueColor }: { label: string; value: string; valueColor?: string; }) {
-    return (
-        <div className="adm-stat-chip">
-            <span className="adm-stat-label">{label}</span>
-            <span className="adm-stat-value" style={valueColor ? { color: valueColor } : undefined}>
-                {value}
-            </span>
-        </div>
     );
 }
 

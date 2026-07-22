@@ -2,7 +2,8 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { getCurrentUser } from "@/lib/auth/currentUser";
-import { listEvents } from "@/lib/events/settings";
+import { listEvents, resolveActiveEventCode } from "@/lib/events/settings";
+import { SPOOF_SPONSOR_COOKIE } from "@/lib/auth/session";
 import type { EventSettingsRow, User } from "@/lib/db/schema";
 
 // ---------------------------------------------------------------------------
@@ -19,9 +20,6 @@ import type { EventSettingsRow, User } from "@/lib/db/schema";
 // React's `cache`, so repeated reads in one render share the work.
 // ---------------------------------------------------------------------------
 
-/** Cookie holding the admin's selected event code. */
-export const ACTIVE_EVENT_COOKIE = "admin_event";
-
 /** Everything the admin shell needs about "who + which event" in one shape. */
 export type AdminState = {
     /** The logged-in admin user (null when auth is disabled / no row). */
@@ -30,6 +28,11 @@ export type AdminState = {
     events: EventSettingsRow[];
     /** The active event's code, or null when there are no events. */
     activeEventCode: string | null;
+    /**
+     * Testing-mode only: the Salesforce id of the sponsor the admin is spoofing
+     * on the frontend, or null when none is chosen. Ignored outside testing mode.
+     */
+    spoofSponsorId: string | null;
 };
 
 /**
@@ -43,19 +46,16 @@ export type AdminState = {
  * @returns {Promise<AdminState>} The merged global state.
  */
 export const getAdminState = cache(async (): Promise<AdminState> => {
-    const [user, events, cookieStore] = await Promise.all([
+    const [user, events, activeEventCode, cookieStore] = await Promise.all([
         getCurrentUser(),
         listEvents(),
+        resolveActiveEventCode(),
         cookies(),
     ]);
 
-    const cookieCode = cookieStore.get(ACTIVE_EVENT_COOKIE)?.value;
-    const activeEventCode =
-        (cookieCode && events.some((e) => e.code === cookieCode)
-            ? cookieCode
-            : events[0]?.code) ?? null;
+    const spoofSponsorId = cookieStore.get(SPOOF_SPONSOR_COOKIE)?.value ?? null;
 
-    return { user, events, activeEventCode };
+    return { user, events, activeEventCode, spoofSponsorId };
 });
 
 /**

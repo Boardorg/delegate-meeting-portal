@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Syne, DM_Sans, DM_Mono } from "next/font/google";
 import "./globals.css";
+import TestingBar from "@/app/components/TestingBar";
 
 const syne = Syne({
     variable: "--font-syne",
@@ -35,7 +36,10 @@ export default function RootLayout({
             lang="en"
             className={`${syne.variable} ${dmSans.variable} ${dmMono.variable}`}
         >
-            <body>{children}</body>
+            <body>
+                <TestingBar />
+                {children}
+            </body>
         </html>
     );
 }

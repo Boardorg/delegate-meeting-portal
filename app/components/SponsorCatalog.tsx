@@ -549,7 +549,11 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
 
     // ── Handlers ──
 
-    // Load this sponsor's saved requests once.
+    // Load the current sponsor's saved requests. Keyed on the sponsor id so it
+    // re-fetches when the identity changes without a reload — e.g. the
+    // testing-mode spoof-sponsor switch, where router.refresh() swaps in a new
+    // `currentSponsor` prop but doesn't remount this component. The `active`
+    // guard drops a stale in-flight response if the sponsor changes again mid-fetch.
     useEffect(() => {
         let active = true;
         fetch("/api/requests")
@@ -561,7 +565,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
         return () => {
             active = false;
         };
-    }, []);
+    }, [currentSponsor.salesforceId]);
 
     // Upsert a request for a delegate. `targetId` is the unique key per sponsor
     // (one request per delegate), so a save replaces any existing entry for that

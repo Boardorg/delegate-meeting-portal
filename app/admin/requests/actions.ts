@@ -58,23 +58,6 @@ function rankError(rank: unknown): string | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the distinct event codes present in the requests table, sorted, for
- * the page's event-picker dropdown.
- *
- * @returns {Promise<string[]>} Unique event codes.
- */
-export async function listRequestEventCodes(): Promise<string[]> {
-    if (process.env.USE_MOCK === "true") {
-        return ["PARTY1999"];
-    }
-    const rows = await db
-        .selectDistinct({ eventCode: meetingRequests.eventCode })
-        .from(meetingRequests)
-        .orderBy(meetingRequests.eventCode);
-    return rows.map((r) => r.eventCode);
-}
-
-/**
  * One enriched request row: stored fields plus the resolved attendee names.
  * Names come from Salesforce (not the DB), so they're attached here.
  */

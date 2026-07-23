@@ -10,10 +10,12 @@
  * Item shapes (note: the SDK parses `startTime`/`endTime` into `Date` objects):
  *   - CventLocation:      id, name, parentLocation?, capacity?
  *   - CventAvailableTime: id, startTime, endTime, type, appointmentType, location?, availableAppointments?
+ *   - CventAppointmentEvent: id, timezone, start, end, ...
  */
 export type {
     LocationJson as CventLocation,
     AvailableTimeJson as CventAvailableTime,
+    AppointmentEvent as CventAppointmentEvent,
     LocationsPaginatedResponse,
     AvailableTimesPaginatedResponse,
 } from "@cvent/sdk/models/components";

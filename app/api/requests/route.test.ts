@@ -38,7 +38,8 @@ import { meetingRequests } from '@/lib/db/schema';
  * this, so the other fields use placeholder values.
  */
 const mockIdentity: ResolvedIdentity = {
-    phone: '+15555550101',
+    contact: '+15555550101',
+    channel: 'sms',
     role: 'sponsor',
     source: 'salesforce',
     salesforceId: 'sf-requester-001',

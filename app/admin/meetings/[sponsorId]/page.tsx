@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getActiveEventCode } from "@/lib/admin/globalState";
 import { getMeetingDetail } from "./actions";
 import MeetingDetail from "./MeetingDetail";
 
@@ -18,19 +19,17 @@ import MeetingDetail from "./MeetingDetail";
  */
 export default async function SponsorMeetingsPage({
     params,
-    searchParams,
 }: {
     params: Promise<{ sponsorId: string }>;
-    searchParams: Promise<{ event?: string }>;
 }) {
-    // Get the sponsorId from the route parameters and the event code from the query parameters.
+    // Get the sponsorId from the route params; the event is global (cookie-backed).
     const { sponsorId } = await params;
-    const { event } = await searchParams;
+    const event = await getActiveEventCode();
 
     // Decode the sponsorId since it is URL-encoded in the route.
     const decodedId = decodeURIComponent(sponsorId);
 
-    // Validate the event code parameter. If it's missing or invalid, return a 404 page.
+    // No active event → nothing to show.
     if (!event) notFound();
 
     // Fetch the meeting detail data for the sponsor and event.
@@ -48,6 +47,7 @@ export default async function SponsorMeetingsPage({
             sponsor={detail.sponsor}
             meetings={detail.meetings}
             eventCode={event}
+            timezone={detail.timezone}
         />
     );
 }

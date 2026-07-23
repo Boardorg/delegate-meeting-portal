@@ -1,5 +1,10 @@
 import "server-only";
-import { getTimeslotsByEvent, getLocationsByEvent } from "@/lib/cvent/client";
+import { cache } from "react";
+import {
+    getTimeslotsByEvent,
+    getLocationsByEvent,
+    getAppointmentEvent,
+} from "@/lib/cvent/client";
 import type { CventAvailableTime, CventLocation } from "@/lib/cvent/types";
 import type { Timeslot, Location } from "@/types";
 
@@ -46,6 +51,7 @@ export function toTimeslots(times: CventAvailableTime[]): Timeslot[] {
             endTime: t.endTime.toISOString(),
             capacity: normalizeCapacity(t.availableAppointments),
             locationId: t.location?.id ?? null,
+            appointmentTypeId: t.appointmentType.id,
         };
     });
 }
@@ -71,56 +77,64 @@ export type EventScheduleData = {
     locations: Location[];
     timeslotById: Map<string, Timeslot>;
     locationById: Map<string, Location>;
+    /** The event's real IANA timezone (e.g. "America/New_York"), for display formatting. */
+    timezone: string;
 };
-
-// Per-process memo so multiple read actions in one render don't each re-walk
-// Cvent pagination. Keyed by event code. In mock mode the underlying calls are
-// cheap file reads; this mainly spares live API round-trips.
-const cache = new Map<string, EventScheduleData>();
 
 /**
  * Loads and maps an event's timeslots and locations from Cvent (or mock
  * fixtures when USE_MOCK=true), returning them alongside id-keyed lookup maps.
- * Results are memoized per event code for the life of the process.
+ * Request-memoized (like getEventAttendees) so multiple read actions in one
+ * render share a single Cvent round trip. Memoization intentionally ends with
+ * the request — availability/locations/types can change in Cvent at any
+ * time, so nothing here may persist across requests, or it'd keep serving
+ * stale data after every such change until the server process restarted.
  *
  * @param {string} eventCode - The event to load availability for.
  * @returns {Promise<EventScheduleData>} Timeslots, locations, and their lookup maps.
  */
-export async function loadEventScheduleData(
-    eventCode: string,
-): Promise<EventScheduleData> {
-    const cached = cache.get(eventCode);
-    if (cached) return cached;
+export const loadEventScheduleData = cache(
+    async (eventCode: string): Promise<EventScheduleData> => {
+        let times: CventAvailableTime[];
+        let locations: CventLocation[];
+        let timezone: string;
+        try {
+            let appointmentEvent: { timezone?: string };
+            [times, locations, appointmentEvent] = await Promise.all([
+                getTimeslotsByEvent(eventCode),
+                getLocationsByEvent(eventCode),
+                getAppointmentEvent(eventCode),
+            ]);
+            // Appointment events should always carry their configured timezone;
+            // UTC is a defensive fallback, not an expected case.
+            timezone = appointmentEvent.timezone ?? "UTC";
+        } catch (err) {
+            // The live Cvent integration is stubbed until we have real credentials.
+            // When it's unavailable (missing creds, API/auth error), degrade to empty
+            // availability instead of crashing every read path that resolves times or
+            // locations. Mirrors the pre-integration state where availability was empty
+            // with USE_MOCK=false.
+            console.warn(
+                `loadEventScheduleData: Cvent unavailable for event "${eventCode}"; ` +
+                    `returning empty availability. ${err instanceof Error ? err.message : String(err)}`,
+            );
+            return {
+                timeslots: [],
+                locations: [],
+                timeslotById: new Map(),
+                locationById: new Map(),
+                timezone: "UTC",
+            };
+        }
 
-    let times: CventAvailableTime[];
-    let locations: CventLocation[];
-    try {
-        [times, locations] = await Promise.all([
-            getTimeslotsByEvent(eventCode),
-            getLocationsByEvent(eventCode),
-        ]);
-    } catch (err) {
-        // The live Cvent integration is stubbed until we have real credentials.
-        // When it's unavailable (missing creds, API/auth error), degrade to empty
-        // availability instead of crashing every read path that resolves times or
-        // locations. Mirrors the pre-integration state where availability was empty
-        // with USE_MOCK=false. Not cached, so a working Cvent connection recovers.
-        console.warn(
-            `loadEventScheduleData: Cvent unavailable for event "${eventCode}"; ` +
-                `returning empty availability. ${err instanceof Error ? err.message : String(err)}`,
-        );
-        return { timeslots: [], locations: [], timeslotById: new Map(), locationById: new Map() };
-    }
-
-    const timeslots = toTimeslots(times);
-    const mappedLocations = toLocations(locations);
-    const data: EventScheduleData = {
-        timeslots,
-        locations: mappedLocations,
-        timeslotById: new Map(timeslots.map((t) => [t.id, t])),
-        locationById: new Map(mappedLocations.map((l) => [l.id, l])),
-    };
-
-    cache.set(eventCode, data);
-    return data;
-}
+        const timeslots = toTimeslots(times);
+        const mappedLocations = toLocations(locations);
+        return {
+            timeslots,
+            locations: mappedLocations,
+            timeslotById: new Map(timeslots.map((t) => [t.id, t])),
+            locationById: new Map(mappedLocations.map((l) => [l.id, l])),
+            timezone,
+        };
+    },
+);

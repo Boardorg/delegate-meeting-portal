@@ -1,6 +1,6 @@
 import { emptyPage } from "@/lib/admin/pagination";
+import { getActiveEventCode } from "@/lib/admin/globalState";
 import {
-    listRequestEventCodes,
     listRequestsPage,
     type RequestRow,
     type RequestSortField,
@@ -35,7 +35,6 @@ export default async function AdminRequestsPage({
     searchParams,
 }: {
     searchParams: Promise<{
-        event?: string;
         q?: string;
         sort?: string;
         dir?: string;
@@ -43,12 +42,9 @@ export default async function AdminRequestsPage({
     }>;
 }) {
     const sp = await searchParams;
-    const eventCodes = await listRequestEventCodes();
 
-    const selectedEvent =
-        sp.event && eventCodes.includes(sp.event)
-            ? sp.event
-            : (eventCodes[0] ?? null);
+    // The active event is global (cookie-backed), shared with the sidebar switcher.
+    const selectedEvent = await getActiveEventCode();
 
     const sortField: RequestSortField = SORT_FIELDS.includes(
         sp.sort as RequestSortField,
@@ -71,7 +67,6 @@ export default async function AdminRequestsPage({
 
     return (
         <RequestsTable
-            eventCodes={eventCodes}
             selectedEvent={selectedEvent}
             query={query}
             sortField={sortField}

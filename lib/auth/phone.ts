@@ -4,11 +4,11 @@
 // Two distinct operations on a user-entered phone string:
 //
 //   normalizePhone(input)
-//     Cleans the formatting (spaces, dashes, parens) but does NOT add a
-//     country code. A leading "+" is preserved if present. This is the form
-//     used for DB storage and lookup — what the admin types is what's
-//     stored and what login compares against, so consistency wins over
-//     guessing a country code.
+//     Cleans the formatting (spaces, dashes, parens) and strips a redundant
+//     US/Canada country code down to the bare 10-digit local number. "+1..."
+//     and "1..." forms collapse to the same value as the plain 10-digit
+//     form. This is the form used for DB storage and lookup, so any of the
+//     three input styles match the same stored user.
 //
 //   toE164(input)
 //     Returns the E.164 form Twilio Verify requires. Same cleaning as
@@ -36,11 +36,19 @@ function parsePhone(input: string): { hasPlus: boolean; digits: string } | null 
     const trimmed = input.trim();
     if (!trimmed) return null;
 
-    const hasPlus = trimmed.startsWith("+");
-    const digits = trimmed.replace(/\D/g, "");
+    let hasPlus = trimmed.startsWith("+");
+    let digits = trimmed.replace(/\D/g, "");
 
     // E.164 allows 8–15 digits; be lenient on the low end but reject obvious junk.
     if (digits.length < 7 || digits.length > 15) return null;
+
+    // Collapse US/Canada country code to the bare 10-digit local number.
+    // This makes "+15555550123" and "15555550123" parse the same as 
+    // "5555550123" the DB stores.
+    if (digits.length === 11 && digits.startsWith("1")) {
+        digits = digits.slice(1);
+        hasPlus = false;
+    }
 
     return { hasPlus, digits };
 }
@@ -51,7 +59,8 @@ function parsePhone(input: string): { hasPlus: boolean; digits: string } | null 
  * login flow normalizes the same way for matching.
  *
  * Behavior:
- *  - "+1 (555) 555-0123" → "+15555550123"
+ *  - "+1 (555) 555-0123" → "5555550123" (redundant US country code stripped)
+ *  - "15555550123"       → "5555550123" (same, without the "+")
  *  - "5555550123"        → "5555550123" (no auto-prepending of country code)
  *  - "abc"               → null
  *
@@ -71,6 +80,7 @@ export function normalizePhone(input: string): string | null {
  * Behavior:
  *  - "+44 7700 900123" → "+447700900123"
  *  - "5555550123"      → "+15555550123"
+ *  - "15555550123"     → "+15555550123"
  *  - "abc"             → null
  *
  * @param {string} input - Raw user input.

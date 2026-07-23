@@ -1,5 +1,6 @@
 import "server-only";
 import twilio, { type Twilio } from "twilio";
+import type { Channel } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Module configuration and constants
@@ -48,38 +49,44 @@ function getClient(): Twilio {
 // ---------------------------------------------------------------------------
 
 /**
- * Asks Twilio Verify to send an SMS one-time code to the given phone number.
- * Twilio owns code generation, expiration, and per-number rate limiting — we
- * never see or store the code itself.
+ * Asks Twilio Verify to send a one-time code to the given phone number or
+ * email address. Twilio owns code generation, expiration, and per-recipient
+ * rate limiting — we never see or store the code itself.
  *
- * @param {string} phone - Target phone number in E.164 format (e.g. "+15555550123").
+ * @param {string} to - Target phone number (E.164, e.g. "+15555550123") or email address.
+ * @param {Channel} channel - "sms" for a phone number, "email" for an email address.
  * @returns {Promise<void>}
  */
-export async function sendVerificationCode(phone: string): Promise<void> {
+export async function sendVerificationCode(
+    to: string,
+    channel: Channel,
+): Promise<void> {
     const { verifyServiceSid } = readEnv();
     await getClient()
         .verify.v2.services(verifyServiceSid)
-        .verifications.create({ to: phone, channel: "sms" });
+        .verifications.create({ to, channel });
 }
 
 /**
- * Submits a user-entered code to Twilio Verify for the given phone number and
- * returns whether it was accepted. Twilio enforces attempt limits and code
- * expiry on its end; a "false" result here covers all rejection reasons.
+ * Submits a user-entered code to Twilio Verify for the given phone number or
+ * email address and returns whether it was accepted. Twilio enforces attempt
+ * limits and code expiry on its end; a "false" result here covers all
+ * rejection reasons. Twilio infers the channel from `to`, so no channel
+ * argument is needed here.
  *
- * @param {string} phone - The phone number the code was sent to, in E.164.
+ * @param {string} to - The phone number (E.164) or email address the code was sent to.
  * @param {string} code - The code entered by the user.
  * @returns {Promise<boolean>} True if Twilio reports status "approved".
  */
 export async function checkVerificationCode(
-    phone: string,
+    to: string,
     code: string,
 ): Promise<boolean> {
     const { verifyServiceSid } = readEnv();
     try {
         const check = await getClient()
             .verify.v2.services(verifyServiceSid)
-            .verificationChecks.create({ to: phone, code });
+            .verificationChecks.create({ to, code });
         return check.status === "approved";
     } catch {
         // Twilio raises on expired/exceeded-attempts verifications; treat as

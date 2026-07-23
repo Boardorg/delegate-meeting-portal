@@ -14,12 +14,14 @@ import { useDebounce } from "use-debounce";
 import { SortableHeaders } from "../_components/SortableHeaders";
 import { TablePagination } from "../_components/TablePagination";
 import { TierPill } from "./_components/TierPill";
+import SchedulerReportPanel from "./SchedulerReportPanel";
 import { pushAllForEvent, runSchedulerForEvent } from "./actions";
 import type {
     SponsorRow,
     SponsorSortField,
     SponsorsPage,
 } from "./actions";
+import type { SchedulerReport } from "@/lib/scheduling/report";
 
 // ---------------------------------------------------------------------------
 // SponsorsTable — sponsor list for /admin/meetings.
@@ -30,7 +32,6 @@ import type {
 // ---------------------------------------------------------------------------
 
 type Props = {
-    eventCodes: string[];
     selectedEvent: string | null;
     query: string;
     sortField: SponsorSortField;
@@ -38,10 +39,9 @@ type Props = {
     data: SponsorsPage;
 };
 
-const COL_COUNT = 8;
+const COL_COUNT = 7;
 
 export default function SponsorsTable({
-    eventCodes,
     selectedEvent,
     query,
     sortField,
@@ -55,6 +55,7 @@ export default function SponsorsTable({
     const [runError, setRunError] = useState<string | null>(null);
     const [showPushAllModal, setShowPushAllModal] = useState(false);
     const [pushAllError, setPushAllError] = useState<string | null>(null);
+    const [report, setReport] = useState<SchedulerReport | null>(null);
     const [isPending, startTransition] = useTransition();
 
     // Handler for running the scheduling engine for the selected event.
@@ -63,7 +64,8 @@ export default function SponsorsTable({
         startTransition(async () => {
             try {
                 setRunError(null);
-                await runSchedulerForEvent(selectedEvent);
+                const result = await runSchedulerForEvent(selectedEvent);
+                setReport(result);
                 setShowRunModal(false);
                 router.refresh();
             } catch (e) {
@@ -89,7 +91,6 @@ export default function SponsorsTable({
 
     // Generates a URL with the given query parameter overrides.
     function hrefWith(overrides: {
-        event?: string | null;
         q?: string;
         sort?: SponsorSortField;
         dir?: "asc" | "desc";
@@ -97,11 +98,6 @@ export default function SponsorsTable({
     }): string {
         // Get current parameters from the URL.
         const params = new URLSearchParams();
-
-        // Include the event parameter if it's defined.
-        const event =
-            overrides.event !== undefined ? overrides.event : selectedEvent;
-        if (event) params.set("event", event);
 
         // For search, only include the parameter if it's non-empty after trimming.
         const q = overrides.q !== undefined ? overrides.q : query;
@@ -150,7 +146,6 @@ export default function SponsorsTable({
             { id: "tier", header: "Tier" },
             { id: "contracted", header: "Contracted", enableSorting: false },
             { id: "bonus", header: "Bonus", enableSorting: false },
-            { id: "total", header: "Total", enableSorting: false },
             { id: "requestCount", header: "Requests" },
             { id: "scheduledCount", header: "Scheduled" },
         ],
@@ -192,15 +187,10 @@ export default function SponsorsTable({
     });
 
     // Handler for changing the selected event.
-    function changeEvent(code: string) {
-        router.push(hrefWith({ event: code, page: 1 }));
-    }
-
-    // Handler for navigating to a sponsor's detail page.
+    // Handler for navigating to a sponsor's detail page. The active event is
+    // global (cookie-backed), so no event param is needed on the URL.
     function goToSponsor(salesforceId: string) {
-        const base = `/admin/meetings/${encodeURIComponent(salesforceId)}`;
-        const event = selectedEvent ? `?event=${encodeURIComponent(selectedEvent)}` : "";
-        router.push(`${base}${event}`);
+        router.push(`/admin/meetings/${encodeURIComponent(salesforceId)}`);
     }
 
     // Render the table with toolbar and modals.
@@ -211,25 +201,6 @@ export default function SponsorsTable({
             </div>
 
             <div className="adm-toolbar">
-                <label className="adm-field">
-                    <span className="adm-field-label">Event</span>
-                    <select
-                        className="adm-input adm-select"
-                        value={selectedEvent ?? ""}
-                        onChange={(e) => changeEvent(e.target.value)}
-                        disabled={eventCodes.length === 0}
-                    >
-                        {eventCodes.length === 0 ? (
-                            <option value="">No events</option>
-                        ) : (
-                            eventCodes.map((code) => (
-                                <option key={code} value={code}>
-                                    {code}
-                                </option>
-                            ))
-                        )}
-                    </select>
-                </label>
                 <input
                     type="search"
                     className="adm-input adm-search"
@@ -239,14 +210,14 @@ export default function SponsorsTable({
                 />
                 <button
                     className="adm-new-btn"
-                    disabled={!selectedEvent}
+                    disabled={!selectedEvent || isPending}
                     onClick={() => { setRunError(null); setShowRunModal(true); }}
                 >
-                    Run Scheduling Engine
+                    {isPending ? "Running…" : "Run Scheduling Engine"}
                 </button>
                 <button
                     className="adm-new-btn"
-                    disabled={!selectedEvent}
+                    disabled={!selectedEvent || isPending}
                     onClick={() => { setPushAllError(null); setShowPushAllModal(true); }}
                 >
                     Push All to Cvent
@@ -270,6 +241,13 @@ export default function SponsorsTable({
                     error={pushAllError}
                     onConfirm={handlePushAll}
                     onCancel={() => setShowPushAllModal(false)}
+                />
+            )}
+
+            {report && (
+                <SchedulerReportPanel
+                    report={report}
+                    onDismiss={() => setReport(null)}
                 />
             )}
 
@@ -319,21 +297,13 @@ function SponsorRow({
     row: SponsorRow;
     onView: () => void;
 }) {
-    // Calculate the total meetings (contracted + bonus) and the percentage of scheduled meetings for the progress bar.
+    // Calculate the total meetings (contracted + bonus) for both progress bars.
     const total = row.contracted + row.bonus;
+    const requestPercent = total > 0 ? Math.round((row.requestCount / total) * 100) : 0;
     const scheduledPercent = total > 0 ? Math.round((row.scheduledCount / total) * 100) : 0;
 
-    // Check if the sponsor is over their meeting target.
-    const isOver = row.scheduledCount > total;
-    const barColor = isOver
-        ? "var(--red)"
-        : scheduledPercent >= 100
-          ? "var(--green)"
-          : scheduledPercent >= 85
-            ? "var(--gold)"
-            : "var(--blue)";
-
-    // Render the sponsor row with company, contact, tier, contracted/bonus totals, request/scheduled counts, and a progress bar for scheduled meetings.
+    // Render the sponsor row with company, contact, tier, contracted/bonus totals, and
+    // progress bars for requested vs. scheduled meetings against the total.
     return (
         <tr className="adm-row adm-row-clickable" onClick={onView}>
             <td>
@@ -348,20 +318,50 @@ function SponsorRow({
             </td>
             <td className="adm-mono">{row.contracted}</td>
             <td className="adm-mono-dim">{row.bonus > 0 ? `+${row.bonus}` : "—"}</td>
-            <td className="adm-mono">{total}</td>
-            <td className="adm-mono-dim">{row.requestCount}</td>
             <td>
-                <div className="adm-progress">
-                    <div className="adm-progress-track">
-                        <div
-                            className="adm-progress-bar"
-                            style={{ width: `${Math.min(scheduledPercent, 100)}%`, background: barColor }}
-                        />
-                    </div>
-                    <span className="adm-progress-label">{row.scheduledCount} / {total}</span>
-                </div>
+                <ProgressCell count={row.requestCount} total={total} percent={requestPercent} />
+            </td>
+            <td>
+                <ProgressCell count={row.scheduledCount} total={total} percent={scheduledPercent} />
             </td>
         </tr>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ProgressCell — a "count / total" bar shared by the Requests and Scheduled
+// columns. Color reflects standing against the target: blue while under 80%,
+// gold from 80-99%, green at exactly 100%, red once over.
+// ---------------------------------------------------------------------------
+
+function ProgressCell({
+    count,
+    total,
+    percent,
+}: {
+    count: number;
+    total: number;
+    percent: number;
+}) {
+    const isOver = count > total;
+    const barColor = isOver
+        ? "var(--red)"
+        : percent >= 100
+          ? "var(--green)"
+          : percent >= 80
+            ? "var(--gold)"
+            : "var(--blue)";
+
+    return (
+        <div className="adm-progress">
+            <div className="adm-progress-track">
+                <div
+                    className="adm-progress-bar"
+                    style={{ width: `${Math.min(percent, 100)}%`, background: barColor }}
+                />
+            </div>
+            <span className="adm-progress-label">{count} / {total}</span>
+        </div>
     );
 }
 

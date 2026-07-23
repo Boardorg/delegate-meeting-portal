@@ -1,114 +1,125 @@
 import {
-	Attendee,
-	AttendeeRole,
-	AttendeeSchedule,
-	Location,
-	MeetingRequest,
-	ScheduledMeeting,
-	SponsorTier,
-	Timeslot,
-} from '@/types';
-import { pairKey, computeMutualPairs, findAvailableTimeslot, wouldViolateCompanyDiversity } from './helpers';
+    Attendee,
+    AttendeeRole,
+    AttendeeSchedule,
+    Location,
+    MeetingRequest,
+    ScheduledMeeting,
+    SponsorTier,
+    Timeslot,
+} from "@/types";
+import {
+    pairKey,
+    computeMutualPairs,
+    findAvailableTimeslot,
+    wouldViolateCompanyDiversity,
+} from "./helpers";
+import type { SchedulerFailureReason } from "./report";
 
 // Defines the configuration for each pass of the scheduling algorithm, including caps and filters.
 interface PassConfig {
-	passNumber: number;
-	day: 1 | 2;
-	delegateCap: number;
-	sponsorCap: (tier: SponsorTier) => number;
-	filter: (
-		requester: Attendee,
-		target: Attendee,
-		rank: number,
-		isMutual: boolean
-	) => boolean;
+    passNumber: number;
+    day: 1 | 2;
+    delegateCap: number;
+    sponsorCap: (tier: SponsorTier) => number;
+    filter: (
+        requester: Attendee,
+        target: Attendee,
+        rank: number,
+        isMutual: boolean,
+    ) => boolean;
 }
 
 // Cumulative meeting caps per sponsor tier, matched to contracted package counts.
 // Diamond: 8 contracted. Standard: 5 contracted.
 // These caps apply from pass 3 onward; earlier passes use lower shared ceilings.
-const SPONSOR_CAPS: Record<string, { pass3: number; pass4: number; pass5: number }> = {
-	diamond:  { pass3: 6, pass4: 8, pass5: 8 },
-	standard: { pass3: 5, pass4: 5, pass5: 5 },
+const SPONSOR_CAPS: Record<
+    string,
+    { pass3: number; pass4: number; pass5: number }
+> = {
+    diamond: { pass3: 6, pass4: 8, pass5: 8 },
+    standard: { pass3: 5, pass4: 5, pass5: 5 },
 };
 
-const tierCap = (tier: SponsorTier, key: keyof typeof SPONSOR_CAPS['diamond']) =>
-	tier ? (SPONSOR_CAPS[tier]?.[key] ?? 5) : 5;
+const tierCap = (
+    tier: SponsorTier,
+    key: keyof (typeof SPONSOR_CAPS)["diamond"],
+) => (tier ? (SPONSOR_CAPS[tier]?.[key] ?? 5) : 5);
 
 // Defines the seven passes of the scheduling algorithm with their specific rules and caps.
 const PASSES: PassConfig[] = [
-	{
-		// Pass 1: Mutual sponsor <-> delegate requests only. Both parties requested each other.
-		passNumber: 1,
-		day: 1,
-		delegateCap: 2,
-		sponsorCap: () => 3,
-		filter: (req, tgt, _rank, mutual) =>
-			mutual &&
-			((req.role === 'sponsor' && tgt.role === 'delegate') ||
-				(req.role === 'delegate' && tgt.role === 'sponsor')),
-	},
-	{
-		// Pass 2: High-interest sponsor requests (rank >= 4), regardless of mutuality.
-		passNumber: 2,
-		day: 1,
-		delegateCap: 3,
-		sponsorCap: () => 4,
-		filter: (req, tgt, rank, _mutual) =>
-			req.role === 'sponsor' && tgt.role === 'delegate' && rank >= 4,
-	},
-	{
-		// Pass 3: High-interest delegate requests for sponsors (rank >= 4), regardless of mutuality.
-		// Cap is now tier-aware: standard sponsors are held to their contracted limit (5).
-		passNumber: 3,
-		day: 1,
-		delegateCap: 4,
-		sponsorCap: (tier) => tierCap(tier, 'pass3'),
-		filter: (req, tgt, rank, _mutual) =>
-			req.role === 'delegate' && tgt.role === 'sponsor' && rank >= 4,
-	},
-	{
-		// Pass 4: Second pass on mutual sponsor <-> delegate requests. Raises caps to fill remaining slots.
-		// Cap is tier-aware: standard stays at 5, diamond rises to 8.
-		passNumber: 4,
-		day: 1,
-		delegateCap: 5,
-		sponsorCap: (tier) => tierCap(tier, 'pass4'),
-		filter: (req, tgt, _rank, mutual) =>
-			mutual &&
-			((req.role === 'sponsor' && tgt.role === 'delegate') ||
-				(req.role === 'delegate' && tgt.role === 'sponsor')),
-	},
-	{
-		// Pass 5: All remaining sponsor requests, any rank. Final cap matches contracted package counts.
-		// TODO: Replace hardcoded pass5 caps with contracted + bonus once the bonus field is
-		// available from Salesforce. The tierCap lookup will need to accept a dynamic value
-		// per attendee rather than a fixed tier-based constant.
-		passNumber: 5,
-		day: 1,
-		delegateCap: 7,
-		sponsorCap: (tier) => tierCap(tier, 'pass5'),
-		filter: (req, tgt, _rank, _mutual) =>
-			req.role === 'sponsor' && tgt.role === 'delegate',
-	},
-	{
-		// Pass 6: Mutual delegate <-> delegate requests on Day 2 only.
-		passNumber: 6,
-		day: 2,
-		delegateCap: 2,
-		sponsorCap: () => 0,
-		filter: (req, tgt, _rank, mutual) =>
-			mutual && req.role === 'delegate' && tgt.role === 'delegate',
-	},
-	{
-		// Pass 7: All remaining delegate <-> delegate requests on Day 2, any rank.
-		passNumber: 7,
-		day: 2,
-		delegateCap: 2,
-		sponsorCap: () => 0,
-		filter: (req, tgt, _rank, _mutual) =>
-			req.role === 'delegate' && tgt.role === 'delegate',
-	},
+    {
+        // Pass 1: Mutual sponsor <-> delegate requests only. Both parties requested each other.
+        passNumber: 1,
+        day: 1,
+        delegateCap: 2,
+        sponsorCap: () => 3,
+        filter: (req, tgt, _rank, mutual) =>
+            mutual &&
+            ((req.role === "sponsor" && tgt.role === "delegate") ||
+                (req.role === "delegate" && tgt.role === "sponsor")),
+    },
+    {
+        // Pass 2: High-interest sponsor requests (rank >= 4), regardless of mutuality.
+        passNumber: 2,
+        day: 1,
+        delegateCap: 3,
+        sponsorCap: () => 4,
+        filter: (req, tgt, rank, _mutual) =>
+            req.role === "sponsor" && tgt.role === "delegate" && rank >= 4,
+    },
+    {
+        // Pass 3: High-interest delegate requests for sponsors (rank >= 4), regardless of mutuality.
+        // Cap is now tier-aware: standard sponsors are held to their contracted limit (5).
+        passNumber: 3,
+        day: 1,
+        delegateCap: 4,
+        sponsorCap: (tier) => tierCap(tier, "pass3"),
+        filter: (req, tgt, rank, _mutual) =>
+            req.role === "delegate" && tgt.role === "sponsor" && rank >= 4,
+    },
+    {
+        // Pass 4: Second pass on mutual sponsor <-> delegate requests. Raises caps to fill remaining slots.
+        // Cap is tier-aware: standard stays at 5, diamond rises to 8.
+        passNumber: 4,
+        day: 1,
+        delegateCap: 5,
+        sponsorCap: (tier) => tierCap(tier, "pass4"),
+        filter: (req, tgt, _rank, mutual) =>
+            mutual &&
+            ((req.role === "sponsor" && tgt.role === "delegate") ||
+                (req.role === "delegate" && tgt.role === "sponsor")),
+    },
+    {
+        // Pass 5: All remaining sponsor requests, any rank. Final cap matches contracted package counts.
+        // TODO: Replace hardcoded pass5 caps with contracted + bonus once the bonus field is
+        // available from Salesforce. The tierCap lookup will need to accept a dynamic value
+        // per attendee rather than a fixed tier-based constant.
+        passNumber: 5,
+        day: 1,
+        delegateCap: 7,
+        sponsorCap: (tier) => tierCap(tier, "pass5"),
+        filter: (req, tgt, _rank, _mutual) =>
+            req.role === "sponsor" && tgt.role === "delegate",
+    },
+    {
+        // Pass 6: Mutual delegate <-> delegate requests on Day 2 only.
+        passNumber: 6,
+        day: 2,
+        delegateCap: 2,
+        sponsorCap: () => 0,
+        filter: (req, tgt, _rank, mutual) =>
+            mutual && req.role === "delegate" && tgt.role === "delegate",
+    },
+    {
+        // Pass 7: All remaining delegate <-> delegate requests on Day 2, any rank.
+        passNumber: 7,
+        day: 2,
+        delegateCap: 2,
+        sponsorCap: () => 0,
+        filter: (req, tgt, _rank, _mutual) =>
+            req.role === "delegate" && tgt.role === "delegate",
+    },
 ];
 
 /**
@@ -119,11 +130,10 @@ const PASSES: PassConfig[] = [
  * @returns {number} The maximum total meetings allowed for this attendee by the end of this pass.
  */
 function getCap(attendee: Attendee, pass: PassConfig): number {
-
-	// Sponsors and delegates use separate cap functions per pass.
-	return attendee.role === 'sponsor'
-		? pass.sponsorCap(attendee.sponsorTier)
-		: pass.delegateCap;
+    // Sponsors and delegates use separate cap functions per pass.
+    return attendee.role === "sponsor"
+        ? pass.sponsorCap(attendee.sponsorTier)
+        : pass.delegateCap;
 }
 
 /**
@@ -135,13 +145,26 @@ function getCap(attendee: Attendee, pass: PassConfig): number {
  * @returns {number} The number of meetings this attendee has on that day.
  */
 function countMeetingsOnDay(
-	meetings: ScheduledMeeting[],
-	attendeeId: string,
-	day: 1 | 2
+    meetings: ScheduledMeeting[],
+    attendeeId: string,
+    day: 1 | 2,
 ): number {
-	return meetings.filter(
-		m => m.day === day && (m.attendeeA === attendeeId || m.attendeeB === attendeeId)
-	).length;
+    return meetings.filter(
+        (m) =>
+            m.day === day &&
+            (m.attendeeA === attendeeId || m.attendeeB === attendeeId),
+    ).length;
+}
+
+/**
+ * Meetings that already exist in Cvent, used to make the engine schedule around
+ * them rather than generate conflicts.
+ */
+export interface PreexistingSchedule {
+	/** Canonical pair keys (see pairKey) that already meet in Cvent. */
+	pairs?: Set<string>;
+	/** Per-attendee (Salesforce id) set of ISO start times already booked in Cvent. */
+	busyStartTimesByAttendee?: Map<string, Set<string>>;
 }
 
 /**
@@ -155,23 +178,33 @@ function countMeetingsOnDay(
  * timeslot's native Cvent location. Business rules (no duplicates, no self-meetings,
  * company diversity) are enforced on every candidate.
  *
- * The engine runs freely with no knowledge of previously pushed meetings. Callers are
- * responsible for post-reconciliation: drop any fresh meeting that duplicates or conflicts
- * with a pushed meeting before inserting into the DB.
+ * The engine avoids conflicting with meetings that already exist in Cvent when
+ * the caller passes `preexisting`: those pairs are treated as already scheduled
+ * and those attendee/time combinations as already busy, so the engine never
+ * generates a duplicate pairing or double-books someone against a Cvent booking.
+ * Callers still run post-reconciliation for anything not covered here.
  *
  * @param {Attendee[]} attendees - All attendees to schedule meetings for.
  * @param {MeetingRequest[]} requests - All submitted meeting requests.
  * @param {Timeslot[]} timeslots - The event's global, Cvent-sourced timeslots.
  * @param {Location[]} _locations - The event's locations (reserved for future location-aware assignment).
- * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }>}
- *   Resolves to the flat list of newly scheduled meetings and a per-attendee breakdown.
+ * @param {PreexistingSchedule} [preexisting] - Pairs/times already booked in Cvent to schedule around.
+ * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[]; skipReasons: Map<string, SchedulerFailureReason> }>}
+ *   Resolves to the flat list of newly scheduled meetings, a per-attendee
+ *   breakdown, and — for the run report — why each attempted-but-unscheduled
+ *   pair was skipped, keyed by canonical pairKey.
  */
 export async function runScheduler(
 	attendees: Attendee[],
 	requests: MeetingRequest[],
 	timeslots: Timeslot[],
 	_locations: Location[],
-): Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }> {
+	preexisting: PreexistingSchedule = {},
+): Promise<{
+	schedule: ScheduledMeeting[];
+	attendeeSchedules: AttendeeSchedule[];
+	skipReasons: Map<string, SchedulerFailureReason>;
+}> {
 
 	// Index attendees by Salesforce ID for lookup throughout the algorithm.
 	const attendeeMap = new Map(attendees.map(a => [a.salesforceId, a]));
@@ -182,13 +215,18 @@ export async function runScheduler(
 	// Pre-compute all mutual pairs once so each pass can check mutuality cheaply.
 	const mutualPairs = computeMutualPairs(requests);
 
-	// Initialize a set to track which pairs have already been scheduled to prevent duplicates.
-	const scheduledPairs = new Set<string>();
+	// Track which pairs are already scheduled (to prevent duplicates), seeded with
+	// pairs that already meet in Cvent so the engine won't re-create them.
+	const scheduledPairs = new Set<string>(preexisting.pairs);
 
 	// Per-attendee set of start times already booked, so nobody is double-booked
-	// at the same wall-clock time. Keyed by Salesforce ID.
+	// at the same wall-clock time. Keyed by Salesforce ID and seeded with the
+	// times each attendee is already booked at in Cvent.
 	const busyByAttendee = new Map<string, Set<string>>(
-		attendees.map(a => [a.salesforceId, new Set<string>()])
+		attendees.map(a => [
+			a.salesforceId,
+			new Set<string>(preexisting.busyStartTimesByAttendee?.get(a.salesforceId)),
+		])
 	);
 
 	// Remaining capacity per timeslot id, drawn down as meetings are booked.
@@ -199,6 +237,11 @@ export async function runScheduler(
 
 	// Auto-increment counter for generating unique meeting IDs.
 	let meetingCounter = 1;
+
+	// Records why each attempted pair was skipped, keyed by canonical pairKey.
+	// The run report uses this to explain unscheduled requests. Later passes
+	// overwrite earlier ones so the most-progressed reason wins.
+	const skipReasons = new Map<string, SchedulerFailureReason>();
 
 	// Loop through each pass in order, applying its specific filters and caps.
 	for (const pass of PASSES) {
@@ -275,20 +318,20 @@ export async function runScheduler(
 			const targetCap    = Math.min(getCap(target,    pass), countAvailable(targetBusy)    + targetDayCount);
 
 			// Skip if either attendee has already reached their cumulative cap for this pass.
-			if (requesterDayCount >= requesterCap) continue;
-			if (targetDayCount    >= targetCap)    continue;
+			if (requesterDayCount >= requesterCap) { skipReasons.set(key, "cap_reached"); continue; }
+			if (targetDayCount    >= targetCap)    { skipReasons.set(key, "cap_reached"); continue; }
 
 			// Skip if this meeting would violate the company diversity rule for either attendee.
 			const requesterMaxSame = requester.scheduling.maxSameCompanyMeetings ?? 2;
 			const targetMaxSame    = target.scheduling.maxSameCompanyMeetings    ?? 2;
-			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.requesterId, req.targetId, requesterMaxSame)) continue;
-			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.targetId, req.requesterId, targetMaxSame))    continue;
+			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.requesterId, req.targetId, requesterMaxSame)) { skipReasons.set(key, "company_diversity"); continue; }
+			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.targetId, req.requesterId, targetMaxSame))    { skipReasons.set(key, "company_diversity"); continue; }
 
 			// Find a timeslot on this day where both attendees are free and capacity remains.
 			const timeslot = findAvailableTimeslot(timeslots, day, requesterBusy, targetBusy, timeslotRemaining);
 
 			// Skip this pair if no usable timeslot exists.
-			if (!timeslot) continue;
+			if (!timeslot) { skipReasons.set(key, "no_availability"); continue; }
 
 			// Book the timeslot: mark both attendees busy at its start time and draw down capacity.
 			requesterBusy.add(timeslot.startTime);
@@ -297,8 +340,12 @@ export async function runScheduler(
 
 			// Build the ScheduledMeeting record with all required fields. Location defaults
 			// to the timeslot's native Cvent location; an admin can reassign it later.
+			// A timestamp suffix keeps ids unique across scheduler runs, since Cvent
+			// never frees an appointment's code even after it's cancelled, so a
+			// counter that restarts from 1 each run could otherwise reuse an id
+			// still attached to an old, deleted-but-cancelled Cvent appointment.
 			const meeting: ScheduledMeeting = {
-				id: `mtg-${String(meetingCounter++).padStart(3, '0')}`,
+				id: `mtg-${String(meetingCounter++).padStart(3, '0')}-${Date.now()}`,
 				attendeeA: req.requesterId,
 				attendeeB: req.targetId,
 				day,
@@ -340,5 +387,5 @@ export async function runScheduler(
 			.sort((x, y) => startTimeOf(x).localeCompare(startTimeOf(y))),
 	}));
 
-	return { schedule: allMeetings, attendeeSchedules };
+	return { schedule: allMeetings, attendeeSchedules, skipReasons };
 }

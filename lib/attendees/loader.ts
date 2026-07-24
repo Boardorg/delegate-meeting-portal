@@ -9,16 +9,19 @@ import { getEventAttendees } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 import { Attendee } from "@/types";
 
-// In TESTING_MODE, Cvent email addresses are obfuscated by wrapping the real
-// address in this marker — e.g. Salesforce "mary@site.com" appears in Cvent as
-// "xxmary@site.comxx". We strip the wrapper before matching. Used for non-prod
-// events where real contacts must not receive real communications.
+// In TESTING_MODE, Cvent email addresses are obfuscated so real contacts can't
+// receive real communications on non-prod events. Two schemes are recognized,
+// both case-insensitive:
+//   - wrapped:  "xxmary@site.comxx"  (an "xx" marker on both ends)
+//   - suffixed: "mary@site.comx"     (a single trailing "x")
+// We strip whichever is present before matching against Salesforce.
 const EMAIL_SAFE_WRAP = "xx";
+const EMAIL_SAFE_SUFFIX = "x";
 
 /**
  * Normalizes a Cvent contact email for matching against Salesforce: lowercased,
- * and (in TESTING_MODE) with the obfuscation wrapper stripped so
- * "xxmary@site.comxx" matches Salesforce's "mary@site.com".
+ * and (in TESTING_MODE) with obfuscation stripped so "xxmary@site.comxx" or
+ * "mary@site.comx" both match Salesforce's "mary@site.com".
  *
  * @param {string} email - The raw Cvent contact email.
  * @returns {string} The comparison key.
@@ -27,8 +30,10 @@ function normalizeCventEmail(email: string): string {
     const lower = email.trim().toLowerCase();
     if (!isTestingMode()) return lower;
 
-    // Only unwrap when the marker is present on both ends, so a stray un-obfuscated
-    // address still compares correctly.
+    // Wrapped scheme: only unwrap when the marker is present on both ends, so a
+    // stray un-obfuscated address still compares correctly. Checked first, since
+    // a wrapped address also ends in "x" and would be mis-stripped by the
+    // suffix rule below.
     if (
         lower.startsWith(EMAIL_SAFE_WRAP) &&
         lower.endsWith(EMAIL_SAFE_WRAP) &&
@@ -39,6 +44,15 @@ function normalizeCventEmail(email: string): string {
             lower.length - EMAIL_SAFE_WRAP.length,
         );
     }
+
+    // Suffixed scheme: a single trailing "x".
+    if (
+        lower.endsWith(EMAIL_SAFE_SUFFIX) &&
+        lower.length > EMAIL_SAFE_SUFFIX.length
+    ) {
+        return lower.slice(0, lower.length - EMAIL_SAFE_SUFFIX.length);
+    }
+
     return lower;
 }
 

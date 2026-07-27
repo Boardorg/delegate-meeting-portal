@@ -6,6 +6,11 @@ import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { createAppointment, cancelAppointment } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
+import {
+    classifyPushError,
+    parseCventError,
+    type MeetingSyncOutcome,
+} from "@/lib/cvent/syncReport";
 
 // ---------------------------------------------------------------------------
 // Shared push-to-Cvent logic
@@ -16,21 +21,15 @@ import { isTestingMode } from "@/lib/helpers/testingMode";
 // and callers get structured results to show in the UI.
 // ---------------------------------------------------------------------------
 
-/** Result of pushing a single meeting to Cvent. */
-export type PushResult = {
-    /** The scheduled meeting id. */
-    meetingId: string;
-    /** Human label for the meeting, e.g. "Acme Sponsor & Jane Delegate". */
-    label: string;
-    /** Whether the Cvent create/update succeeded. */
-    ok: boolean;
+/**
+ * Result of pushing a single meeting to Cvent. Extends the report's
+ * MeetingSyncOutcome (meetingId, label, ok, kind, reason, error, warning) with
+ * the created appointment id.
+ */
+export interface PushResult extends MeetingSyncOutcome {
     /** The Cvent appointment id on success. */
     cventAppointmentId?: string | null;
-    /** The error message on failure (from Cvent or validation). */
-    error?: string;
-    /** Set on success when repushing created the new appointment fine but failed to cancel the old one. */
-    warning?: string;
-};
+}
 
 /** Aggregate result of a push-all operation. */
 export type PushSummary = {
@@ -43,28 +42,6 @@ export type PushSummary = {
     /** Per-meeting outcomes, in input order. */
     results: PushResult[];
 };
-
-/**
- * Extracts Cvent's human-readable error message from a raw HTTP response body.
- * Cvent error responses are JSON like `{ "message": "...", "code": "..." }`;
- * this returns the `message` when present, or null when the body is missing /
- * not JSON / has no message.
- *
- * @param {unknown} body - The raw response body (a string on SDK errors).
- * @returns {string | null} The Cvent message, or null.
- */
-function extractCventMessage(body: unknown): string | null {
-    if (typeof body !== "string" || !body.trim()) return null;
-    try {
-        const parsed = JSON.parse(body) as { message?: unknown };
-        if (typeof parsed.message === "string" && parsed.message.trim()) {
-            return parsed.message.trim();
-        }
-    } catch {
-        // Not JSON — nothing to extract.
-    }
-    return null;
-}
 
 /**
  * Turns a thrown push error into a message for the result row.
@@ -91,7 +68,7 @@ function describePushError(err: unknown): string {
         cause?: unknown;
     };
 
-    const cventMessage = extractCventMessage(e.body);
+    const cventMessage = parseCventError(e.body).message;
 
     // Outside testing mode: prefer Cvent's message when there is one; otherwise
     // keep it terse and don't leak raw responses into the admin UI.
@@ -106,7 +83,8 @@ function describePushError(err: unknown): string {
         if (pretty && pretty !== base) parts.push(pretty);
     }
     if (typeof e.statusCode === "number") parts.push(`HTTP ${e.statusCode}`);
-    if (typeof e.body === "string" && e.body.trim()) parts.push(`Response body: ${e.body}`);
+    if (typeof e.body === "string" && e.body.trim())
+        parts.push(`Response body: ${e.body}`);
     if (e.cause && e.cause !== err) {
         parts.push(
             `Cause: ${e.cause instanceof Error ? e.cause.message : String(e.cause)}`,
@@ -116,8 +94,25 @@ function describePushError(err: unknown): string {
 }
 
 /**
+ * Whether a portal meeting still needs pushing to Cvent: it was never synced,
+ * or it was modified since its last push. Used to partition an event's (or a
+ * sponsor's) meetings into "to push" vs "already synced" for the sync report.
+ *
+ * @param {ScheduledMeetingRow} row - The meeting row.
+ * @returns {boolean} True when the row should be pushed.
+ */
+export function needsSync(row: ScheduledMeetingRow): boolean {
+    return (
+        !row.cventAppointmentId ||
+        (row.lastModifiedAt != null &&
+            row.lastPushedAt != null &&
+            row.lastModifiedAt > row.lastPushedAt)
+    );
+}
+
+/**
  * Pushes a set of scheduled-meeting rows to Cvent.
- * 
+ *
  * A row not yet synced gets a new appointment.
  * A row already synced and edited since gets a replacement appointment instead.
  * The new appointment is created first. The old one is only cancelled after that succeeds.
@@ -156,6 +151,12 @@ export async function pushMeetingRows(
         const target = attendeeById.get(row.attendeeB);
         const label = `${requester?.name ?? row.attendeeA} & ${target?.name ?? row.attendeeB}`;
 
+        // A row with an existing appointment is a replacement (update); a fresh
+        // row is a create. Recorded on every result so the report can split
+        // successes into created vs updated.
+        const oldAppointmentId = row.cventAppointmentId;
+        const kind = oldAppointmentId ? "update" : "create";
+
         // A meeting can't be pushed without a resolvable time block.
         const timeslot = scheduleData.timeslotById.get(row.timeslotId);
         if (!timeslot) {
@@ -163,7 +164,22 @@ export async function pushMeetingRows(
                 meetingId: row.id,
                 label,
                 ok: false,
-                error: `No Cvent timeslot found for id ${row.timeslotId}`,
+                kind,
+                reason: "missing_timeslot",
+                error: `No Cvent timeslot found for id ${row.timeslotId}.`,
+            });
+            continue;
+        }
+
+        // Cvent appointments must be placed in a location.
+        if (!row.locationId) {
+            results.push({
+                meetingId: row.id,
+                label,
+                ok: false,
+                kind,
+                reason: "missing_location",
+                error: "The meeting has no location assigned to send to Cvent.",
             });
             continue;
         }
@@ -175,21 +191,26 @@ export async function pushMeetingRows(
                 meetingId: row.id,
                 label,
                 ok: false,
-                error: `Requester ${requester?.name ?? row.attendeeA} has no Cvent contact id to host the appointment`,
+                kind,
+                reason: "host_not_in_cvent",
+                error: `Requester ${requester?.name ?? row.attendeeA} has no Cvent contact id to host the appointment. Confirm they're a Cvent attendee for this event.`,
             });
             continue;
         }
 
         // Attendees are the non-host participant(s); the target's contact id
-        // when known.
+        // when known. A missing target contact id isn't fatal (the appointment
+        // is created host-only) but is worth flagging.
         const attendeeContactIds = target?.cventContactId
             ? [target.cventContactId]
             : [];
+        const targetWarning = target?.cventContactId
+            ? undefined
+            : `${target?.name ?? row.attendeeB} isn't linked in Cvent, so the appointment was created without them as a participant.`;
 
         // A never-pushed row can reuse its own id as the code, since it's unused.
         // A repushed row needs a fresh code, since Cvent keeps the old one attached to the appointment being cancelled.
         // A timestamp suffix is enough to make it fresh without a DB round trip.
-        const oldAppointmentId = row.cventAppointmentId;
         const code = oldAppointmentId ? `${row.id}-${Date.now()}` : row.id;
 
         const input = {
@@ -204,17 +225,25 @@ export async function pushMeetingRows(
         };
 
         try {
-            const cventAppointmentId = await createAppointment(eventCode, input);
+            const cventAppointmentId = await createAppointment(
+                eventCode,
+                input,
+            );
+
+            // Collect non-fatal notes for an otherwise-successful push.
+            const notes: string[] = [];
+            if (targetWarning) notes.push(targetWarning);
 
             // Only cancel the old appointment once the replacement exists.
             // This can't undo the create, so a failure here is reported as a
             // warning rather than failing a push that otherwise succeeded.
-            let warning: string | undefined;
             if (oldAppointmentId) {
                 try {
                     await cancelAppointment(eventCode, oldAppointmentId);
                 } catch (cancelErr) {
-                    warning = `Created the new appointment, but failed to cancel the previous one (${oldAppointmentId}): ${describePushError(cancelErr)}`;
+                    notes.push(
+                        `Created the new appointment, but failed to cancel the previous one (${oldAppointmentId}): ${describePushError(cancelErr)}`,
+                    );
                 }
             }
 
@@ -223,17 +252,31 @@ export async function pushMeetingRows(
                 .set({ cventAppointmentId, lastPushedAt: new Date() })
                 .where(eq(scheduledMeetings.id, row.id));
 
-            results.push({ meetingId: row.id, label, ok: true, cventAppointmentId, warning });
+            results.push({
+                meetingId: row.id,
+                label,
+                ok: true,
+                kind,
+                cventAppointmentId,
+                warning: notes.length ? notes.join(" ") : undefined,
+            });
         } catch (err) {
             results.push({
                 meetingId: row.id,
                 label,
                 ok: false,
+                kind,
+                reason: classifyPushError(err),
                 error: describePushError(err),
             });
         }
     }
 
     const pushed = results.filter((r) => r.ok).length;
-    return { total: results.length, pushed, failed: results.length - pushed, results };
+    return {
+        total: results.length,
+        pushed,
+        failed: results.length - pushed,
+        results,
+    };
 }

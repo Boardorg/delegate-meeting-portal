@@ -15,6 +15,7 @@ import { SortableHeaders } from "../_components/SortableHeaders";
 import { TablePagination } from "../_components/TablePagination";
 import { TierPill } from "./_components/TierPill";
 import SchedulerReportPanel from "./SchedulerReportPanel";
+import SyncReportPanel from "./SyncReportPanel";
 import { pushAllForEvent, runSchedulerForEvent } from "./actions";
 import type {
     SponsorRow,
@@ -22,6 +23,7 @@ import type {
     SponsorsPage,
 } from "./actions";
 import type { SchedulerReport } from "@/lib/scheduling/report";
+import type { SyncReport } from "@/lib/cvent/syncReport";
 
 // ---------------------------------------------------------------------------
 // SponsorsTable — sponsor list for /admin/meetings.
@@ -56,6 +58,7 @@ export default function SponsorsTable({
     const [showPushAllModal, setShowPushAllModal] = useState(false);
     const [pushAllError, setPushAllError] = useState<string | null>(null);
     const [report, setReport] = useState<SchedulerReport | null>(null);
+    const [syncReport, setSyncReport] = useState<SyncReport | null>(null);
     const [isPending, startTransition] = useTransition();
 
     // Handler for running the scheduling engine for the selected event.
@@ -80,7 +83,8 @@ export default function SponsorsTable({
         startTransition(async () => {
             try {
                 setPushAllError(null);
-                await pushAllForEvent(selectedEvent);
+                const result = await pushAllForEvent(selectedEvent);
+                setSyncReport(result);
                 setShowPushAllModal(false);
                 router.refresh();
             } catch (e) {
@@ -220,7 +224,7 @@ export default function SponsorsTable({
                     disabled={!selectedEvent || isPending}
                     onClick={() => { setPushAllError(null); setShowPushAllModal(true); }}
                 >
-                    Push All to Cvent
+                    {isPending ? "Working…" : "Push All to Cvent"}
                 </button>
             </div>
 
@@ -248,6 +252,13 @@ export default function SponsorsTable({
                 <SchedulerReportPanel
                     report={report}
                     onDismiss={() => setReport(null)}
+                />
+            )}
+
+            {syncReport && (
+                <SyncReportPanel
+                    report={syncReport}
+                    onDismiss={() => setSyncReport(null)}
                 />
             )}
 

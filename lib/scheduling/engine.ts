@@ -14,6 +14,7 @@ import {
     findAvailableTimeslot,
     wouldViolateCompanyDiversity,
 } from "./helpers";
+import type { SchedulerFailureReason } from "./report";
 
 // Defines the configuration for each pass of the scheduling algorithm, including caps and filters.
 interface PassConfig {
@@ -156,6 +157,17 @@ function countMeetingsOnDay(
 }
 
 /**
+ * Meetings that already exist in Cvent, used to make the engine schedule around
+ * them rather than generate conflicts.
+ */
+export interface PreexistingSchedule {
+	/** Canonical pair keys (see pairKey) that already meet in Cvent. */
+	pairs?: Set<string>;
+	/** Per-attendee (Salesforce id) set of ISO start times already booked in Cvent. */
+	busyStartTimesByAttendee?: Map<string, Set<string>>;
+}
+
+/**
  * Runs the full multi-pass scheduling algorithm against a set of attendees and requests.
  *
  * Meetings are scheduled across seven passes in priority order. Caps are cumulative —
@@ -166,23 +178,33 @@ function countMeetingsOnDay(
  * timeslot's native Cvent location. Business rules (no duplicates, no self-meetings,
  * company diversity) are enforced on every candidate.
  *
- * The engine runs freely with no knowledge of previously pushed meetings. Callers are
- * responsible for post-reconciliation: drop any fresh meeting that duplicates or conflicts
- * with a pushed meeting before inserting into the DB.
+ * The engine avoids conflicting with meetings that already exist in Cvent when
+ * the caller passes `preexisting`: those pairs are treated as already scheduled
+ * and those attendee/time combinations as already busy, so the engine never
+ * generates a duplicate pairing or double-books someone against a Cvent booking.
+ * Callers still run post-reconciliation for anything not covered here.
  *
  * @param {Attendee[]} attendees - All attendees to schedule meetings for.
  * @param {MeetingRequest[]} requests - All submitted meeting requests.
  * @param {Timeslot[]} timeslots - The event's global, Cvent-sourced timeslots.
  * @param {Location[]} _locations - The event's locations (reserved for future location-aware assignment).
- * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }>}
- *   Resolves to the flat list of newly scheduled meetings and a per-attendee breakdown.
+ * @param {PreexistingSchedule} [preexisting] - Pairs/times already booked in Cvent to schedule around.
+ * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[]; skipReasons: Map<string, SchedulerFailureReason> }>}
+ *   Resolves to the flat list of newly scheduled meetings, a per-attendee
+ *   breakdown, and — for the run report — why each attempted-but-unscheduled
+ *   pair was skipped, keyed by canonical pairKey.
  */
 export async function runScheduler(
 	attendees: Attendee[],
 	requests: MeetingRequest[],
 	timeslots: Timeslot[],
 	_locations: Location[],
-): Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[] }> {
+	preexisting: PreexistingSchedule = {},
+): Promise<{
+	schedule: ScheduledMeeting[];
+	attendeeSchedules: AttendeeSchedule[];
+	skipReasons: Map<string, SchedulerFailureReason>;
+}> {
 
 	// Index attendees by Salesforce ID for lookup throughout the algorithm.
 	const attendeeMap = new Map(attendees.map(a => [a.salesforceId, a]));
@@ -193,13 +215,18 @@ export async function runScheduler(
 	// Pre-compute all mutual pairs once so each pass can check mutuality cheaply.
 	const mutualPairs = computeMutualPairs(requests);
 
-	// Initialize a set to track which pairs have already been scheduled to prevent duplicates.
-	const scheduledPairs = new Set<string>();
+	// Track which pairs are already scheduled (to prevent duplicates), seeded with
+	// pairs that already meet in Cvent so the engine won't re-create them.
+	const scheduledPairs = new Set<string>(preexisting.pairs);
 
 	// Per-attendee set of start times already booked, so nobody is double-booked
-	// at the same wall-clock time. Keyed by Salesforce ID.
+	// at the same wall-clock time. Keyed by Salesforce ID and seeded with the
+	// times each attendee is already booked at in Cvent.
 	const busyByAttendee = new Map<string, Set<string>>(
-		attendees.map(a => [a.salesforceId, new Set<string>()])
+		attendees.map(a => [
+			a.salesforceId,
+			new Set<string>(preexisting.busyStartTimesByAttendee?.get(a.salesforceId)),
+		])
 	);
 
 	// Remaining capacity per timeslot id, drawn down as meetings are booked.
@@ -210,6 +237,11 @@ export async function runScheduler(
 
 	// Auto-increment counter for generating unique meeting IDs.
 	let meetingCounter = 1;
+
+	// Records why each attempted pair was skipped, keyed by canonical pairKey.
+	// The run report uses this to explain unscheduled requests. Later passes
+	// overwrite earlier ones so the most-progressed reason wins.
+	const skipReasons = new Map<string, SchedulerFailureReason>();
 
 	// Loop through each pass in order, applying its specific filters and caps.
 	for (const pass of PASSES) {
@@ -286,20 +318,20 @@ export async function runScheduler(
 			const targetCap    = Math.min(getCap(target,    pass), countAvailable(targetBusy)    + targetDayCount);
 
 			// Skip if either attendee has already reached their cumulative cap for this pass.
-			if (requesterDayCount >= requesterCap) continue;
-			if (targetDayCount    >= targetCap)    continue;
+			if (requesterDayCount >= requesterCap) { skipReasons.set(key, "cap_reached"); continue; }
+			if (targetDayCount    >= targetCap)    { skipReasons.set(key, "cap_reached"); continue; }
 
 			// Skip if this meeting would violate the company diversity rule for either attendee.
 			const requesterMaxSame = requester.scheduling.maxSameCompanyMeetings ?? 2;
 			const targetMaxSame    = target.scheduling.maxSameCompanyMeetings    ?? 2;
-			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.requesterId, req.targetId, requesterMaxSame)) continue;
-			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.targetId, req.requesterId, targetMaxSame))    continue;
+			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.requesterId, req.targetId, requesterMaxSame)) { skipReasons.set(key, "company_diversity"); continue; }
+			if (wouldViolateCompanyDiversity(allMeetings, attendeeMap, req.targetId, req.requesterId, targetMaxSame))    { skipReasons.set(key, "company_diversity"); continue; }
 
 			// Find a timeslot on this day where both attendees are free and capacity remains.
 			const timeslot = findAvailableTimeslot(timeslots, day, requesterBusy, targetBusy, timeslotRemaining);
 
 			// Skip this pair if no usable timeslot exists.
-			if (!timeslot) continue;
+			if (!timeslot) { skipReasons.set(key, "no_availability"); continue; }
 
 			// Book the timeslot: mark both attendees busy at its start time and draw down capacity.
 			requesterBusy.add(timeslot.startTime);
@@ -355,5 +387,5 @@ export async function runScheduler(
 			.sort((x, y) => startTimeOf(x).localeCompare(startTimeOf(y))),
 	}));
 
-	return { schedule: allMeetings, attendeeSchedules };
+	return { schedule: allMeetings, attendeeSchedules, skipReasons };
 }

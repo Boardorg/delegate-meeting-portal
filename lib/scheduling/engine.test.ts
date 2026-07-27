@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { runScheduler } from './engine';
+import { pairKey } from './helpers';
 import type { Attendee, Location, MeetingRequest, Timeslot } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -244,5 +245,51 @@ describe('runScheduler — company diversity', () => {
         const { schedule } = await runScheduler([s1, s2, s3, d1], requests, timeslots, NO_LOCATIONS);
 
         expect(schedule).toHaveLength(3);
+    });
+});
+
+// Pre-existing Cvent meetings are scheduled around: their pairs aren't re-created
+// and their times don't get double-booked.
+describe('runScheduler — pre-existing Cvent schedule', () => {
+    test('does not re-schedule a pair that already meets in Cvent', async () => {
+        const s1 = makeAttendee('s1', 'Acme', 'sponsor');
+        const d1 = makeAttendee('d1', 'Globex', 'delegate');
+        const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
+        const requests = [makeRequest('s1', 'd1', 5)];
+
+        const { schedule } = await runScheduler([s1, d1], requests, timeslots, NO_LOCATIONS, {
+            pairs: new Set([pairKey('s1', 'd1')]),
+        });
+
+        expect(schedule).toHaveLength(0);
+    });
+
+    test('does not book an attendee at a time they are already booked in Cvent', async () => {
+        // d1 is already busy at 09:00 (the only timeslot), so the meeting can't be placed.
+        const s1 = makeAttendee('s1', 'Acme', 'sponsor');
+        const d1 = makeAttendee('d1', 'Globex', 'delegate');
+        const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
+        const requests = [makeRequest('s1', 'd1', 5)];
+
+        const { schedule } = await runScheduler([s1, d1], requests, timeslots, NO_LOCATIONS, {
+            busyStartTimesByAttendee: new Map([["d1", new Set(["09:00"])]]),
+        });
+
+        expect(schedule).toHaveLength(0);
+    });
+
+    test('still schedules the pair at a free time when another time is pre-booked', async () => {
+        // d1 is busy at 09:00 but 10:00 is open, so the meeting lands at 10:00.
+        const s1 = makeAttendee('s1', 'Acme', 'sponsor');
+        const d1 = makeAttendee('d1', 'Globex', 'delegate');
+        const timeslots = day1Grid(['09:00', '10:00']);
+        const requests = [makeRequest('s1', 'd1', 5)];
+
+        const { schedule } = await runScheduler([s1, d1], requests, timeslots, NO_LOCATIONS, {
+            busyStartTimesByAttendee: new Map([["d1", new Set(["09:00"])]]),
+        });
+
+        expect(schedule).toHaveLength(1);
+        expect(schedule[0].timeslotId).toBe("ts-2");
     });
 });

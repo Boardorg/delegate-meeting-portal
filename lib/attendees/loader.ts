@@ -1,4 +1,5 @@
 import path from "path";
+import { cache } from "react";
 import { loadMockData } from "@/lib/scheduling/loader";
 import { formatProfile } from "@/lib/attendees/formatProfile";
 import { getMeetingDataByEvent } from "@/lib/salesforce/client";
@@ -8,16 +9,19 @@ import { getEventAttendees } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 import { Attendee } from "@/types";
 
-// In TESTING_MODE, Cvent email addresses are obfuscated by wrapping the real
-// address in this marker — e.g. Salesforce "mary@site.com" appears in Cvent as
-// "xxmary@site.comxx". We strip the wrapper before matching. Used for non-prod
-// events where real contacts must not receive real communications.
+// In TESTING_MODE, Cvent email addresses are obfuscated so real contacts can't
+// receive real communications on non-prod events. Two schemes are recognized,
+// both case-insensitive:
+//   - wrapped:  "xxmary@site.comxx"  (an "xx" marker on both ends)
+//   - suffixed: "mary@site.comx"     (a single trailing "x")
+// We strip whichever is present before matching against Salesforce.
 const EMAIL_SAFE_WRAP = "xx";
+const EMAIL_SAFE_SUFFIX = "x";
 
 /**
  * Normalizes a Cvent contact email for matching against Salesforce: lowercased,
- * and (in TESTING_MODE) with the obfuscation wrapper stripped so
- * "xxmary@site.comxx" matches Salesforce's "mary@site.com".
+ * and (in TESTING_MODE) with obfuscation stripped so "xxmary@site.comxx" or
+ * "mary@site.comx" both match Salesforce's "mary@site.com".
  *
  * @param {string} email - The raw Cvent contact email.
  * @returns {string} The comparison key.
@@ -26,8 +30,10 @@ function normalizeCventEmail(email: string): string {
     const lower = email.trim().toLowerCase();
     if (!isTestingMode()) return lower;
 
-    // Only unwrap when the marker is present on both ends, so a stray un-obfuscated
-    // address still compares correctly.
+    // Wrapped scheme: only unwrap when the marker is present on both ends, so a
+    // stray un-obfuscated address still compares correctly. Checked first, since
+    // a wrapped address also ends in "x" and would be mis-stripped by the
+    // suffix rule below.
     if (
         lower.startsWith(EMAIL_SAFE_WRAP) &&
         lower.endsWith(EMAIL_SAFE_WRAP) &&
@@ -38,6 +44,15 @@ function normalizeCventEmail(email: string): string {
             lower.length - EMAIL_SAFE_WRAP.length,
         );
     }
+
+    // Suffixed scheme: a single trailing "x".
+    if (
+        lower.endsWith(EMAIL_SAFE_SUFFIX) &&
+        lower.length > EMAIL_SAFE_SUFFIX.length
+    ) {
+        return lower.slice(0, lower.length - EMAIL_SAFE_SUFFIX.length);
+    }
+
     return lower;
 }
 
@@ -51,6 +66,12 @@ function normalizeCventEmail(email: string): string {
  *     login flow, which has no session yet), otherwise the code resolved by
  *     getEventCode() (env var → session).
  *
+ * This is a thin front door: it resolves the effective data source and event
+ * code, then delegates to the request-memoized core. Resolving here means every
+ * caller in a request shares one cache entry regardless of how they spelled the
+ * arguments — `loadAttendees()`, `loadAttendees(false, undefined)`, and
+ * `loadAttendees(false, "BMWS")` all collapse to the same normalized key.
+ *
  * @param {boolean} [mock] - Force the mock JSON source.
  * @param {string} [eventCode] - Explicit event code override for the SF query.
  */
@@ -58,65 +79,89 @@ export async function loadAttendees(
     mock: boolean = false,
     eventCode?: string,
 ): Promise<Attendee[]> {
-    let attendees: Attendee[];
+    const useMock = process.env.USE_MOCK === "true" || mock;
 
-    // Are we using mock data?
-    if (process.env.USE_MOCK === "true" || mock) {
-        // Load from the mock JSON file.
-        const base = path.join(process.cwd(), "data", "mock");
-        attendees = await loadMockData(path.join(base, "attendees.json"));
+    // Resolve the code once. Mock mode reads a static file and ignores the code,
+    // so key it empty; otherwise use the explicit code (login, pre-session) or
+    // fall back to the env var / session cookie via getEventCode().
+    const resolvedEventCode = useMock
+        ? ""
+        : (eventCode ?? (await getEventCode()));
 
-        // Not using mock data, so load from Salesforce.
-    } else {
-        // Use the explicit code when given (login, pre-session), otherwise
-        // resolve it from the env var / session cookie.
-        const resolvedEventCode = eventCode ?? (await getEventCode());
+    return loadAttendeesCached(useMock, resolvedEventCode);
+}
 
-        // Load from Salesforce using the event code.
-        const data = await getMeetingDataByEvent(resolvedEventCode);
-        attendees = meetingDataToAttendees(data, false);
+/**
+ * Request-memoized core of {@link loadAttendees}, keyed on the already-resolved
+ * (useMock, eventCode) so multiple callers in one render share a single
+ * Salesforce + Cvent round-trip.
+ *
+ * NOTE: React's `cache` hands every caller the *same* array instance within a
+ * request. Treat the result as read-only — filter/map to derive, never sort or
+ * splice it in place, or you'll corrupt other callers' view.
+ *
+ * @param {boolean} useMock - Whether to read the mock JSON source.
+ * @param {string} eventCode - Resolved event code ("" in mock mode).
+ * @returns {Promise<Attendee[]>} The formatted attendee list.
+ */
+const loadAttendeesCached = cache(
+    async (useMock: boolean, eventCode: string): Promise<Attendee[]> => {
+        let attendees: Attendee[];
 
-        // Cross-check against Cvent: keep only attendees who also exist in Cvent
-        // for this event (matched by email), and enrich each with its real Cvent
-        // contact id (needed to push appointments). Cvent presence is required —
-        // if the lookup can't run (no Cvent Event ID, or the API fails), return
-        // no attendees rather than exposing/scheduling people we can't push.
-        let cventAttendees;
-        try {
-            cventAttendees = await getEventAttendees(resolvedEventCode);
-        } catch (err) {
-            console.warn(
-                `loadAttendees: Cvent attendee lookup failed for "${resolvedEventCode}" — ` +
-                    `returning no attendees. ${err instanceof Error ? err.message : String(err)}`,
-            );
-            return [];
+        // Are we using mock data?
+        if (useMock) {
+            // Load from the mock JSON file.
+            const base = path.join(process.cwd(), "data", "mock");
+            attendees = await loadMockData(path.join(base, "attendees.json"));
+
+            // Not using mock data, so load from Salesforce.
+        } else {
+            // Load from Salesforce using the event code.
+            const data = await getMeetingDataByEvent(eventCode);
+            attendees = meetingDataToAttendees(data, false);
+
+            // Cross-check against Cvent: keep only attendees who also exist in Cvent
+            // for this event (matched by email), and enrich each with its real Cvent
+            // contact id (needed to push appointments). Cvent presence is required —
+            // if the lookup can't run (no Cvent Event ID, or the API fails), return
+            // no attendees rather than exposing/scheduling people we can't push.
+            let cventAttendees;
+            try {
+                cventAttendees = await getEventAttendees(eventCode);
+            } catch (err) {
+                console.warn(
+                    `loadAttendees: Cvent attendee lookup failed for "${eventCode}" — ` +
+                        `returning no attendees. ${err instanceof Error ? err.message : String(err)}`,
+                );
+                return [];
+            }
+
+            const cventAttendeesNormalized = cventAttendees.map((c) => ({
+                email: normalizeCventEmail(c.email),
+                contactId: c.contactId,
+            }));
+
+            attendees = attendees
+                .filter(
+                    (a) =>
+                        a.email &&
+                        cventAttendeesNormalized.find(
+                            (c) => c.email === a.email.toLowerCase(),
+                        ),
+                )
+                .map((a) => ({
+                    ...a,
+                    cventContactId:
+                        cventAttendeesNormalized.find(
+                            (c) => c.email === a.email.toLowerCase(),
+                        )?.contactId ?? "",
+                }));
         }
 
-        const cventAttendeesNormalized = cventAttendees.map((c) => ({
-            email: normalizeCventEmail(c.email),
-            contactId: c.contactId,
+        // Apply display-layer formatting to the profile data for each attendee.
+        return attendees.map((a) => ({
+            ...a,
+            profile: formatProfile(a.profile),
         }));
-
-        attendees = attendees
-            .filter(
-                (a) =>
-                    a.email &&
-                    cventAttendeesNormalized.find(
-                        (c) => c.email === a.email.toLowerCase(),
-                    ),
-            )
-            .map((a) => ({
-                ...a,
-                cventContactId:
-                    cventAttendeesNormalized.find(
-                        (c) => c.email === a.email.toLowerCase(),
-                    )?.contactId ?? "",
-            }));
-    }
-
-    // Apply display-layer formatting to the profile data for each attendee.
-    return attendees.map((a) => ({
-        ...a,
-        profile: formatProfile(a.profile),
-    }));
-}
+    },
+);

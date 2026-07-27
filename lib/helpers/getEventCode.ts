@@ -1,5 +1,7 @@
 import "server-only";
 import { getSession } from "@/lib/auth/session";
+import { resolveActiveEventCode } from "@/lib/events/settings";
+import { isTestingMode } from "@/lib/helpers/testingMode";
 
 /**
  * Thrown by getEventCode when no event code can be resolved. A dedicated type so
@@ -31,6 +33,14 @@ export class MissingEventCodeError extends Error {
  * @throws {Error} When neither source provides a code.
  */
 export async function getEventCode(): Promise<string> {
+    // In testing mode the frontend follows the admin's selected event, so the
+    // whole app can be driven from one place. resolveActiveEventCode() uses the
+    // selected event, or defaults to the first one when none is chosen.
+    if (isTestingMode()) {
+        const active = await resolveActiveEventCode();
+        if (active) return active;
+    }
+
     const fromEnv = process.env.SF_EVENT_CODE;
     if (fromEnv) return fromEnv;
 

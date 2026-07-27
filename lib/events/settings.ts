@@ -1,8 +1,10 @@
 import "server-only";
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { eventSettings, type EventSettingsRow } from "@/lib/db/schema";
+import { ACTIVE_EVENT_COOKIE } from "@/lib/auth/session";
 
 // ---------------------------------------------------------------------------
 // Event settings accessors
@@ -39,3 +41,26 @@ export const getEventSettings = cache(
 export const listEvents = cache(async (): Promise<EventSettingsRow[]> => {
     return db.select().from(eventSettings).orderBy(asc(eventSettings.code));
 });
+
+/**
+ * Resolves the admin's active event code — the single source of truth used by
+ * the admin shell and, in testing mode, by getEventCode. Returns the
+ * `admin_event` cookie when it points at a known event; otherwise falls back to
+ * the first event in the list (or null when there are none). So if no event has
+ * been explicitly selected, the first one is used by default.
+ *
+ * @returns {Promise<string | null>} The active event code, or null.
+ */
+export const resolveActiveEventCode = cache(
+    async (): Promise<string | null> => {
+        const [events, cookieStore] = await Promise.all([
+            listEvents(),
+            cookies(),
+        ]);
+        const cookieCode = cookieStore.get(ACTIVE_EVENT_COOKIE)?.value;
+        if (cookieCode && events.some((e) => e.code === cookieCode)) {
+            return cookieCode;
+        }
+        return events[0]?.code ?? null;
+    },
+);

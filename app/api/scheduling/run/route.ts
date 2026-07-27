@@ -30,8 +30,13 @@ export async function POST(request: NextRequest) {
 			body.locations ?? [],
 		);
 
-		// Return the generated schedule and attendee schedules.
-		return NextResponse.json(result);
+		// Return the generated schedule and attendee schedules. skipReasons is a
+		// Map, which JSON.stringify silently turns into {}, so convert it to a
+		// plain object first.
+		return NextResponse.json({
+			...result,
+			skipReasons: Object.fromEntries(result.skipReasons),
+		});
 
 	} catch (err) {
 

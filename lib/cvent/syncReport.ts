@@ -194,6 +194,33 @@ export function classifyPushError(err: unknown): SyncFailureReason {
 }
 
 /**
+ * Whether a failed cancel means the appointment is already gone from Cvent —
+ * either it was already cancelled (e.g. manually, in Cvent) or it no longer
+ * exists (404). In that case there's nothing left for us to cancel, so the
+ * local record can safely be treated as un-synced rather than as a failure.
+ * Duck-typed against the Cvent SDK error shape (`statusCode` + JSON `body`).
+ *
+ * @param {unknown} err - The thrown error from a cancelAppointment call.
+ * @returns {boolean} True when Cvent has no live appointment left to cancel.
+ */
+export function isAppointmentAlreadyGone(err: unknown): boolean {
+    if (!(err instanceof Error)) return false;
+
+    const e = err as { statusCode?: number; body?: string };
+
+    // A 404 means Cvent has no such appointment anymore.
+    if (e.statusCode === 404) return true;
+
+    // Otherwise look for Cvent's already-cancelled / not-found wording in the
+    // message, code, or error text (e.g. "This appointment has been cancelled.").
+    const { message, code } = parseCventError(e.body);
+    const text = `${message ?? ""} ${code ?? ""} ${err.message}`;
+    return /cancel(?:l)?ed|not found|does not exist|no longer exist|no such appointment/i.test(
+        text,
+    );
+}
+
+/**
  * Builds a serializable summary of a push-to-Cvent run from the per-meeting
  * outcomes and the event's meeting counts.
  *

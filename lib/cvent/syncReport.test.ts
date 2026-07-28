@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
     buildSyncReport,
     classifyPushError,
+    isAppointmentAlreadyGone,
     parseCventError,
     type MeetingSyncOutcome,
 } from "./syncReport";
@@ -74,6 +75,38 @@ describe("classifyPushError", () => {
         expect(classifyPushError("just a string")).toBe("unknown");
         expect(classifyPushError(cventError("teapot", 418))).toBe("unknown");
         expect(classifyPushError(new Error("something odd"))).toBe("unknown");
+    });
+});
+
+describe("isAppointmentAlreadyGone", () => {
+    it("treats a 404 as already gone", () => {
+        expect(isAppointmentAlreadyGone(cventError("x", 404))).toBe(true);
+    });
+
+    it("detects Cvent's already-cancelled message", () => {
+        const err = cventError(
+            "bad request",
+            400,
+            JSON.stringify({ message: "This appointment has been cancelled." }),
+        );
+        expect(isAppointmentAlreadyGone(err)).toBe(true);
+    });
+
+    it("detects not-found / does-not-exist wording", () => {
+        expect(
+            isAppointmentAlreadyGone(
+                cventError("x", 400, JSON.stringify({ message: "Appointment does not exist" })),
+            ),
+        ).toBe(true);
+        expect(
+            isAppointmentAlreadyGone(new Error("no such appointment")),
+        ).toBe(true);
+    });
+
+    it("is false for genuine failures and non-errors", () => {
+        expect(isAppointmentAlreadyGone(cventError("host full", 409))).toBe(false);
+        expect(isAppointmentAlreadyGone(cventError("server error", 500))).toBe(false);
+        expect(isAppointmentAlreadyGone("just a string")).toBe(false);
     });
 });
 

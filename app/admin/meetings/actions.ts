@@ -1,13 +1,18 @@
 "use server";
 
-import { and, eq, gt, isNotNull, isNull, or } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { meetingRequests, scheduledMeetings, type NewScheduledMeeting } from "@/lib/db/schema";
+import {
+    meetingRequests,
+    scheduledMeetings,
+    type NewScheduledMeeting,
+} from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { getEventAppointments } from "@/lib/cvent/client";
-import { pushMeetingRows, type PushSummary } from "@/lib/cvent/push";
+import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
+import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import { runScheduler, type PreexistingSchedule } from "@/lib/scheduling/engine";
 import { buildSchedulerReport, type SchedulerReport } from "@/lib/scheduling/report";
 import { pairKey } from "@/lib/scheduling/helpers";
@@ -361,32 +366,40 @@ export async function runSchedulerForEvent(
  * abort the whole push.
  *
  * @param {string} eventCode - The event to push meetings for.
- * @returns {Promise<{ pushed: number }>} Count of meetings successfully pushed.
+ * @returns {Promise<SyncReport>} A DB-friendly summary of the run: how many
+ *   meetings were already synced, attempted, created/updated, and — for
+ *   failures — an actionable reason per meeting.
  */
-export async function pushAllForEvent(eventCode: string): Promise<PushSummary> {
-    // Load all un-synced portal meetings for this event (full rows — the shared
-    // pusher needs the participants, timeslot, and location).
-    const rows = await db
+export async function pushAllForEvent(eventCode: string): Promise<SyncReport> {
+    // Load every portal meeting for this event, so the report can distinguish
+    // meetings that still need pushing from ones already synced and up to date.
+    const portalRows = await db
         .select()
         .from(scheduledMeetings)
         .where(
             and(
                 eq(scheduledMeetings.eventCode, eventCode),
                 eq(scheduledMeetings.source, "portal"),
-                or(
-                    isNull(scheduledMeetings.cventAppointmentId),
-                    and(
-                        isNotNull(scheduledMeetings.lastModifiedAt),
-                        isNotNull(scheduledMeetings.lastPushedAt),
-                        gt(scheduledMeetings.lastModifiedAt, scheduledMeetings.lastPushedAt),
-                    ),
-                ),
             ),
         );
 
-    const summary = await pushMeetingRows(eventCode, rows);
+    // A row needs pushing if it was never synced, or was modified since its
+    // last push. Everything else is already synced and up to date. Applied in
+    // memory (rather than in the query) so the untouched rows are still counted
+    // for the report.
+    const toPush = portalRows.filter(needsSync);
+    const alreadySynced = portalRows.length - toPush.length;
+
+    const summary = await pushMeetingRows(eventCode, toPush);
 
     // Revalidate the admin meetings page to reflect the updated push status.
     revalidatePath("/admin/meetings");
-    return summary;
+
+    return buildSyncReport({
+        eventCode,
+        generatedAt: new Date().toISOString(),
+        totalPortalMeetings: portalRows.length,
+        alreadySynced,
+        results: summary.results,
+    });
 }

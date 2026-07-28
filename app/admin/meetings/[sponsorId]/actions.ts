@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gt, isNull, isNotNull, ne, or } from "drizzle-orm";
+import { and, eq, ne, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import {
@@ -10,12 +10,12 @@ import {
 } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
-import { pushMeetingRows } from "@/lib/cvent/push";
+import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
+import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import { cancelAppointment, getAppointmentsByEvent } from "@/lib/cvent/client";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail, Timeslot, Location } from "@/types";
-import type { PushResult, PushSummary } from "@/lib/cvent/push";
 
 // ---------------------------------------------------------------------------
 // Server actions for /admin/meetings/[sponsorId] — the per-sponsor meeting
@@ -379,15 +379,16 @@ export async function removeMeeting(params: { id: string }): Promise<void> {
 
 /**
  * Pushes a single portal meeting to Cvent (create, or update if already synced)
- * and returns the structured result so the UI can report success/failure.
+ * and returns a sync report so the UI can render the same result panel as the
+ * event-wide push. The meeting is always attempted, so "already synced" is 0.
  *
  * @param {{ id: string; eventCode: string }} params
- * @returns {Promise<PushSummary>} The push outcome (a single-meeting summary).
+ * @returns {Promise<SyncReport>} The push outcome as a (single-meeting) report.
  */
 export async function pushMeeting(params: {
     id: string;
     eventCode: string;
-}): Promise<PushSummary> {
+}): Promise<SyncReport> {
     const rows = await db
         .select()
         .from(scheduledMeetings)
@@ -400,23 +401,33 @@ export async function pushMeeting(params: {
 
     const summary = await pushMeetingRows(params.eventCode, rows);
     revalidatePath("/admin/meetings", "layout");
-    return summary;
+
+    return buildSyncReport({
+        eventCode: params.eventCode,
+        generatedAt: new Date().toISOString(),
+        totalPortalMeetings: rows.length,
+        alreadySynced: 0,
+        results: summary.results,
+    });
 }
 
 /**
  * Pushes all un-synced portal meetings for a single sponsor to Cvent. Covers
  * both not-yet-pushed meetings (create) and meetings edited since their last
- * push (update). Returns the structured result so the UI can report how many
- * succeeded and detail any failures.
+ * push (update), and returns a sync report scoped to that sponsor — so the UI
+ * can render the same result panel as the event-wide push, including how many
+ * of the sponsor's meetings were already synced.
  *
  * @param {{ sponsorId: string; eventCode: string }} params
- * @returns {Promise<PushSummary>} Aggregate counts plus per-meeting results.
+ * @returns {Promise<SyncReport>} A DB-friendly summary of the sponsor's push.
  */
 export async function pushAllForSponsor(params: {
     sponsorId: string;
     eventCode: string;
-}): Promise<PushSummary> {
-    const rows = await db
+}): Promise<SyncReport> {
+    // Load every portal meeting for this sponsor, then partition in memory so
+    // the untouched (already-synced) ones are still counted in the report.
+    const sponsorRows = await db
         .select()
         .from(scheduledMeetings)
         .where(
@@ -427,23 +438,22 @@ export async function pushAllForSponsor(params: {
                     eq(scheduledMeetings.attendeeA, params.sponsorId),
                     eq(scheduledMeetings.attendeeB, params.sponsorId),
                 ),
-                or(
-                    isNull(scheduledMeetings.cventAppointmentId),
-                    and(
-                        isNotNull(scheduledMeetings.lastModifiedAt),
-                        isNotNull(scheduledMeetings.lastPushedAt),
-                        gt(
-                            scheduledMeetings.lastModifiedAt,
-                            scheduledMeetings.lastPushedAt,
-                        ),
-                    ),
-                ),
             ),
         );
 
-    const summary = await pushMeetingRows(params.eventCode, rows);
+    const toPush = sponsorRows.filter(needsSync);
+    const alreadySynced = sponsorRows.length - toPush.length;
+
+    const summary = await pushMeetingRows(params.eventCode, toPush);
     revalidatePath("/admin/meetings", "layout");
-    return summary;
+
+    return buildSyncReport({
+        eventCode: params.eventCode,
+        generatedAt: new Date().toISOString(),
+        totalPortalMeetings: sponsorRows.length,
+        alreadySynced,
+        results: summary.results,
+    });
 }
 
 /** One selectable delegate in the create meeting modal. */

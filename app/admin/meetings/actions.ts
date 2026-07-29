@@ -10,11 +10,22 @@ import {
 } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
-import { getEventAppointments } from "@/lib/cvent/client";
+import { getEventAppointments, cancelAppointment } from "@/lib/cvent/client";
 import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
-import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
-import { runScheduler, type PreexistingSchedule } from "@/lib/scheduling/engine";
-import { buildSchedulerReport, type SchedulerReport } from "@/lib/scheduling/report";
+import {
+    buildSyncReport,
+    isAppointmentAlreadyGone,
+    parseCventError,
+    type SyncReport,
+} from "@/lib/cvent/syncReport";
+import {
+    runScheduler,
+    type PreexistingSchedule,
+} from "@/lib/scheduling/engine";
+import {
+    buildSchedulerReport,
+    type SchedulerReport,
+} from "@/lib/scheduling/report";
 import { pairKey } from "@/lib/scheduling/helpers";
 import { loadMockRequests } from "@/lib/scheduling/loader";
 import { paginate, type Page } from "@/lib/admin/pagination";
@@ -91,18 +102,29 @@ export async function listSponsorsPage(params: {
     // Build a map of request counts keyed by attendee ID.
     const requestCountMap = new Map<string, number>();
     for (const r of requestRows) {
-        requestCountMap.set(r.requesterId, (requestCountMap.get(r.requesterId) ?? 0) + 1);
+        requestCountMap.set(
+            r.requesterId,
+            (requestCountMap.get(r.requesterId) ?? 0) + 1,
+        );
     }
 
     // Build a map of scheduled meeting counts keyed by attendee ID.
     const scheduledCountMap = new Map<string, number>();
     for (const m of meetingRows) {
-        scheduledCountMap.set(m.attendeeA, (scheduledCountMap.get(m.attendeeA) ?? 0) + 1);
-        scheduledCountMap.set(m.attendeeB, (scheduledCountMap.get(m.attendeeB) ?? 0) + 1);
+        scheduledCountMap.set(
+            m.attendeeA,
+            (scheduledCountMap.get(m.attendeeA) ?? 0) + 1,
+        );
+        scheduledCountMap.set(
+            m.attendeeB,
+            (scheduledCountMap.get(m.attendeeB) ?? 0) + 1,
+        );
     }
 
     // Filter attendees to only include sponsors with a Salesforce ID.
-    const sponsors = attendees.filter((a) => a.role === "sponsor" && a.salesforceId);
+    const sponsors = attendees.filter(
+        (a) => a.role === "sponsor" && a.salesforceId,
+    );
 
     // Map sponsors to SponsorRow, attaching request and scheduled counts from the maps.
     let rows: SponsorRow[] = sponsors.map((s) => ({
@@ -188,7 +210,8 @@ async function buildPreexistingFromCvent(
     // Cvent contact id → our Salesforce id, to translate appointment participants.
     const salesforceIdByContactId = new Map<string, string>();
     for (const a of attendees) {
-        if (a.cventContactId) salesforceIdByContactId.set(a.cventContactId, a.salesforceId);
+        if (a.cventContactId)
+            salesforceIdByContactId.set(a.cventContactId, a.salesforceId);
     }
 
     const busyStartTimesByAttendee = new Map<string, Set<string>>();
@@ -239,22 +262,26 @@ export async function runSchedulerForEvent(
     const mockRequestsPath = `${process.cwd()}/data/mock/requests.json`;
 
     // Load attendees, requests, the event's Cvent availability, and already-pushed meetings.
-    const [attendees, requestRows, scheduleData, pushedRows] = await Promise.all([
-        loadAttendees(false, eventCode),
-        isMock
-            ? loadMockRequests(mockRequestsPath)
-            : db.select().from(meetingRequests).where(eq(meetingRequests.eventCode, eventCode)),
-        loadEventScheduleData(eventCode),
-        db
-            .select()
-            .from(scheduledMeetings)
-            .where(
-                and(
-                    eq(scheduledMeetings.eventCode, eventCode),
-                    isNotNull(scheduledMeetings.cventAppointmentId),
+    const [attendees, requestRows, scheduleData, pushedRows] =
+        await Promise.all([
+            loadAttendees(false, eventCode),
+            isMock
+                ? loadMockRequests(mockRequestsPath)
+                : db
+                      .select()
+                      .from(meetingRequests)
+                      .where(eq(meetingRequests.eventCode, eventCode)),
+            loadEventScheduleData(eventCode),
+            db
+                .select()
+                .from(scheduledMeetings)
+                .where(
+                    and(
+                        eq(scheduledMeetings.eventCode, eventCode),
+                        isNotNull(scheduledMeetings.cventAppointmentId),
+                    ),
                 ),
-            ),
-    ]);
+        ]);
 
     const engineRequests: MeetingRequest[] = requestRows.map((r) => ({
         id: String(r.id),
@@ -312,13 +339,15 @@ export async function runSchedulerForEvent(
     }
 
     // Replace all un-pushed portal meetings for this event with the reconciled output.
-    await db.delete(scheduledMeetings).where(
-        and(
-            eq(scheduledMeetings.eventCode, eventCode),
-            eq(scheduledMeetings.source, "portal"),
-            isNull(scheduledMeetings.cventAppointmentId),
-        ),
-    );
+    await db
+        .delete(scheduledMeetings)
+        .where(
+            and(
+                eq(scheduledMeetings.eventCode, eventCode),
+                eq(scheduledMeetings.source, "portal"),
+                isNull(scheduledMeetings.cventAppointmentId),
+            ),
+        );
 
     if (reconciledSchedule.length > 0) {
         const toInsert: NewScheduledMeeting[] = reconciledSchedule.map((m) => ({
@@ -402,4 +431,190 @@ export async function pushAllForEvent(eventCode: string): Promise<SyncReport> {
         alreadySynced,
         results: summary.results,
     });
+}
+
+// ---------------------------------------------------------------------------
+// Bulk maintenance actions — for resetting an event's schedule from the
+// Manage Meetings toolbar. Both return an ephemeral MaintenanceReport the UI
+// renders in MaintenanceReportPanel (mirroring the scheduler/sync reports).
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of a bulk maintenance action, shown in MaintenanceReportPanel. A
+ * discriminated union so one panel can render both operations.
+ */
+export type MaintenanceReport =
+    | {
+          kind: "clear_unsynced";
+          eventCode: string;
+          generatedAt: string;
+          /** Number of un-synced portal meetings deleted from the DB. */
+          deleted: number;
+      }
+    | {
+          kind: "unpush_synced";
+          eventCode: string;
+          generatedAt: string;
+          /** Synced portal meetings found (Cvent cancels attempted). */
+          total: number;
+          /** How many were cancelled in Cvent and unlinked in the DB. */
+          unpushed: number;
+          /**
+           * How many were already gone in Cvent (cancelled manually or
+           * missing). Unlinked in the DB anyway, since there's nothing to cancel.
+           */
+          alreadyGone: number;
+          /** How many failed to cancel (left synced in the DB). */
+          failed: number;
+          /** Per-meeting failure detail. */
+          failures: { meetingId: string; label: string; detail: string }[];
+          /** Per-meeting notes for the already-gone meetings. */
+          notes: { meetingId: string; label: string; detail: string }[];
+      };
+
+/**
+ * Deletes every un-synced portal meeting for an event from the DB — rows that
+ * were never pushed to Cvent (no appointment id). Meetings already synced to
+ * Cvent are left untouched so their Cvent appointments aren't orphaned; this is
+ * the same guard the scheduler uses before re-inserting fresh output.
+ *
+ * @param {string} eventCode - The event whose un-synced meetings to clear.
+ * @returns {Promise<MaintenanceReport>} How many meetings were deleted.
+ */
+export async function clearUnsyncedForEvent(
+    eventCode: string,
+): Promise<MaintenanceReport> {
+    // Only un-synced (cventAppointmentId IS NULL) portal rows. Cvent-native
+    // rows (source "cvent") are read-only and excluded. RETURNING gives us the
+    // deleted count for the report.
+    const deleted = await db
+        .delete(scheduledMeetings)
+        .where(
+            and(
+                eq(scheduledMeetings.eventCode, eventCode),
+                eq(scheduledMeetings.source, "portal"),
+                isNull(scheduledMeetings.cventAppointmentId),
+            ),
+        )
+        .returning({ id: scheduledMeetings.id });
+
+    // Revalidate the admin meetings page to reflect the cleared schedule.
+    revalidatePath("/admin/meetings");
+
+    return {
+        kind: "clear_unsynced",
+        eventCode,
+        generatedAt: new Date().toISOString(),
+        deleted: deleted.length,
+    };
+}
+
+/**
+ * Cancels the Cvent appointment behind every synced portal meeting for an
+ * event, then clears that meeting's sync link (cventAppointmentId + lastPushedAt)
+ * so it reads as un-synced again. The DB row itself is kept — this only unwinds
+ * the push to Cvent, not the schedule.
+ *
+ * The DB link is cleared only after the Cvent cancel succeeds, so a failed
+ * cancel leaves the row pointing at a still-live appointment rather than
+ * silently orphaning it. Per-meeting failures are collected and skipped so one
+ * bad cancel doesn't abort the batch.
+ *
+ * Note: Cvent never frees a cancelled appointment's `code`, so re-pushing these
+ * exact rows would collide (APPT_CODE_ALREADY_EXISTS). The normal reset flow
+ * regenerates ids first — unpush, then clear/re-run the engine — so codes stay
+ * fresh; see lib/cvent/push.ts.
+ *
+ * @param {string} eventCode - The event whose synced meetings to unpush.
+ * @returns {Promise<MaintenanceReport>} Counts plus per-meeting failure detail.
+ */
+export async function unpushAllForEvent(
+    eventCode: string,
+): Promise<MaintenanceReport> {
+    // Synced portal meetings: rows we pushed (they carry a Cvent appointment
+    // id). Cvent-native rows are read-only and excluded.
+    const syncedRows = await db
+        .select()
+        .from(scheduledMeetings)
+        .where(
+            and(
+                eq(scheduledMeetings.eventCode, eventCode),
+                eq(scheduledMeetings.source, "portal"),
+                isNotNull(scheduledMeetings.cventAppointmentId),
+            ),
+        );
+
+    // Names for the failure labels, mapped from Salesforce ids like the push flow.
+    const attendees = await loadAttendees(false, eventCode);
+    const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
+
+    const failures: { meetingId: string; label: string; detail: string }[] = [];
+    const notes: { meetingId: string; label: string; detail: string }[] = [];
+    let unpushed = 0;
+    let alreadyGone = 0;
+
+    for (const row of syncedRows) {
+        // Guarded by the query above, but keep the type narrow for the DB call.
+        if (!row.cventAppointmentId) continue;
+        const label = `${attendeeById.get(row.attendeeA)?.name ?? row.attendeeA} & ${
+            attendeeById.get(row.attendeeB)?.name ?? row.attendeeB
+        }`;
+
+        // Unlinks the meeting in the DB so it reads as un-synced (row kept).
+        const unlink = () =>
+            db
+                .update(scheduledMeetings)
+                .set({ cventAppointmentId: null, lastPushedAt: null })
+                .where(eq(scheduledMeetings.id, row.id));
+
+        try {
+            // Cancel in Cvent first, then unlink. Only clear once the cancel
+            // succeeds, so a real failure leaves the row pointing at a live
+            // appointment rather than silently orphaning it.
+            await cancelAppointment(eventCode, row.cventAppointmentId);
+            await unlink();
+            unpushed++;
+        } catch (err) {
+            // If the appointment is already gone in Cvent (cancelled manually or
+            // missing), there's nothing left to cancel — unlink locally anyway
+            // and note it rather than treating it as a failure.
+            if (isAppointmentAlreadyGone(err)) {
+                await unlink();
+                alreadyGone++;
+                notes.push({
+                    meetingId: row.id,
+                    label,
+                    detail: "Already cancelled or missing in Cvent — unsynced locally.",
+                });
+                continue;
+            }
+
+            // A genuine failure: leave the row synced. Prefer Cvent's
+            // human-readable message when present.
+            const base = err instanceof Error ? err.message : String(err);
+            const cventMessage = parseCventError(
+                (err as { body?: string }).body,
+            ).message;
+            failures.push({
+                meetingId: row.id,
+                label,
+                detail: cventMessage ?? base,
+            });
+        }
+    }
+
+    // Revalidate the admin meetings page to reflect the updated sync status.
+    revalidatePath("/admin/meetings");
+
+    return {
+        kind: "unpush_synced",
+        eventCode,
+        generatedAt: new Date().toISOString(),
+        total: syncedRows.length,
+        unpushed,
+        alreadyGone,
+        failed: failures.length,
+        failures,
+        notes,
+    };
 }

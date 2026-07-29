@@ -16,8 +16,15 @@ import { TablePagination } from "../_components/TablePagination";
 import { TierPill } from "./_components/TierPill";
 import SchedulerReportPanel from "./SchedulerReportPanel";
 import SyncReportPanel from "./SyncReportPanel";
-import { pushAllForEvent, runSchedulerForEvent } from "./actions";
+import MaintenanceReportPanel from "./MaintenanceReportPanel";
+import {
+    clearUnsyncedForEvent,
+    pushAllForEvent,
+    runSchedulerForEvent,
+    unpushAllForEvent,
+} from "./actions";
 import type {
+    MaintenanceReport,
     SponsorRow,
     SponsorSortField,
     SponsorsPage,
@@ -57,8 +64,14 @@ export default function SponsorsTable({
     const [runError, setRunError] = useState<string | null>(null);
     const [showPushAllModal, setShowPushAllModal] = useState(false);
     const [pushAllError, setPushAllError] = useState<string | null>(null);
+    const [showClearModal, setShowClearModal] = useState(false);
+    const [clearError, setClearError] = useState<string | null>(null);
+    const [showUnpushModal, setShowUnpushModal] = useState(false);
+    const [unpushError, setUnpushError] = useState<string | null>(null);
     const [report, setReport] = useState<SchedulerReport | null>(null);
     const [syncReport, setSyncReport] = useState<SyncReport | null>(null);
+    const [maintenanceReport, setMaintenanceReport] =
+        useState<MaintenanceReport | null>(null);
     const [isPending, startTransition] = useTransition();
 
     // Handler for running the scheduling engine for the selected event.
@@ -89,6 +102,39 @@ export default function SponsorsTable({
                 router.refresh();
             } catch (e) {
                 setPushAllError(e instanceof Error ? e.message : "An unexpected error occurred.");
+            }
+        });
+    }
+
+    // Handler for clearing all un-synced meetings for the selected event.
+    function handleClearUnsynced() {
+        if (!selectedEvent) return;
+        startTransition(async () => {
+            try {
+                setClearError(null);
+                const result = await clearUnsyncedForEvent(selectedEvent);
+                setMaintenanceReport(result);
+                setShowClearModal(false);
+                router.refresh();
+            } catch (e) {
+                setClearError(e instanceof Error ? e.message : "An unexpected error occurred.");
+            }
+        });
+    }
+
+    // Handler for unpushing (cancelling in Cvent) all synced meetings for the
+    // selected event. The meetings stay in the DB but become un-synced.
+    function handleUnpushAll() {
+        if (!selectedEvent) return;
+        startTransition(async () => {
+            try {
+                setUnpushError(null);
+                const result = await unpushAllForEvent(selectedEvent);
+                setMaintenanceReport(result);
+                setShowUnpushModal(false);
+                router.refresh();
+            } catch (e) {
+                setUnpushError(e instanceof Error ? e.message : "An unexpected error occurred.");
             }
         });
     }
@@ -226,6 +272,20 @@ export default function SponsorsTable({
                 >
                     {isPending ? "Working…" : "Push All to Cvent"}
                 </button>
+                <button
+                    className="adm-new-btn"
+                    disabled={!selectedEvent || isPending}
+                    onClick={() => { setClearError(null); setShowClearModal(true); }}
+                >
+                    {isPending ? "Working…" : "Clear All Unsynced"}
+                </button>
+                <button
+                    className="adm-new-btn"
+                    disabled={!selectedEvent || isPending}
+                    onClick={() => { setUnpushError(null); setShowUnpushModal(true); }}
+                >
+                    {isPending ? "Working…" : "Unpush All Synced"}
+                </button>
             </div>
 
             {showRunModal && selectedEvent && (
@@ -248,6 +308,26 @@ export default function SponsorsTable({
                 />
             )}
 
+            {showClearModal && selectedEvent && (
+                <ClearUnsyncedModal
+                    eventCode={selectedEvent}
+                    isPending={isPending}
+                    error={clearError}
+                    onConfirm={handleClearUnsynced}
+                    onCancel={() => setShowClearModal(false)}
+                />
+            )}
+
+            {showUnpushModal && selectedEvent && (
+                <UnpushAllModal
+                    eventCode={selectedEvent}
+                    isPending={isPending}
+                    error={unpushError}
+                    onConfirm={handleUnpushAll}
+                    onCancel={() => setShowUnpushModal(false)}
+                />
+            )}
+
             {report && (
                 <SchedulerReportPanel
                     report={report}
@@ -259,6 +339,13 @@ export default function SponsorsTable({
                 <SyncReportPanel
                     report={syncReport}
                     onDismiss={() => setSyncReport(null)}
+                />
+            )}
+
+            {maintenanceReport && (
+                <MaintenanceReportPanel
+                    report={maintenanceReport}
+                    onDismiss={() => setMaintenanceReport(null)}
                 />
             )}
 
@@ -408,6 +495,84 @@ function PushAllModal({
                     <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
                     <button className="adm-btn adm-btn-primary" onClick={onConfirm} disabled={isPending}>
                         {isPending ? "Pushing…" : "Push All"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ClearUnsyncedModal — confirmation dialog for deleting all un-synced meetings.
+// ---------------------------------------------------------------------------
+
+function ClearUnsyncedModal({
+    eventCode,
+    isPending,
+    error,
+    onConfirm,
+    onCancel,
+}: {
+    eventCode: string;
+    isPending: boolean;
+    error: string | null;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <div className="adm-modal-overlay">
+            <div className="adm-modal adm-modal-md">
+                <div className="adm-modal-title">Clear All Unsynced Meetings?</div>
+                <p className="adm-modal-body">
+                    This permanently deletes every meeting for{" "}
+                    <strong>{eventCode}</strong>{" "}
+                    that has not been pushed to Cvent. Meetings already synced to
+                    Cvent are kept. This cannot be undone.
+                </p>
+                {error && <div className="adm-modal-error">{error}</div>}
+                <div className="adm-modal-actions">
+                    <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
+                    <button className="adm-btn adm-btn-danger" onClick={onConfirm} disabled={isPending}>
+                        {isPending ? "Clearing…" : "Clear Unsynced"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// UnpushAllModal — confirmation dialog for cancelling all synced Cvent
+// appointments while keeping the meetings in the DB.
+// ---------------------------------------------------------------------------
+
+function UnpushAllModal({
+    eventCode,
+    isPending,
+    error,
+    onConfirm,
+    onCancel,
+}: {
+    eventCode: string;
+    isPending: boolean;
+    error: string | null;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <div className="adm-modal-overlay">
+            <div className="adm-modal adm-modal-md">
+                <div className="adm-modal-title">Unpush All Synced Meetings?</div>
+                <p className="adm-modal-body">
+                    This cancels the Cvent appointment behind every synced meeting
+                    for <strong>{eventCode}</strong>. The meetings stay in the
+                    portal but return to un-synced. This cannot be undone.
+                </p>
+                {error && <div className="adm-modal-error">{error}</div>}
+                <div className="adm-modal-actions">
+                    <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
+                    <button className="adm-btn adm-btn-danger" onClick={onConfirm} disabled={isPending}>
+                        {isPending ? "Unpushing…" : "Unpush All"}
                     </button>
                 </div>
             </div>

@@ -14,8 +14,8 @@
 
 :root {
   /* Font families — populated by Next.js font variable injection in layout.tsx */
-  --display: var(--font-syne), sans-serif;
-  --body: var(--font-dm-sans), sans-serif;
+  --display: var(--font-inter), sans-serif;
+  --body: var(--font-inter), sans-serif;
   --mono: var(--font-dm-mono), monospace;
 
   /* Color palette — Assemble brand system */

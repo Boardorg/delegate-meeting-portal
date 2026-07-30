@@ -235,7 +235,7 @@
 /* ── LOGIN ── */
 .login-page { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
 .login-card { width:100%; max-width:380px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:32px 28px; display:flex; flex-direction:column; gap:22px; animation:fadeIn .18s var(--ease); }
-.login-brand { display:flex; align-items:center; gap:10px; font-family:var(--display); font-size:14px; font-weight:700; color:var(--text); }
+.login-brand { display:flex; align-items:center; gap:12px; }
 .login-heading { display:flex; flex-direction:column; gap:4px; }
 .login-eyebrow { font-family:var(--body); font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--t2); }
 .login-title { font-family:var(--display); font-size:20px; font-weight:700; letter-spacing:-0.01em; color:var(--text); margin:0; }

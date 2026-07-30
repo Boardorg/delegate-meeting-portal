@@ -42,8 +42,8 @@ export default function TopBar({ user, actions }: TopBarProps) {
     return (
         <header className="topbar">
             <div className="topbar-logo">
-                <div className="logo-mark">DM</div>
-                Delegate Meeting Portal
+                <div className="logo-mark">MP</div>
+                Meeting Preferences
             </div>
             <div className="topbar-spacer" />
             <div className="topbar-right">

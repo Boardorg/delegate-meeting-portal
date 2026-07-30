@@ -230,8 +230,8 @@ function LoginForm() {
         <main className="login-page">
             <div className="login-card">
                 <div className="login-brand">
-                    <div className="logo-mark">DM</div>
-                    Delegate Meeting Portal
+                    <div className="logo-mark">MP</div>
+                    Meeting Preferences
                 </div>
 
                 {step === "contact" ? (

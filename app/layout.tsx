@@ -22,7 +22,7 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-    title: "Delegate Meeting Portal",
+    title: "Meeting Preferences",
     description: "Sponsor meeting request portal",
 };
 

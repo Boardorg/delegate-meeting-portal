@@ -18,20 +18,28 @@
   --body: var(--font-dm-sans), sans-serif;
   --mono: var(--font-dm-mono), monospace;
 
-  /* Color palette */
-  --bg: #0b0c0f; --surface: #13141a; --s2: #1a1c24; --s3: #22242e;
-  --border: #2a2d38; --border-up: #363a48;
-  --red: #e8391e; --red-s: rgba(232,57,30,0.12); --red-b: rgba(232,57,30,0.25);
-  --blue: #4f8ef7; --blue-s: rgba(79,142,247,0.1); --blue-b: rgba(79,142,247,0.25);
-  --gold: #f0a020; --gold-s: rgba(240,160,32,0.1);
-  --green: #2ec97e; --green-s: rgba(46,201,126,0.1); --green-b: rgba(46,201,126,0.3);
-  --purple: #9b72f5;
-  --text: #edeef2; --t2: #9a9eb0; --t3: #585c6e;
+  /* Color palette — Assemble brand system */
+  --bg: #ffffff; --surface: #fbfbfb; --s2: #e9e8eb; --s3: #c5c5c5;
+  --border: #b0b0b0; --border-up: #262626;
+  --teal: #089e9d; --teal-s: rgba(8,158,157,0.08); --teal-b: rgba(8,158,157,0.32); /* brand primary — CTAs, logo, primary accents */
+  --red: #b92025; --red-s: rgba(185,32,37,0.07); --red-b: rgba(185,32,37,0.3); /* alert / destructive only */
+  --red-deep: #8b181c; /* darkened --red for hover on solid-red buttons, same pattern as --blue-deep */
+  --blue: #2f8fe0; --blue-s: rgba(47,143,224,0.1); --blue-b: rgba(47,143,224,0.32); /* interactive / selected */
+  --blue-deep: #0a3b57; /* solid CTA blue — Request Meeting, My Requests. Deliberately distinct from --blue (lighter, interactive) */
+  --gold: #a3690f; --gold-s: rgba(163,105,15,0.12); /* admin warning tier, below --red severity */
+  --green: #7fa0b8; --green-s: rgba(127,160,184,0.14); --green-b: rgba(127,160,184,0.42); /* positive / requested — muted sibling of --blue */
+  --green-ink: #3f5f75; /* same hue as --green, darkened for legible text — --green itself is too light to read as foreground text on white */
+  --purple: #e44f3f; /* diamond / premium tier accent — its own hue, clear of --teal, --blue, and the revenue scale */
+  --progress-full: #11a5a3; /* admin progress bar — complete. A brighter sibling of --teal, distinct hue from --green (muted blue) */
+  --progress-mid: #006065; /* admin progress bar — in progress. Deep teal so it reads clearly darker than --progress-full, not just a lighter/muted version of it */
+  --text: #0c0c0c; --t2: #262626; --t3: rgba(12,12,12,0.62);
   --r: 8px; --r-lg: 12px; --ease: cubic-bezier(0.4,0,0.2,1);
 
-  /* Revenue color scale: bright green → deep blue */
-  --rev-1: #4ade80; --rev-2: #34d399; --rev-3: #22c5a8;
-  --rev-4: #14b8c0; --rev-5: #0ea5c0; --rev-6: #1a7fb5; --rev-7: #1e4fa0;
+  /* Revenue color scale: deep aubergine (smallest) → bright plum (largest),
+     one continuous hue — kept apart from --teal (brand) and --blue
+     (interactive/positive) so revenue color-coding never collides with UI state. */
+  --rev-1: #2b1730; --rev-2: #432447; --rev-3: #5c2f66;
+  --rev-4: #7a3f7e; --rev-5: #9c579c; --rev-6: #c17fbc; --rev-7: #d9b3d6;
 }
 
 html, body {
@@ -57,8 +65,8 @@ a { color: inherit; text-decoration: none; }
 .admin-event-switcher-empty { font-size:12px; color:var(--t3); line-height:1.4; }
 
 /* ── TESTING BAR (global, testing mode only) ── */
-.testing-bar { display:flex; align-items:center; gap:16px; padding:8px 16px; background:var(--gold-s); border-bottom:1px solid rgba(240,160,32,0.35); }
-.testing-bar-badge { flex-shrink:0; font-family:var(--mono); font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:.08em; color:var(--gold); border:1px solid rgba(240,160,32,0.4); border-radius:100px; padding:3px 9px; }
+.testing-bar { display:flex; align-items:center; gap:16px; padding:8px 16px; background:var(--gold-s); border-bottom:1px solid rgba(163,105,15,0.3); }
+.testing-bar-badge { flex-shrink:0; font-family:var(--mono); font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:.08em; color:var(--gold); border:1px solid rgba(163,105,15,0.35); border-radius:100px; padding:3px 9px; }
 /* Lay the reused switchers out inline within the bar. */
 .testing-bar .admin-event-switcher { flex-direction:row; align-items:center; gap:8px; padding:0; border-bottom:none; }
 .testing-bar .admin-event-switcher-select { width:auto; min-width:150px; max-width:260px; }
@@ -66,14 +74,17 @@ a { color: inherit; text-decoration: none; }
 .testing-bar-nav:hover { background:var(--s3); }
 
 /* ── TOPBAR (shared by frontend and backend) ── */
-.topbar { position:sticky; top:0; z-index:200; background:rgba(11,12,15,0.88); backdrop-filter:blur(16px); border-bottom:1px solid var(--border); height:58px; display:flex; align-items:center; padding:0 24px; gap:14px; }
+.topbar { position:sticky; top:0; z-index:200; background:rgba(255,255,255,0.92); backdrop-filter:blur(16px); border-bottom:1px solid var(--border); height:58px; display:flex; align-items:center; padding:0 24px; gap:14px; }
 .topbar-logo { font-family:var(--display); font-size:15px; font-weight:700; letter-spacing:-0.01em; display:flex; align-items:center; gap:10px; flex-shrink:0; }
-.logo-mark { width:30px; height:30px; background:var(--red); border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:11px; font-weight:500; color:#fff; }
+.logo-mark { width:30px; height:30px; background:var(--teal); border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:11px; font-weight:500; color:#fff; }
 .topbar-spacer { flex:1; }
 .topbar-right { display:flex; align-items:center; gap:10px; }
-.user-chip { display:flex; align-items:center; gap:8px; background:var(--s2); border:1px solid var(--border); border-radius:var(--r); padding:5px 12px; }
+.user-chip { display:flex; align-items:center; gap:8px; background:none; border:none; padding:0 12px; }
 .user-name { font-size:12px; font-weight:500; }
 .user-sub { font-size:11px; color:var(--t2); }
+.logout-btn { background:none; border:1px solid var(--border); border-radius:var(--r); padding:7px 14px; font-family:var(--body); font-size:13px; font-weight:500; color:var(--t2); cursor:pointer; transition:border-color .15s, color .15s; }
+.logout-btn:hover:not(:disabled) { border-color:var(--border-up); color:var(--text); }
+.logout-btn:disabled { opacity:.5; cursor:not-allowed; }
 
 /* ── Animations + scrollbar (global utility) ── */
 @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }

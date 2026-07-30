@@ -36,13 +36,9 @@ export default function LogoutButton() {
     return (
         <button
             type="button"
+            className="logout-btn"
             onClick={handleLogout}
             disabled={pending || authDisabled}
-            style={{
-                padding: "6px 12px",
-                fontSize: 14,
-                cursor: "pointer",
-            }}
         >
             {pending ? "Logging out…" : "Log out"}
         </button>

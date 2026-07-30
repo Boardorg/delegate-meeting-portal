@@ -132,7 +132,7 @@ export default function EventSettingsForm({ active, hasEvents }: Props) {
                 {!creating && (
                     <button
                         type="button"
-                        className="adm-new-btn"
+                        className="adm-new-btn adm-new-btn-primary"
                         onClick={beginCreate}
                         disabled={pending}
                     >

@@ -1134,12 +1134,15 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
 
     const pkgLabel =
         currentSponsor.sponsorTier === "diamond" ? "◆ Diamond" : "● Standard";
+    // Counter sits on the solid --blue-deep "My Requests" button, so these
+    // need to read on a dark background rather than the light --red/--t2 tones
+    // used elsewhere.
     const reqCountColor =
         reqCount >= maxMeetings
-            ? "var(--red)"
+            ? "#ffb3ae"
             : reqCount > 0
-              ? "var(--green)"
-              : "var(--t2)";
+              ? "#ffffff"
+              : "rgba(255,255,255,0.7)";
 
     const showHCards = viewMode === "list" && catalogWidth < LIST_BREAK;
 
@@ -1340,7 +1343,11 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                 </div>
                 <div className="drawer-body">
                     <div className="pkg-bar">
-                        <span className="pkg-label">{pkgLabel} package</span>
+                        <span
+                            className={`pkg-label ${currentSponsor.sponsorTier === "diamond" ? "pkg-label-diamond" : ""}`}
+                        >
+                            {pkgLabel} package
+                        </span>
                         <span
                             className={`pkg-val ${drawerEntries.length >= maxMeetings ? "pkg-full" : "pkg-ok"}`}
                         >

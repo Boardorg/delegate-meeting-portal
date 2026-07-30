@@ -33,6 +33,10 @@
 .adm-new-btn { background:var(--s2); border:1px solid var(--border-up); border-radius:var(--r); padding:7px 14px; font-family:var(--body); font-size:13px; font-weight:500; color:var(--text); cursor:pointer; transition:background .15s; }
 .adm-new-btn:hover:not(:disabled) { background:var(--s3); }
 .adm-new-btn:disabled { opacity:.5; cursor:not-allowed; }
+/* Push / create actions — same solid-blue, darken-on-hover pattern as the
+   frontend's Request Meeting button, so the two apps read as one system. */
+.adm-new-btn-primary { background:var(--blue); border-color:var(--blue); font-weight:700; color:#fff; }
+.adm-new-btn-primary:hover:not(:disabled) { background:var(--blue-deep); border-color:var(--blue-deep); }
 .adm-table { width:100%; border-collapse:collapse; font-size:13px; }
 .adm-table th, .adm-table td { padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle; }
 .adm-table th { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--t2); font-weight:600; background:var(--surface); }
@@ -51,12 +55,21 @@
 .adm-btn { background:var(--s2); border:1px solid var(--border); border-radius:4px; padding:4px 10px; font-family:var(--body); font-size:12px; color:var(--text); cursor:pointer; transition:background .12s; }
 .adm-btn:hover:not(:disabled) { background:var(--s3); }
 .adm-btn:disabled { opacity:.5; cursor:not-allowed; }
-.adm-btn-primary { background:var(--blue, #0070f3); border-color:var(--blue, #0070f3); color:#fff; }
-.adm-btn-primary:hover:not(:disabled) { filter:brightness(1.1); background:var(--blue, #0070f3); }
-.adm-btn-danger { background:transparent; border-color:var(--red-b, #e8391e); color:var(--red, #e8391e); }
-.adm-btn-danger:hover:not(:disabled) { background:rgba(232,57,30,0.1); }
+.adm-btn-primary { background:var(--blue, #0070f3); border-color:var(--blue, #0070f3); color:#fff; font-weight:700; }
+.adm-btn-primary:hover:not(:disabled) { background:var(--blue-deep); border-color:var(--blue-deep); }
+.adm-btn-danger { background:transparent; border-color:var(--red-b, #b92025); color:var(--red, #b92025); }
+.adm-btn-danger:hover:not(:disabled) { background:rgba(185,32,37,0.08); }
+/* Trigger-sized counterpart to .adm-btn-danger, for actions whose own
+   confirm modal is already styled as destructive (e.g. Clear All Unsynced). */
+.adm-new-btn-danger { background:none; border-color:var(--red-b); color:var(--red); }
+.adm-new-btn-danger:hover:not(:disabled) { background:var(--red-s); }
+/* Stronger sibling of .adm-new-btn-danger — solid fill, for the most
+   consequential destructive action (Unpush All Synced), same darken-on-hover
+   pattern as .adm-new-btn-primary. */
+.adm-new-btn-danger-solid { background:var(--red); border-color:var(--red); font-weight:700; color:#fff; }
+.adm-new-btn-danger-solid:hover:not(:disabled) { background:var(--red-deep); border-color:var(--red-deep); }
 .adm-confirm-label { font-size:12px; color:var(--t2); margin-right:4px; }
-.adm-row-error td { background:rgba(232,57,30,0.07); color:var(--red, #e8391e); font-size:12px; padding:6px 12px; }
+.adm-row-error td { background:rgba(185,32,37,0.06); color:var(--red, #b92025); font-size:12px; padding:6px 12px; }
 
 /* Toolbar above a table: filters (event picker) + live search. */
 .adm-toolbar { display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; }
@@ -86,17 +99,17 @@
 
 /* ── Tier pill (TierPill component) ── */
 .tier-pill { font-size:10px; padding:2px 8px; border-radius:100px; font-weight:500; white-space:nowrap; }
-.tier-pill-diamond  { background:rgba(155,114,245,0.12); color:var(--purple); border:1px solid rgba(155,114,245,0.25); }
-.tier-pill-standard { background:rgba(46,201,126,0.1);   color:var(--green);  border:1px solid rgba(46,201,126,0.3); }
+.tier-pill-diamond  { background:rgba(228,79,63,0.1);   color:var(--purple);   border:1px solid rgba(228,79,63,0.28); }
+.tier-pill-standard { background:rgba(127,160,184,0.12); color:var(--green-ink); border:1px solid rgba(127,160,184,0.3); }
 
 /* ── Generic badge chip (MatchKindChip, SyncChip, SourceChip) ── */
 .adm-chip { font-size:10px; padding:2px 7px; border-radius:100px; font-weight:500; white-space:nowrap; }
-.adm-chip-mutual          { background:var(--green-s);          color:var(--green);  border:1px solid var(--green-b); }
+.adm-chip-mutual          { background:var(--green-s);          color:var(--green-ink); border:1px solid var(--green-b); }
 .adm-chip-sponsor-choice  { background:var(--blue-s);           color:var(--blue);   border:1px solid var(--blue-b); }
-.adm-chip-delegate-choice { background:rgba(155,114,245,0.1);   color:var(--purple); border:1px solid rgba(155,114,245,0.25); }
-.adm-chip-admin           { background:rgba(240,160,32,0.1);    color:var(--gold);   border:1px solid rgba(240,160,32,0.3); }
-.adm-chip-synced          { background:var(--green-s);          color:var(--green);  border:1px solid var(--green-b); }
-.adm-chip-modified        { background:rgba(240,160,32,0.1);    color:var(--gold);   border:1px solid rgba(240,160,32,0.3); }
+.adm-chip-delegate-choice { background:rgba(228,79,63,0.09);    color:var(--purple); border:1px solid rgba(228,79,63,0.25); }
+.adm-chip-admin           { background:rgba(163,105,15,0.1);    color:var(--gold);   border:1px solid rgba(163,105,15,0.3); }
+.adm-chip-synced          { background:var(--green-s);          color:var(--green-ink); border:1px solid var(--green-b); }
+.adm-chip-modified        { background:rgba(163,105,15,0.1);    color:var(--gold);   border:1px solid rgba(163,105,15,0.3); }
 .adm-chip-not-pushed      { background:var(--s3); color:var(--t2); border:1px solid var(--border); }
 .adm-chip-portal          { background:var(--blue-s); color:var(--blue); border:1px solid var(--blue-b); }
 .adm-chip-cvent           { background:var(--s3);    color:var(--t3);  border:1px solid var(--border); }
@@ -131,10 +144,10 @@
 .adm-modal-sub      { font-size:12px; color:var(--t2); margin-bottom:20px; }
 .adm-modal-body     { font-size:13px; color:var(--t2); line-height:1.55; margin:0 0 20px; }
 .adm-modal-actions  { display:flex; justify-content:flex-end; gap:10px; }
-.adm-modal-error    { margin-bottom:16px; padding:10px 14px; background:rgba(232,57,30,0.08); border:1px solid var(--red-b, rgba(232,57,30,0.3)); border-radius:var(--r); font-size:12px; color:var(--red, #e8391e); }
-.adm-modal-warn-over { font-size:12px; padding:8px 12px; border-radius:var(--r); background:rgba(232,57,30,0.08); color:var(--red);  border:1px solid rgba(232,57,30,0.25); }
-.adm-modal-warn-at   { font-size:12px; padding:8px 12px; border-radius:var(--r); background:rgba(240,160,32,0.1);  color:var(--gold); border:1px solid rgba(240,160,32,0.3); }
-.adm-modal-load-error { font-size:12px; color:var(--red, #e8391e); margin-bottom:16px; }
+.adm-modal-error    { margin-bottom:16px; padding:10px 14px; background:rgba(185,32,37,0.06); border:1px solid var(--red-b, rgba(185,32,37,0.3)); border-radius:var(--r); font-size:12px; color:var(--red, #b92025); }
+.adm-modal-warn-over { font-size:12px; padding:8px 12px; border-radius:var(--r); background:rgba(185,32,37,0.06); color:var(--red);  border:1px solid rgba(185,32,37,0.25); }
+.adm-modal-warn-at   { font-size:12px; padding:8px 12px; border-radius:var(--r); background:rgba(163,105,15,0.1);  color:var(--gold); border:1px solid rgba(163,105,15,0.3); }
+.adm-modal-load-error { font-size:12px; color:var(--red, #b92025); margin-bottom:16px; }
 .adm-modal-loading    { font-size:12px; color:var(--t3); margin-bottom:16px; }
 .adm-field-mb    { margin-bottom:14px; }
 .adm-field-mb-sm { margin-bottom:6px; }
@@ -158,7 +171,7 @@
 .adm-sync-item { padding:10px 14px; background:var(--s2); border:1px solid var(--border); border-left:3px solid var(--red); border-radius:var(--r); }
 .adm-sync-item-warn { border-left-color:var(--gold); }
 .adm-sync-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-.adm-sync-reason { flex-shrink:0; font-size:10px; text-transform:uppercase; letter-spacing:.06em; font-weight:600; color:var(--red); background:rgba(232,57,30,0.1); border:1px solid var(--red-b); border-radius:999px; padding:2px 10px; }
+.adm-sync-reason { flex-shrink:0; font-size:10px; text-transform:uppercase; letter-spacing:.06em; font-weight:600; color:var(--red); background:var(--red-s); border:1px solid var(--red-b); border-radius:999px; padding:2px 10px; }
 .adm-sync-hint { font-size:12px; color:var(--t2); margin-top:5px; line-height:1.5; }
 .adm-sync-detail { font-family:var(--mono); font-size:11px; color:var(--t3); margin-top:6px; white-space:pre-wrap; word-break:break-word; }
 

@@ -11,8 +11,8 @@ import type { SyncFailureReason, SyncReport } from "@/lib/cvent/syncReport";
 // detail behind it. Pure presentation over a serializable report.
 // ---------------------------------------------------------------------------
 
-const GREEN = "#2ec97e";
-const RED = "#e8391e";
+const GREEN = "#7fa0b8";
+const RED = "#b92025";
 
 // Short label per failure reason, for the reason tag.
 const REASON_LABEL: Record<SyncFailureReason, string> = {

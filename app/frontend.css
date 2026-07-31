@@ -41,7 +41,7 @@
 .acc-item { border-bottom:1px solid var(--border); }
 .acc-item:last-child { border-bottom:none; }
 .acc-trigger { width:100%; background:none; border:none; padding:11px 14px; display:flex; align-items:center; gap:8px; cursor:pointer; text-align:left; color:var(--text); font-family:var(--body); font-size:12px; transition:background .12s; }
-.acc-trigger:hover { background:var(--s3); }
+.acc-trigger:hover { background:var(--s2); }
 .acc-arrow { width:0; height:0; border:solid transparent; border-width:4px 0 4px 6px; border-left-color:var(--blue); flex-shrink:0; transition:transform .18s var(--ease); }
 .acc-item.open .acc-arrow { transform:rotate(90deg); }
 .acc-label { flex:1; line-height:1.3; }

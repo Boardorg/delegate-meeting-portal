@@ -14,8 +14,8 @@
 .admin-sidebar { flex:1; overflow-y:auto; padding:4px; display:flex; flex-direction:column; gap:2px; }
 .admin-sidebar-item { display:flex; flex-direction:column; }
 .admin-sidebar-row { display:flex; align-items:center; gap:10px; width:100%; padding:8px 12px; background:none; border:none; border-radius:var(--r-pill); font-family:var(--body); font-size:13px; font-weight:500; color:var(--text); text-decoration:none; cursor:pointer; transition:background .12s, color .12s; text-align:left; }
-.admin-sidebar-row:hover { background:var(--s2); }
-.admin-sidebar-row.active { background:var(--s3); color:var(--text); }
+.admin-sidebar-row:hover { background:#f2f1f3; } /* lighter than --s2 (active), but still visible against the white sidebar — --surface was too close to white to read as a hover state */
+.admin-sidebar-row.active { background:var(--s2); color:var(--text); }
 .admin-sidebar-icon { width:16px; display:inline-flex; align-items:center; justify-content:center; color:var(--t2); flex-shrink:0; }
 .admin-sidebar-row.active .admin-sidebar-icon { color:var(--text); }
 .admin-sidebar-label { flex:1; }
@@ -39,7 +39,7 @@
 .adm-new-btn-primary:hover:not(:disabled) { background:var(--teal-deep); border-color:var(--teal-deep); }
 .adm-table { width:100%; border-collapse:collapse; font-size:13px; }
 .adm-table th, .adm-table td { padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle; }
-.adm-table th { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--t2); font-weight:600; background:var(--surface); }
+.adm-table th { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text); font-weight:600; background:var(--bg); }
 .adm-row td { color:var(--text); }
 .adm-row-new td { background:rgba(0,112,243,0.04); }
 .adm-actions-col { width:200px; text-align:right; }

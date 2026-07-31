@@ -9,9 +9,9 @@
 /* ── Admin shell + sidebar ── */
 .admin-shell { display:flex; min-height:calc(100vh - 58px); }
 /* Sticky left column holding the global event switcher above the scrollable nav. */
-.admin-sidebar-col { width:240px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border); position:sticky; top:58px; height:calc(100vh - 58px); display:flex; flex-direction:column; }
+.admin-sidebar-col { width:240px; flex-shrink:0; background:var(--bg); padding-left:24px; position:sticky; top:58px; height:calc(100vh - 58px); display:flex; flex-direction:column; }
 /* .admin-event-switcher* live in globals.css — shared with the testing bar, which renders on the frontend too. */
-.admin-sidebar { flex:1; overflow-y:auto; padding:14px 8px; display:flex; flex-direction:column; gap:2px; }
+.admin-sidebar { flex:1; overflow-y:auto; padding:4px; display:flex; flex-direction:column; gap:2px; }
 .admin-sidebar-item { display:flex; flex-direction:column; }
 .admin-sidebar-row { display:flex; align-items:center; gap:10px; width:100%; padding:8px 12px; background:none; border:none; border-radius:var(--r-pill); font-family:var(--body); font-size:13px; font-weight:500; color:var(--text); text-decoration:none; cursor:pointer; transition:background .12s, color .12s; text-align:left; }
 .admin-sidebar-row:hover { background:var(--s2); }
@@ -21,7 +21,7 @@
 .admin-sidebar-label { flex:1; }
 .admin-sidebar-chevron { font-size:10px; color:var(--t3); transition:transform .15s; }
 .admin-sidebar-children { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
-.admin-main { flex:1; padding:24px; overflow:auto; }
+.admin-main { flex:1; padding:6px 24px 24px; overflow:auto; }
 
 /* ── Admin data tables (shared by /admin/users, /admin/requests, …) ──
    Neutral `adm-*` prefix: these styles back the shared table scaffolding

@@ -201,7 +201,7 @@
 .pkg-full { color:var(--red); }
 .drawer-empty { text-align:center; padding:48px 16px; color:var(--t2); }
 .drawer-empty-icon { font-size:28px; opacity:.25; margin-bottom:12px; }
-.d-item { background:var(--s2); border:1px solid var(--border); border-radius:var(--r-lg); padding:14px; margin-bottom:10px; animation:fadeIn .18s var(--ease); }
+.d-item { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:14px; margin-bottom:10px; animation:fadeIn .18s var(--ease); }
 .d-item-hero { display:flex; align-items:flex-start; gap:10px; margin-bottom:12px; }
 .d-meta { flex:1; min-width:0; }
 .d-company { font-family:var(--display); font-size:13px; font-weight:700; color:var(--text); line-height:1.3; }

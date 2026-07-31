@@ -35,8 +35,8 @@
 .adm-new-btn:disabled { opacity:.5; cursor:not-allowed; }
 /* Push / create actions — same solid-blue, darken-on-hover pattern as the
    frontend's Request Meeting button, so the two apps read as one system. */
-.adm-new-btn-primary { background:var(--blue); border-color:var(--blue); font-weight:700; color:#fff; }
-.adm-new-btn-primary:hover:not(:disabled) { background:var(--blue-deep); border-color:var(--blue-deep); }
+.adm-new-btn-primary { background:var(--teal); border-color:var(--teal); font-weight:700; color:#fff; }
+.adm-new-btn-primary:hover:not(:disabled) { background:var(--teal-deep); border-color:var(--teal-deep); }
 .adm-table { width:100%; border-collapse:collapse; font-size:13px; }
 .adm-table th, .adm-table td { padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle; }
 .adm-table th { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--t2); font-weight:600; background:var(--surface); }
@@ -55,8 +55,8 @@
 .adm-btn { background:var(--s2); border:1px solid var(--border); border-radius:var(--r-pill); padding:4px 10px; font-family:var(--body); font-size:12px; color:var(--text); cursor:pointer; transition:background .12s; }
 .adm-btn:hover:not(:disabled) { background:var(--s3); }
 .adm-btn:disabled { opacity:.5; cursor:not-allowed; }
-.adm-btn-primary { background:var(--blue, #0070f3); border-color:var(--blue, #0070f3); color:#fff; font-weight:700; }
-.adm-btn-primary:hover:not(:disabled) { background:var(--blue-deep); border-color:var(--blue-deep); }
+.adm-btn-primary { background:var(--teal); border-color:var(--teal); color:#fff; font-weight:700; }
+.adm-btn-primary:hover:not(:disabled) { background:var(--teal-deep); border-color:var(--teal-deep); }
 .adm-btn-danger { background:transparent; border-color:var(--red-b, #b92025); color:var(--red, #b92025); }
 .adm-btn-danger:hover:not(:disabled) { background:rgba(185,32,37,0.08); }
 /* Trigger-sized counterpart to .adm-btn-danger, for actions whose own

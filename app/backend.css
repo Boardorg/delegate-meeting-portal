@@ -49,8 +49,8 @@
 .adm-actions-cell { vertical-align:middle; }
 .adm-actions-inner { display:flex; gap:6px; justify-content:flex-end; align-items:center; min-height:28px; }
 .adm-empty { text-align:center; color:var(--t3); padding:32px !important; }
-.adm-input { width:100%; padding:5px 8px; font-size:12px; font-family:var(--body); background:var(--s2); border:1px solid var(--border); border-radius:var(--r); color:var(--text); }
-.adm-input:focus { outline:none; border-color:var(--blue-b); }
+.adm-input { width:100%; padding:5px 8px; font-size:12px; font-family:var(--body); background:var(--surface); border:1px solid var(--border); border-radius:var(--r); color:var(--text); transition:border-color .15s; }
+.adm-input:focus { outline:none; border-color:var(--border-up); }
 .adm-input:disabled { opacity:.6; }
 .adm-btn { background:var(--s2); border:1px solid var(--border); border-radius:var(--r-pill); padding:4px 10px; font-family:var(--body); font-size:12px; color:var(--text); cursor:pointer; transition:background .12s; }
 .adm-btn:hover:not(:disabled) { background:var(--s3); }
@@ -135,7 +135,7 @@
 
 /* ── Modal overlay + dialog ── */
 .adm-modal-overlay { position:fixed; inset:0; z-index:50; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; padding:16px; }
-.adm-modal    { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:28px 32px; width:100%; }
+.adm-modal    { background:var(--bg); border:1px solid var(--border); border-radius:var(--r-lg); padding:28px 32px; width:100%; }
 .adm-modal-sm { max-width:440px; }
 .adm-modal-md { max-width:460px; }
 .adm-modal-lg { max-width:500px; display:flex; flex-direction:column; gap:16px; }
@@ -155,7 +155,7 @@
 .adm-field .adm-input { width:100%; }
 
 /* ── Sponsor detail card (MeetingDetail header block) ── */
-.adm-card      { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:20px 24px; margin-bottom:20px; }
+.adm-card      { background:var(--bg); border:1px solid var(--border); border-radius:var(--r-lg); padding:20px 24px; margin-bottom:20px; }
 .adm-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
 .adm-card-title { font-family:var(--display); font-size:20px; font-weight:700; letter-spacing:-0.02em; }
 .adm-card-sub   { font-size:13px; color:var(--t2); margin-top:3px; }
@@ -176,7 +176,7 @@
 .adm-sync-detail { font-family:var(--mono); font-size:11px; color:var(--t3); margin-top:6px; white-space:pre-wrap; word-break:break-word; }
 
 /* ── Stat chip (StatChip component) ── */
-.adm-stat-chip  { background:var(--s2); border:1px solid var(--border); border-radius:var(--r); padding:8px 14px; display:flex; flex-direction:column; gap:1px; }
+.adm-stat-chip  { background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:8px 14px; display:flex; flex-direction:column; gap:1px; }
 .adm-stat-label { font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:var(--t3); }
 .adm-stat-value { font-family:var(--mono); font-size:15px; font-weight:500; color:var(--text); }
 

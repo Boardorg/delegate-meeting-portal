@@ -72,8 +72,8 @@ a { color: inherit; text-decoration: none; }
 /* Lay the reused switchers out inline within the bar. */
 .testing-bar .admin-event-switcher { flex-direction:row; align-items:center; gap:8px; padding:0; border-bottom:none; }
 .testing-bar .admin-event-switcher-select { width:auto; min-width:150px; max-width:260px; }
-.testing-bar-nav { margin-left:auto; flex-shrink:0; display:inline-flex; align-items:center; gap:6px; background:var(--s2); border:1px solid var(--border-up); border-radius:var(--r-pill); padding:6px 14px; font-family:var(--body); font-size:13px; font-weight:500; color:var(--text); text-decoration:none; transition:background .15s; }
-.testing-bar-nav:hover { background:var(--s3); }
+.testing-bar-nav { margin-left:auto; flex-shrink:0; display:inline-flex; align-items:center; gap:6px; background:var(--bg); border:1px solid rgba(163,105,15,0.35); border-radius:var(--r-pill); padding:6px 14px; font-family:var(--body); font-size:13px; font-weight:500; color:var(--gold); text-decoration:none; transition:background .15s; }
+.testing-bar-nav:hover { background:var(--gold-s); }
 
 /* ── TOPBAR (shared by frontend and backend) ── */
 .topbar { position:sticky; top:0; z-index:200; background:rgba(255,255,255,0.92); backdrop-filter:blur(16px); height:58px; display:flex; align-items:center; padding:0 24px; gap:14px; }
@@ -86,8 +86,8 @@ a { color: inherit; text-decoration: none; }
 .user-chip { display:flex; align-items:center; gap:8px; background:none; border:none; padding:0 12px; }
 .user-name { font-size:12px; font-weight:500; }
 .user-sub { font-size:11px; color:var(--t2); }
-.logout-btn { background:none; border:1px solid var(--border); border-radius:var(--r-pill); padding:7px 14px; font-family:var(--body); font-size:13px; font-weight:500; color:var(--t2); cursor:pointer; transition:border-color .15s, color .15s; }
-.logout-btn:hover:not(:disabled) { border-color:var(--border-up); color:var(--text); }
+.logout-btn { background:#d7d7d8; border:1px solid #d7d7d8; border-radius:var(--r-pill); padding:7px 14px; font-family:var(--body); font-size:13px; font-weight:500; color:var(--t2); cursor:pointer; transition:background .15s, border-color .15s, color .15s; }
+.logout-btn:hover:not(:disabled) { background:var(--s3); border-color:var(--s3); color:var(--text); }
 .logout-btn:disabled { opacity:.5; cursor:not-allowed; }
 
 /* ── Animations + scrollbar (global utility) ── */

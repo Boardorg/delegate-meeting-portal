@@ -10,8 +10,8 @@ import type { MaintenanceReport } from "./actions";
 // failures. Pure presentation over the serializable MaintenanceReport.
 // ---------------------------------------------------------------------------
 
-const GREEN = "#2ec97e";
-const RED = "#e8391e";
+const GREEN = "#7fa0b8";
+const RED = "#b92025";
 
 export default function MaintenanceReportPanel({
     report,

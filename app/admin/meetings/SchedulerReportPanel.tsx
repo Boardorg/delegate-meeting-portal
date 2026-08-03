@@ -27,11 +27,10 @@ import { StatChip } from "./_components/StatChip";
 
 // Chart series colors, matched to the admin theme tokens (--green / --red).
 // recharts needs literal values, so the token hexes are inlined.
-const GREEN = "#2ec97e";
-const RED = "#e8391e";
-// Muted chrome so the chart reads as "light theming" over the dark surface.
-const AXIS = "#9a9eb0"; // --t2
-const GRID = "#2a2d38"; // --border
+const GREEN = "#7fa0b8";
+const RED = "#b92025";
+const AXIS = "#303030"; // --t2
+const GRID = "#c0c0c0"; // --border
 
 // Friendly labels for the closed set of failure reasons.
 const REASON_LABEL: Record<SchedulerFailureReason, string> = {
@@ -135,14 +134,14 @@ export default function SchedulerReportPanel({
                                 tickLine={false}
                             />
                             <Tooltip
-                                cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                                cursor={{ fill: "rgba(12,12,12,0.04)" }}
                                 contentStyle={{
-                                    background: "#13141a",
+                                    background: "#fbfbfb",
                                     border: `1px solid ${GRID}`,
                                     borderRadius: 8,
                                     fontSize: 12,
                                 }}
-                                labelStyle={{ color: "#edeef2" }}
+                                labelStyle={{ color: "#0c0c0c" }}
                             />
                             <Legend wrapperStyle={{ fontSize: 12 }} />
                             <Bar

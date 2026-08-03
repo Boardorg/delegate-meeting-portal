@@ -122,7 +122,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                             sponsor.scheduledCount > total
                                 ? "var(--red)"
                                 : sponsor.scheduledCount === total
-                                  ? "var(--green)"
+                                  ? "var(--green-ink)"
                                   : sponsor.scheduledCount > 0
                                     ? "var(--text)"
                                     : "var(--gold)"
@@ -130,7 +130,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                     />
                     <button
                         type="button"
-                        className="adm-new-btn adm-ml-auto"
+                        className="adm-new-btn adm-new-btn-primary adm-ml-auto"
                         disabled={isPending}
                         onClick={handlePushAll}
                     >
@@ -165,7 +165,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                 </div>
                 <button
                     type="button"
-                    className="adm-new-btn"
+                    className="adm-new-btn adm-new-btn-primary"
                     onClick={() => setShowCreate(true)}
                 >
                     + Create Meeting

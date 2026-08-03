@@ -251,7 +251,7 @@ export default function RequestsTable({
                 <h1 className="adm-page-title">Meeting requests</h1>
                 <button
                     type="button"
-                    className="adm-new-btn"
+                    className="adm-new-btn adm-new-btn-primary"
                     onClick={beginCreate}
                     disabled={creating || pending || !selectedEvent}
                     title={

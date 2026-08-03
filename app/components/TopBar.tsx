@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import LogoutButton from "@/app/logout-button";
 
 // ---------------------------------------------------------------------------
@@ -42,8 +43,16 @@ export default function TopBar({ user, actions }: TopBarProps) {
     return (
         <header className="topbar">
             <div className="topbar-logo">
-                <div className="logo-mark">DM</div>
-                Delegate Meeting Portal
+                <Image
+                    className="brand-logo"
+                    src="/assemble-logo.svg"
+                    alt="Assemble"
+                    width={152}
+                    height={22}
+                    priority
+                />
+                <div className="brand-divider" />
+                <span className="brand-product">Meeting Preferences</span>
             </div>
             <div className="topbar-spacer" />
             <div className="topbar-right">

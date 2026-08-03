@@ -259,28 +259,28 @@ export default function SponsorsTable({
                     onChange={(e) => setSearchInput(e.target.value)}
                 />
                 <button
-                    className="adm-new-btn"
+                    className="adm-new-btn adm-new-btn-primary"
                     disabled={!selectedEvent || isPending}
                     onClick={() => { setRunError(null); setShowRunModal(true); }}
                 >
                     {isPending ? "Running…" : "Run Scheduling Engine"}
                 </button>
                 <button
-                    className="adm-new-btn"
+                    className="adm-new-btn adm-new-btn-primary"
                     disabled={!selectedEvent || isPending}
                     onClick={() => { setPushAllError(null); setShowPushAllModal(true); }}
                 >
                     {isPending ? "Working…" : "Push All to Cvent"}
                 </button>
                 <button
-                    className="adm-new-btn"
+                    className="adm-new-btn adm-new-btn-danger"
                     disabled={!selectedEvent || isPending}
                     onClick={() => { setClearError(null); setShowClearModal(true); }}
                 >
                     {isPending ? "Working…" : "Clear All Unsynced"}
                 </button>
                 <button
-                    className="adm-new-btn"
+                    className="adm-new-btn adm-new-btn-danger-solid"
                     disabled={!selectedEvent || isPending}
                     onClick={() => { setUnpushError(null); setShowUnpushModal(true); }}
                 >
@@ -445,10 +445,10 @@ function ProgressCell({
     const barColor = isOver
         ? "var(--red)"
         : percent >= 100
-          ? "var(--green)"
+          ? "var(--progress-full)"
           : percent >= 80
             ? "var(--gold)"
-            : "var(--blue)";
+            : "var(--progress-mid)";
 
     return (
         <div className="adm-progress">

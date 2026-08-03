@@ -2,6 +2,7 @@
 
 import "@/app/frontend.css";
 import { Suspense, useEffect, useRef, useState, type SubmitEvent } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Channel } from "@/types";
 
@@ -230,8 +231,14 @@ function LoginForm() {
         <main className="login-page">
             <div className="login-card">
                 <div className="login-brand">
-                    <div className="logo-mark">DM</div>
-                    Delegate Meeting Portal
+                    <Image
+                        className="brand-logo"
+                        src="/assemble-logo.svg"
+                        alt="Assemble"
+                        width={152}
+                        height={22}
+                        priority
+                    />
                 </div>
 
                 {step === "contact" ? (
@@ -239,7 +246,7 @@ function LoginForm() {
                         <div className="login-heading">
                             <span className="login-eyebrow">Sign in</span>
                             <h1 className="login-title">
-                                Access the meeting portal
+                                Access your meeting preferences
                             </h1>
                         </div>
                         <form

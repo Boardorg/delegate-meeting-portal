@@ -86,7 +86,7 @@
 .card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
 .a-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:16px; display:flex; flex-direction:column; gap:0; transition:border-color .15s, transform .15s; position:relative; overflow:hidden; animation:fadeIn .2s var(--ease); }
 .a-card:hover { border-color:var(--border-up); transform:translateY(-1px); }
-.a-card.is-requested { border-color:var(--green-b); background:linear-gradient(160deg,var(--surface) 50%,rgba(127,160,184,0.06)); }
+.a-card.is-requested { border-color:var(--teal); background:rgba(77,107,106,0.09); }
 .a-card.is-requested::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--teal); border-radius:var(--r-lg) var(--r-lg) 0 0; }
 .a-card.is-capped { opacity:.4; pointer-events:none; }
 
@@ -133,7 +133,7 @@
 .list-row { display:grid; grid-template-columns:var(--list-cols); border-bottom:1px solid var(--border); align-items:start; transition:background .12s; }
 .list-row:last-child { border-bottom:none; }
 .list-row:hover { background:var(--s2); }
-.list-row.is-requested { background:rgba(127,160,184,0.06); border-left:2px solid var(--green); }
+.list-row.is-requested { background:rgba(77,107,106,0.1); }
 .list-row.is-capped { opacity:.4; pointer-events:none; }
 .list-cell { padding:9px 10px; font-size:11px; overflow:hidden; }
 .lc-name { font-family:var(--display); font-size:12px; font-weight:600; color:var(--text); line-height:1.25; }
@@ -155,7 +155,7 @@
 /* ── HORIZONTAL CARD ── */
 .hcard-list { display:flex; flex-direction:column; gap:10px; }
 .hcard { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:14px 16px; display:flex; flex-direction:column; gap:10px; animation:fadeIn .18s var(--ease); position:relative; overflow:hidden; }
-.hcard.is-requested { border-color:var(--green-b); background:linear-gradient(160deg,var(--surface) 60%,rgba(127,160,184,0.06)); }
+.hcard.is-requested { border-color:var(--teal); background:rgba(77,107,106,0.09); }
 .hcard.is-requested::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--teal); border-radius:var(--r-lg) var(--r-lg) 0 0; }
 .hcard.is-capped { opacity:.4; pointer-events:none; }
 .hcard-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }

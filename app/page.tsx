@@ -2,6 +2,9 @@ import "@/app/frontend.css";
 import { redirect } from "next/navigation";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { getCurrentIdentity } from "@/lib/auth/currentUser";
+import { getEventCode } from "@/lib/helpers/getEventCode";
+import { getEventSettings } from "@/lib/events/settings";
+import { eventThemeVars } from "@/lib/events/theme";
 import SponsorCatalog from "@/app/components/SponsorCatalog";
 
 export default async function Home() {
@@ -14,10 +17,27 @@ export default async function Home() {
 
     const attendees = await loadAttendees();
     const delegates = attendees.filter((a) => a.role === "delegate");
+
+    // Resolve the active event's per-event Brand Color so the catalog's primary
+    // accent (--teal) reflects it. Any failure to resolve an event (e.g.
+    // MissingEventCodeError) leaves themeColor null, so the default teal applies.
+    let themeColor: string | null = null;
+    try {
+        const settings = await getEventSettings(await getEventCode());
+        themeColor = settings?.themeColor ?? null;
+    } catch {
+        // No resolvable event — keep the fallback teal.
+    }
+
     return (
-        <SponsorCatalog
-            delegates={delegates}
-            currentSponsor={identity.attendee}
-        />
+        // display:contents so this wrapper only carries the theme variables
+        // (which inherit into the catalog) without adding a box that could
+        // disturb the sticky topbar / full-height page layout.
+        <div style={{ display: "contents", ...eventThemeVars(themeColor) }}>
+            <SponsorCatalog
+                delegates={delegates}
+                currentSponsor={identity.attendee}
+            />
+        </div>
     );
 }

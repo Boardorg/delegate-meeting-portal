@@ -206,6 +206,11 @@ export const eventSettings = pgTable("event_settings", {
     // Optional human-friendly label shown in the event dropdown.
     name: text("name"),
 
+    // Optional per-event brand color (hex, e.g. "#089e9d"). When set it drives
+    // the frontend's --teal primary accent; when null the CSS fallback (the
+    // default Assemble teal in globals.css) is used instead.
+    themeColor: text("theme_color"),
+
     // Cvent Event id (the overall event).
     cventEventId: text("cvent_event_id"),
 

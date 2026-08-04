@@ -21,7 +21,11 @@
   /* Color palette — Assemble brand system */
   --bg: #ffffff; --surface: #fbfbfb; --s2: #e9e8eb; --s3: #c5c5c5;
   --border: #b0b0b0; --border-up: #262626;
-  --teal: #089e9d; --teal-s: rgba(8,158,157,0.08); --teal-b: rgba(8,158,157,0.32); /* brand primary — CTAs, logo, primary accents */
+  /* Brand primary — CTAs, logo, primary accents. This literal is the FALLBACK:
+     on the frontend the active event's per-event Brand Color (event_settings.
+     theme_color) overrides --teal (and its --teal-deep/--teal-grey partners) at
+     the catalog root; when an event has no color set, these defaults apply. */
+  --teal: #089e9d; --teal-s: rgba(8,158,157,0.08); --teal-b: rgba(8,158,157,0.32);
   --teal-deep: #006065; /* darken-on-hover partner for --teal, same pattern as --blue-deep */
   --teal-grey: #4d6b6a; /* deeper, desaturated sibling of --teal — unselected states that should still read as "green" but quieter */
   --red: #b92025; --red-s: rgba(185,32,37,0.07); --red-b: rgba(185,32,37,0.3); /* alert / destructive only */

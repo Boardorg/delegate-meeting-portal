@@ -35,9 +35,27 @@ function trimToNull(v: unknown): string | null {
     return t === "" ? null : t;
 }
 
+/**
+ * Normalizes a brand color to a lowercase `#rrggbb` hex, or null. Anything that
+ * isn't a valid 3- or 6-digit hex is dropped to null so the frontend never
+ * injects an invalid CSS value (in which case it falls back to the default
+ * teal). 3-digit shorthand is expanded to its 6-digit form.
+ */
+function normalizeColor(v: unknown): string | null {
+    const t = trimToNull(v);
+    if (!t) return null;
+    const hex = t.toLowerCase();
+    if (/^#[0-9a-f]{6}$/.test(hex)) return hex;
+    // Expand #rgb → #rrggbb.
+    const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(hex);
+    if (short) return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`;
+    return null;
+}
+
 /** The settings fields a create/update accepts (code excluded from updates). */
 export type EventSettingsInput = {
     name?: string | null;
+    themeColor?: string | null;
     cventEventId?: string | null;
     cventAppointmentEventId?: string | null;
 };
@@ -46,6 +64,7 @@ export type EventSettingsInput = {
 function toPatch(input: EventSettingsInput) {
     return {
         name: trimToNull(input.name),
+        themeColor: normalizeColor(input.themeColor),
         cventEventId: trimToNull(input.cventEventId),
         cventAppointmentEventId: trimToNull(input.cventAppointmentEventId),
     };

@@ -386,7 +386,7 @@ export default function SponsorCatalog({
     const [activeFilters, setActiveFilters] = useState<
         Record<string, string[]>
     >({});
-    const [viewMode, setViewMode] = useState<ViewMode>("grid");
+    const [viewMode, setViewMode] = useState<ViewMode>("list");
     const [sortField, setSortField] = useState("company");
     const [sortDir, setSortDir] = useState<SortDir>("asc");
     const [searchQuery, setSearchQuery] = useState("");

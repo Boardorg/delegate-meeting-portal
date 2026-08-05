@@ -206,6 +206,15 @@ export const eventSettings = pgTable("event_settings", {
     // Optional human-friendly label shown in the event dropdown.
     name: text("name"),
 
+    // Optional per-event brand color (hex, e.g. "#089e9d"). When set it drives
+    // the frontend's --accent primary accent; when null the CSS fallback (the
+    // default Assemble teal in globals.css) is used instead.
+    themeColor: text("theme_color"),
+
+    // Optional per-event logo URL, shown in the header next to the Assemble
+    // mark. An absolute (https://…) or root-relative (/…) URL; null hides it.
+    logoUrl: text("logo_url"),
+
     // Cvent Event id (the overall event).
     cventEventId: text("cvent_event_id"),
 

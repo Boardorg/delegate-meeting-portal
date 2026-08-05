@@ -51,9 +51,22 @@ export default async function AdminLayout({
         : "Anonymous";
     const displayRole = user?.role ?? "auth disabled";
 
+    // Show the active event's logo (if it has a logo URL) next to the Assemble
+    // mark, labelled with the event's friendly name or its code.
+    const activeEvent = events.find((e) => e.code === activeEventCode);
+    const eventLogo = activeEvent?.logoUrl
+        ? {
+              src: activeEvent.logoUrl,
+              alt: activeEvent.name ?? activeEventCode ?? "Event",
+          }
+        : null;
+
     return (
         <>
-            <TopBar user={{ name: displayName, title: displayRole }} />
+            <TopBar
+                user={{ name: displayName, title: displayRole }}
+                eventLogo={eventLogo}
+            />
             <div className="admin-shell">
                 <div className="admin-sidebar-col">
                     <EventSwitcher events={events} activeEventCode={activeEventCode} />

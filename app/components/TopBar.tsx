@@ -23,6 +23,16 @@ export type TopBarUser = {
 };
 
 /**
+ * A per-event logo shown beside the Assemble mark. `src` is the event's
+ * configured logo URL; it's rendered at a fixed header height (width auto).
+ */
+export type TopBarEventLogo = {
+    src: string;
+    /** Accessible label, e.g. the event name. */
+    alt: string;
+};
+
+/**
  * Props for the TopBar.
  */
 export type TopBarProps = {
@@ -30,6 +40,8 @@ export type TopBarProps = {
     user?: TopBarUser;
     /** Page-specific buttons (e.g. "My Requests") rendered to the left of logout. */
     actions?: ReactNode;
+    /** Optional current-event logo shown next to the Assemble mark. */
+    eventLogo?: TopBarEventLogo | null;
 };
 
 /**
@@ -39,7 +51,7 @@ export type TopBarProps = {
  * @param {TopBarProps} props - User + action-slot overrides.
  * @returns {JSX.Element} The header element.
  */
-export default function TopBar({ user, actions }: TopBarProps) {
+export default function TopBar({ user, actions, eventLogo }: TopBarProps) {
     return (
         <header className="topbar">
             <div className="topbar-logo">
@@ -51,6 +63,23 @@ export default function TopBar({ user, actions }: TopBarProps) {
                     height={22}
                     priority
                 />
+                {/* Current-event logo (when the event has a logo URL), set off
+                    from the Assemble mark by a divider. Rendered at a fixed
+                    header height with width:auto (see .brand-event-logo). A
+                    plain <img> — not next/image — since the URL is arbitrary
+                    (any host, unknown dimensions), which next/image can't
+                    optimize without per-host config. */}
+                {eventLogo && (
+                    <>
+                        <div className="brand-divider" />
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            className="brand-event-logo"
+                            src={eventLogo.src}
+                            alt={eventLogo.alt}
+                        />
+                    </>
+                )}
                 <div className="brand-divider" />
                 <span className="brand-product">Meeting Preferences</span>
             </div>

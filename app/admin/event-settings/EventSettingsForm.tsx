@@ -190,18 +190,18 @@ export default function EventSettingsForm({ active, hasEvents }: Props) {
                         />
                     </label>
 
-                    {/* Brand color — drives the frontend's primary accent
+                    {/* Event color — drives the frontend's primary accent
                         (buttons, request highlights). Empty falls back to the
                         default teal. The native swatch and the hex text input
                         stay in sync; the swatch always shows a concrete color,
                         so it opens on the fallback when nothing is set. */}
                     <label className="adm-field adm-field-mb">
-                        <span className="adm-field-label">Brand Color</span>
+                        <span className="adm-field-label">Event Color</span>
                         <div className="adm-color-row">
                             <input
                                 type="color"
                                 className="adm-color-swatch"
-                                aria-label="Brand color picker"
+                                aria-label="Event color picker"
                                 value={draft.themeColor || FALLBACK_COLOR}
                                 onChange={(e) =>
                                     set("themeColor", e.target.value)

@@ -5,7 +5,6 @@ import TopBar from "@/app/components/TopBar";
 import AdminSidebar from "@/app/components/AdminSidebar";
 import EventSwitcher from "@/app/components/EventSwitcher";
 import { getAdminState } from "@/lib/admin/globalState";
-import { getEventLogo } from "@/lib/events/logo";
 import { ADMIN_NAV } from "./nav";
 
 // ---------------------------------------------------------------------------
@@ -52,12 +51,14 @@ export default async function AdminLayout({
         : "Anonymous";
     const displayRole = user?.role ?? "auth disabled";
 
-    // Show the active event's logo (if it has one) next to the Assemble mark,
-    // labelled with the event's friendly name or its code.
+    // Show the active event's logo (if it has a logo URL) next to the Assemble
+    // mark, labelled with the event's friendly name or its code.
     const activeEvent = events.find((e) => e.code === activeEventCode);
-    const logo = getEventLogo(activeEventCode);
-    const eventLogo = logo
-        ? { ...logo, alt: activeEvent?.name ?? activeEventCode ?? "Event" }
+    const eventLogo = activeEvent?.logoUrl
+        ? {
+              src: activeEvent.logoUrl,
+              alt: activeEvent.name ?? activeEventCode ?? "Event",
+          }
         : null;
 
     return (

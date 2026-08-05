@@ -211,6 +211,10 @@ export const eventSettings = pgTable("event_settings", {
     // default Assemble teal in globals.css) is used instead.
     themeColor: text("theme_color"),
 
+    // Optional per-event logo URL, shown in the header next to the Assemble
+    // mark. An absolute (https://…) or root-relative (/…) URL; null hides it.
+    logoUrl: text("logo_url"),
+
     // Cvent Event id (the overall event).
     cventEventId: text("cvent_event_id"),
 

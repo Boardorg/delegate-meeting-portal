@@ -5,7 +5,6 @@ import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventSettings } from "@/lib/events/settings";
 import { eventThemeVars } from "@/lib/events/theme";
-import { getEventLogo } from "@/lib/events/logo";
 import type { TopBarEventLogo } from "@/app/components/TopBar";
 import SponsorCatalog from "@/app/components/SponsorCatalog";
 
@@ -21,18 +20,17 @@ export default async function Home() {
     const delegates = attendees.filter((a) => a.role === "delegate");
 
     // Resolve the active event's per-event Brand Color (drives the catalog's
-    // --accent accent) and its header logo. Any failure to resolve an event (e.g.
-    // MissingEventCodeError) leaves both null, so the default teal + no logo
-    // apply.
+    // --accent accent) and its header logo URL. Any failure to resolve an event
+    // (e.g. MissingEventCodeError) leaves both null, so the default teal + no
+    // logo apply.
     let themeColor: string | null = null;
     let eventLogo: TopBarEventLogo | null = null;
     try {
         const code = await getEventCode();
         const settings = await getEventSettings(code);
         themeColor = settings?.themeColor ?? null;
-        const logo = getEventLogo(code);
-        if (logo) {
-            eventLogo = { ...logo, alt: settings?.name ?? code };
+        if (settings?.logoUrl) {
+            eventLogo = { src: settings.logoUrl, alt: settings.name ?? code };
         }
     } catch {
         // No resolvable event — keep the fallback teal and no event logo.

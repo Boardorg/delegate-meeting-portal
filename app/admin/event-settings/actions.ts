@@ -56,6 +56,7 @@ function normalizeColor(v: unknown): string | null {
 export type EventSettingsInput = {
     name?: string | null;
     themeColor?: string | null;
+    logoUrl?: string | null;
     cventEventId?: string | null;
     cventAppointmentEventId?: string | null;
 };
@@ -65,6 +66,7 @@ function toPatch(input: EventSettingsInput) {
     return {
         name: trimToNull(input.name),
         themeColor: normalizeColor(input.themeColor),
+        logoUrl: trimToNull(input.logoUrl),
         cventEventId: trimToNull(input.cventEventId),
         cventAppointmentEventId: trimToNull(input.cventAppointmentEventId),
     };

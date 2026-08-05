@@ -20,6 +20,7 @@ type Props = {
 type Draft = {
     name: string;
     themeColor: string;
+    logoUrl: string;
     cventEventId: string;
     cventAppointmentEventId: string;
 };
@@ -29,6 +30,7 @@ function draftFrom(row: EventSettingsRow | null): Draft {
     return {
         name: row?.name ?? "",
         themeColor: row?.themeColor ?? "",
+        logoUrl: row?.logoUrl ?? "",
         cventEventId: row?.cventEventId ?? "",
         cventAppointmentEventId: row?.cventAppointmentEventId ?? "",
     };
@@ -222,6 +224,24 @@ export default function EventSettingsForm({ active, hasEvents }: Props) {
                         <span className="adm-field-hint">
                             Primary accent color for this event’s frontend.
                             Leave blank to use the default teal.
+                        </span>
+                    </label>
+
+                    {/* Logo URL — shown in the header next to the Assemble mark
+                        (frontend + admin). Absolute (https://…) or root-relative
+                        (/…); blank hides it. */}
+                    <label className="adm-field adm-field-mb">
+                        <span className="adm-field-label">Logo URL</span>
+                        <input
+                            type="text"
+                            className="adm-input"
+                            placeholder="https://… or /path.png (optional)"
+                            value={draft.logoUrl}
+                            onChange={(e) => set("logoUrl", e.target.value)}
+                            disabled={pending}
+                        />
+                        <span className="adm-field-hint">
+                            Event logo shown in the header. Leave blank for none.
                         </span>
                     </label>
 

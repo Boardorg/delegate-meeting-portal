@@ -207,7 +207,7 @@ export const eventSettings = pgTable("event_settings", {
     name: text("name"),
 
     // Optional per-event brand color (hex, e.g. "#089e9d"). When set it drives
-    // the frontend's --teal primary accent; when null the CSS fallback (the
+    // the frontend's --accent primary accent; when null the CSS fallback (the
     // default Assemble teal in globals.css) is used instead.
     themeColor: text("theme_color"),
 

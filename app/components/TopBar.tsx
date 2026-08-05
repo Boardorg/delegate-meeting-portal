@@ -23,6 +23,18 @@ export type TopBarUser = {
 };
 
 /**
+ * A per-event logo shown beside the Assemble mark. Dimensions are the image's
+ * intrinsic size (for aspect ratio); it's rendered at a fixed header height.
+ */
+export type TopBarEventLogo = {
+    src: string;
+    width: number;
+    height: number;
+    /** Accessible label, e.g. the event name. */
+    alt: string;
+};
+
+/**
  * Props for the TopBar.
  */
 export type TopBarProps = {
@@ -30,6 +42,8 @@ export type TopBarProps = {
     user?: TopBarUser;
     /** Page-specific buttons (e.g. "My Requests") rendered to the left of logout. */
     actions?: ReactNode;
+    /** Optional current-event logo shown next to the Assemble mark. */
+    eventLogo?: TopBarEventLogo | null;
 };
 
 /**
@@ -39,7 +53,7 @@ export type TopBarProps = {
  * @param {TopBarProps} props - User + action-slot overrides.
  * @returns {JSX.Element} The header element.
  */
-export default function TopBar({ user, actions }: TopBarProps) {
+export default function TopBar({ user, actions, eventLogo }: TopBarProps) {
     return (
         <header className="topbar">
             <div className="topbar-logo">
@@ -51,6 +65,23 @@ export default function TopBar({ user, actions }: TopBarProps) {
                     height={22}
                     priority
                 />
+                {/* Current-event logo (when the event has one), set off from the
+                    Assemble mark by a divider. Rendered at a fixed header height
+                    with width:auto (see .brand-event-logo) so any logo's aspect
+                    ratio is preserved without layout shift. */}
+                {eventLogo && (
+                    <>
+                        <div className="brand-divider" />
+                        <Image
+                            className="brand-event-logo"
+                            src={eventLogo.src}
+                            alt={eventLogo.alt}
+                            width={eventLogo.width}
+                            height={eventLogo.height}
+                            priority
+                        />
+                    </>
+                )}
                 <div className="brand-divider" />
                 <span className="brand-product">Meeting Preferences</span>
             </div>

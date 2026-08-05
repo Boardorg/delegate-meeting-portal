@@ -34,7 +34,7 @@ function draftFrom(row: EventSettingsRow | null): Draft {
     };
 }
 
-// The default frontend brand color (globals.css --teal). Shown as the swatch's
+// The default frontend brand color (globals.css --accent). Shown as the swatch's
 // value when no per-event color is set, so the picker opens on the real
 // fallback rather than an arbitrary default.
 const FALLBACK_COLOR = "#089e9d";
@@ -218,16 +218,6 @@ export default function EventSettingsForm({ active, hasEvents }: Props) {
                                 }
                                 disabled={pending}
                             />
-                            {draft.themeColor && (
-                                <button
-                                    type="button"
-                                    className="adm-btn"
-                                    onClick={() => set("themeColor", "")}
-                                    disabled={pending}
-                                >
-                                    Reset
-                                </button>
-                            )}
                         </div>
                         <span className="adm-field-hint">
                             Primary accent color for this event’s frontend.

@@ -4,7 +4,7 @@ import "@/app/frontend.css";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
-import TopBar from "@/app/components/TopBar";
+import TopBar, { type TopBarEventLogo } from "@/app/components/TopBar";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -70,6 +70,8 @@ interface FilterConfig {
 interface Props {
     delegates: Attendee[];
     currentSponsor: Attendee;
+    /** Current-event logo for the header, or null when the event has none. */
+    eventLogo?: TopBarEventLogo | null;
 }
 
 // ── Pure helpers ───────────────────────────────────────────────────────────
@@ -372,7 +374,11 @@ function FiltersPanel({
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
+export default function SponsorCatalog({
+    delegates,
+    currentSponsor,
+    eventLogo,
+}: Props) {
     // This sponsor's saved requests. Each links to its delegate via targetId
     // (a Salesforce id), so the catalog never translates between id spaces.
     const [requests, setRequests] = useState<MeetingRequest[]>([]);
@@ -1155,6 +1161,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                     name: currentSponsor.name,
                     title: currentSponsor.title,
                 }}
+                eventLogo={eventLogo}
                 actions={
                     <button
                         className={`requests-btn ${reqCount > 0 ? "has-items" : ""}`}

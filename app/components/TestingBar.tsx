@@ -36,7 +36,14 @@ export default async function TestingBar() {
                     salesforceId: a.salesforceId,
                     name: a.name,
                     company: a.company,
-                }));
+                }))
+                // Alphabetical by name (the dropdown's leading label), with
+                // company as a tiebreaker; case-insensitive.
+                .sort((a, b) =>
+                    a.name.localeCompare(b.name, undefined, {
+                        sensitivity: "base",
+                    }),
+                );
         } catch {
             sponsors = [];
         }
@@ -46,7 +53,10 @@ export default async function TestingBar() {
         <div className="testing-bar">
             <span className="testing-bar-badge">Testing mode</span>
             <EventSwitcher events={events} activeEventCode={activeEventCode} />
-            <SponsorSwitcher sponsors={sponsors} selectedSponsorId={spoofSponsorId} />
+            <SponsorSwitcher
+                sponsors={sponsors}
+                selectedSponsorId={spoofSponsorId}
+            />
             <TestingNavToggle />
         </div>
     );

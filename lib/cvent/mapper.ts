@@ -33,15 +33,23 @@ function normalizeCapacity(raw: number | undefined): number {
  * for each from the chronological order of distinct calendar dates (earliest
  * date → Day 1, next → Day 2, and so on).
  *
+ * Only DEFINED-type times are mapped. FLEXIBLE-type times let a host pick any
+ * time/location on the fly rather than booking into a fixed slot, which
+ * doesn't match how createAppointment is called here — pushing into one
+ * fails with TIMESLOT_NOT_FOUND. Excluding them keeps the app from ever
+ * scheduling into a slot it can't actually push to Cvent.
+ *
  * @param {CventAvailableTime[]} times - Raw available-times from the Cvent client.
  * @returns {Timeslot[]} The mapped timeslots.
  */
 export function toTimeslots(times: CventAvailableTime[]): Timeslot[] {
+    const definedTimes = times.filter((t) => t.type === "DEFINED");
+
     // ISO date (YYYY-MM-DD) → 1-based day index, in chronological order.
-    const dates = [...new Set(times.map((t) => t.startTime.toISOString().slice(0, 10)))].sort();
+    const dates = [...new Set(definedTimes.map((t) => t.startTime.toISOString().slice(0, 10)))].sort();
     const dayByDate = new Map(dates.map((d, i) => [d, i + 1]));
 
-    return times.map((t) => {
+    return definedTimes.map((t) => {
         const startTime = t.startTime.toISOString();
         return {
             id: t.id,

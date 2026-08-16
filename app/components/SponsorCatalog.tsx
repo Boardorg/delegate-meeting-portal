@@ -5,18 +5,16 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
 import TopBar, { type TopBarEventLogo } from "@/app/components/TopBar";
+import DetailsModal from "@/app/components/DetailsModal";
+import {
+    REV_TIERS,
+    revClass,
+    dotTags,
+    str,
+    hasValue,
+} from "@/app/components/catalogFormat";
 
 // ── Constants ──────────────────────────────────────────────────────────────
-
-const REV_TIERS = [
-    "<10M",
-    "10M-50M",
-    "50M-100M",
-    "100M-500M",
-    "500M-1B",
-    "1B-5B",
-    ">5B",
-];
 
 const SORT_ORDER: Record<string, string[]> = {
     annualRevenue: REV_TIERS,
@@ -41,7 +39,8 @@ const SORT_ORDER: Record<string, string[]> = {
 };
 
 const LIST_BREAK = 860;
-const LIST_COLS = "140px 110px 72px 82px 72px 68px 1fr 1fr 1fr 1fr";
+// Trailing 96px column is the (header-less) "More details" button.
+const LIST_COLS = "140px 110px 72px 82px 72px 68px 1fr 1fr 1fr 96px";
 const LIST_HEADERS = [
     "Name / Title",
     "Company",
@@ -51,8 +50,8 @@ const LIST_HEADERS = [
     "Co. Size",
     "Specialization",
     "Industries",
-    "Regions",
     "Priorities",
+    "",
 ];
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -75,12 +74,8 @@ interface Props {
 }
 
 // ── Pure helpers ───────────────────────────────────────────────────────────
-
-function revClass(val: string | number | null | undefined): string {
-    if (!val) return "";
-    const i = REV_TIERS.indexOf(String(val));
-    return i >= 0 ? `rev-${i + 1}` : "";
-}
+// Presentational helpers (revClass, dotTags, str, hasValue) live in
+// ./catalogFormat and are imported above so DetailsModal can share them.
 
 function getSortVal(d: Attendee, field: string): string | number {
     if (field === "name") return d.name.toLowerCase();
@@ -90,19 +85,6 @@ function getSortVal(d: Attendee, field: string): string | number {
     if (v == null) return -1;
     const ord = SORT_ORDER[field];
     return ord ? ord.indexOf(String(v)) : -1;
-}
-
-function dotTags(arr: string[] | null | undefined): string {
-    return (arr || []).join(" · ");
-}
-
-function str(v: unknown): string {
-    return v != null ? String(v) : "N/A";
-}
-
-/** Returns true if a scalar profile value should be shown on a card. */
-function hasValue(v: unknown): boolean {
-    return v != null && v !== "";
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -142,6 +124,91 @@ function CardMoreToggle({ p }: { p: AttendeeProfile }) {
                 </div>
             )}
         </div>
+    );
+}
+
+/**
+ * The Request → Edit / Remove action group for a single delegate, including the
+ * interest-level picker. Presentational: all state (which target is being
+ * picked, the just-requested lock) lives in SponsorCatalog and is passed in, so
+ * the same group can render in the grid card, the list row, and the details
+ * modal off one implementation.
+ */
+function RequestActions({
+    d,
+    req,
+    isPicking,
+    justRequested,
+    onStartPick,
+    onCancelPick,
+    onSelectRank,
+    onRemove,
+}: {
+    d: Attendee;
+    /** The delegate's existing request, or undefined when none. */
+    req: MeetingRequest | undefined;
+    /** True while this delegate's interest-level picker is open. */
+    isPicking: boolean;
+    /** True during the 2s locked "Requested" confirmation after a save. */
+    justRequested: boolean;
+    onStartPick: (d: Attendee) => void;
+    onCancelPick: () => void;
+    onSelectRank: (d: Attendee, rank: number) => void;
+    onRemove: (d: Attendee) => void;
+}) {
+    if (isPicking) {
+        return (
+            <div className="rank-picker">
+                <div className="rank-pips">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                        <div
+                            key={n}
+                            className="rank-pip"
+                            onClick={() => onSelectRank(d, n)}
+                        >
+                            {n}
+                        </div>
+                    ))}
+                </div>
+                <div className="rank-picker-label">Rate interest level</div>
+                <button className="rank-pip-cancel" onClick={onCancelPick}>
+                    Cancel
+                </button>
+            </div>
+        );
+    }
+
+    if (req !== undefined) {
+        // Locked confirmation for 2s after requesting; then editable/removable.
+        if (justRequested) {
+            return (
+                <button className="requested-btn" disabled>
+                    👍 Requested
+                </button>
+            );
+        }
+        return (
+            <div className="req-edit-actions">
+                <button
+                    className="req-btn"
+                    onClick={() => onStartPick(d)}
+                >
+                    Edit request
+                </button>
+                <button
+                    className="req-remove-btn"
+                    onClick={() => onRemove(d)}
+                >
+                    Remove
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <button className="req-btn" onClick={() => onStartPick(d)}>
+            + Request Meeting
+        </button>
     );
 }
 
@@ -402,6 +469,10 @@ export default function SponsorCatalog({
     const [sortDir, setSortDir] = useState<SortDir>("asc");
     const [searchQuery, setSearchQuery] = useState("");
     const [drawerOpen, setDrawerOpen] = useState(false);
+    // Delegate whose "More details" modal is open (list view), or null.
+    const [detailsDelegate, setDetailsDelegate] = useState<Attendee | null>(
+        null,
+    );
     const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
     const [openAccordions, setOpenAccordions] = useState<Set<string>>(
         new Set(),
@@ -1027,13 +1098,16 @@ export default function SponsorCatalog({
                                 </div>
                                 <div className="list-cell">
                                     <span className="lc-tags">
-                                        {dotTags(p.regionsOverseen)}
-                                    </span>
-                                </div>
-                                <div className="list-cell">
-                                    <span className="lc-tags">
                                         {dotTags(p.strategicPriorities)}
                                     </span>
+                                </div>
+                                <div className="list-cell list-details-cell">
+                                    <button
+                                        className="list-details-btn"
+                                        onClick={() => setDetailsDelegate(d)}
+                                    >
+                                        More details
+                                    </button>
                                 </div>
                             </div>
                         );
@@ -1469,6 +1543,27 @@ export default function SponsorCatalog({
                     )}
                 </div>
             </div>
+
+            {/* Delegate "More details" modal (list view) */}
+            {detailsDelegate && (
+                <DetailsModal
+                    d={detailsDelegate}
+                    onClose={() => setDetailsDelegate(null)}
+                >
+                    <RequestActions
+                        d={detailsDelegate}
+                        req={requestByTarget.get(detailsDelegate.salesforceId)}
+                        isPicking={pickingId === detailsDelegate.id}
+                        justRequested={justRequestedIds.has(
+                            detailsDelegate.salesforceId,
+                        )}
+                        onStartPick={(x) => setPickingId(x.id)}
+                        onCancelPick={() => setPickingId(null)}
+                        onSelectRank={handleSelectRank}
+                        onRemove={deleteRequest}
+                    />
+                </DetailsModal>
+            )}
         </>
     );
 }

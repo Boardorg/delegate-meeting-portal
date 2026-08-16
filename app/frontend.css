@@ -145,12 +145,19 @@
 .list-req-btn { background:var(--accent); border:1px solid var(--accent); border-radius:var(--r-pill); padding:5px 10px; font-family:var(--body); font-size:11px; font-weight:700; color:#fff; cursor:pointer; white-space:nowrap; transition:background .12s, border-color .12s, color .12s; }
 .list-req-btn:hover:not(:disabled) { background:var(--accent-deep); border-color:var(--accent-deep); }
 .list-req-btn:disabled { opacity:.5; cursor:not-allowed; }
-.list-rank-picker { display:flex; align-items:center; gap:3px; }
+/* Stacked so the label sits above the number pips in the narrow name column. */
+.list-rank-picker { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
+.list-rank-label { font-size:11px; font-weight:700; color:var(--text); line-height:1.2; }
+.list-rank-pips { display:flex; align-items:center; gap:3px; }
 .list-rank-pip { width:24px; height:24px; border-radius:var(--r-pill); background:var(--accent); border:1px solid var(--accent); display:flex; align-items:center; justify-content:center; font-size:10px; font-family:var(--mono); font-weight:700; cursor:pointer; color:#fff; transition:background .1s; }
 .list-rank-pip:hover { background:var(--accent-deep); border-color:var(--accent-deep); }
 .list-rank-cancel { font-size:11px; color:var(--t3); background:none; border:none; cursor:pointer; font-family:var(--body); padding:0 2px; }
 .list-rank-cancel:hover { color:var(--t2); }
 .list-requested-btn { background:var(--accent); border:1px solid var(--accent); border-radius:var(--r-pill); padding:5px 10px; font-family:var(--body); font-size:11px; font-weight:700; color:#fff; cursor:default; opacity:.5; white-space:nowrap; display:flex; align-items:center; gap:5px; }
+/* Edit + Remove pair shown for an existing request (past the 2s lock). */
+.list-edit-actions { display:flex; align-items:center; gap:5px; }
+.list-remove-btn { background:none; border:1px solid var(--border); border-radius:var(--r-pill); padding:5px 10px; font-family:var(--body); font-size:11px; font-weight:700; color:var(--t2); cursor:pointer; white-space:nowrap; transition:background .12s, border-color .12s, color .12s; }
+.list-remove-btn:hover { border-color:var(--red-b); color:var(--red); background:var(--red-s); }
 
 /* ── HORIZONTAL CARD ── */
 .hcard-list { display:flex; flex-direction:column; gap:10px; }

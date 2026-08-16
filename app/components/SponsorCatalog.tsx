@@ -383,6 +383,17 @@ export default function SponsorCatalog({
     // (a Salesforce id), so the catalog never translates between id spaces.
     const [requests, setRequests] = useState<MeetingRequest[]>([]);
     const [pickingId, setPickingId] = useState<string | null>(null);
+    // Targets (by salesforceId) whose request was just placed/edited in this
+    // session. Each shows a locked "Requested" confirmation for 2s before the
+    // button re-enables as "Edit request". Requests loaded from the server are
+    // never in this set, so they're editable immediately.
+    const [justRequestedIds, setJustRequestedIds] = useState<Set<string>>(
+        new Set(),
+    );
+    // Pending 2s timers keyed by target id, so we can clear them on unmount.
+    const justRequestedTimers = useRef<
+        Map<string, ReturnType<typeof setTimeout>>
+    >(new Map());
     const [activeFilters, setActiveFilters] = useState<
         Record<string, string[]>
     >({});
@@ -649,12 +660,42 @@ export default function SponsorCatalog({
         [requestByTarget],
     );
 
+    // Mark a target as just-requested, then clear that flag after 2s so the
+    // button re-enables as "Edit request". Re-requesting restarts the timer.
+    const markJustRequested = useCallback((targetId: string) => {
+        setJustRequestedIds((prev) => new Set(prev).add(targetId));
+        const timers = justRequestedTimers.current;
+        const existing = timers.get(targetId);
+        if (existing) clearTimeout(existing);
+        timers.set(
+            targetId,
+            setTimeout(() => {
+                setJustRequestedIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(targetId);
+                    return next;
+                });
+                timers.delete(targetId);
+            }, 2000),
+        );
+    }, []);
+
+    // Clear any pending confirmation timers on unmount.
+    useEffect(() => {
+        const timers = justRequestedTimers.current;
+        return () => {
+            timers.forEach(clearTimeout);
+            timers.clear();
+        };
+    }, []);
+
     const handleSelectRank = useCallback(
         (delegate: Attendee, rank: number) => {
             setPickingId(null);
             saveRequest(delegate, rank);
+            markJustRequested(delegate.salesforceId);
         },
-        [saveRequest],
+        [saveRequest, markJustRequested],
     );
 
     const handleApplyFilter = useCallback(
@@ -720,14 +761,6 @@ export default function SponsorCatalog({
         const req = requestByTarget.get(d.salesforceId);
         const isPicking = pickingId === d.id;
 
-        if (req !== undefined && !isPicking) {
-            return (
-                <button className="requested-btn" disabled>
-                    👍 Requested
-                </button>
-            );
-        }
-
         if (isPicking) {
             return (
                 <div className="rank-picker">
@@ -753,6 +786,22 @@ export default function SponsorCatalog({
                         Cancel
                     </button>
                 </div>
+            );
+        }
+
+        if (req !== undefined) {
+            // Locked confirmation for 2s after requesting; then editable.
+            if (justRequestedIds.has(d.salesforceId)) {
+                return (
+                    <button className="requested-btn" disabled>
+                        👍 Requested
+                    </button>
+                );
+            }
+            return (
+                <button className="req-btn" onClick={() => setPickingId(d.id)}>
+                    ✏️ Edit request
+                </button>
             );
         }
 
@@ -869,31 +918,52 @@ export default function SponsorCatalog({
                         const rc = revClass(p.annualRevenue) || "rev-na";
 
                         let action: React.ReactNode;
-                        if (req !== undefined && !isPicking) {
+                        if (isPicking) {
                             action = (
+                                <div className="list-rank-picker">
+                                    <div className="list-rank-pips">
+                                        {[1, 2, 3, 4, 5].map((n) => (
+                                            <div
+                                                key={n}
+                                                className="list-rank-pip"
+                                                onClick={() =>
+                                                    handleSelectRank(d, n)
+                                                }
+                                            >
+                                                {n}
+                                            </div>
+                                        ))}
+                                        <button
+                                            className="list-rank-cancel"
+                                            onClick={() => setPickingId(null)}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <span className="list-rank-label">
+                                        Rate interest level
+                                    </span>
+                                </div>
+                            );
+                        } else if (req !== undefined) {
+                            // Locked confirmation for 2s, then editable.
+                            action = justRequestedIds.has(d.salesforceId) ? (
                                 <button className="list-requested-btn" disabled>
                                     👍 Requested
                                 </button>
-                            );
-                        } else if (isPicking) {
-                            action = (
-                                <div className="list-rank-picker">
-                                    {[1, 2, 3, 4, 5].map((n) => (
-                                        <div
-                                            key={n}
-                                            className="list-rank-pip"
-                                            onClick={() =>
-                                                handleSelectRank(d, n)
-                                            }
-                                        >
-                                            {n}
-                                        </div>
-                                    ))}
+                            ) : (
+                                <div className="list-edit-actions">
                                     <button
-                                        className="list-rank-cancel"
-                                        onClick={() => setPickingId(null)}
+                                        className="list-req-btn"
+                                        onClick={() => setPickingId(d.id)}
                                     >
-                                        ✕
+                                        Edit
+                                    </button>
+                                    <button
+                                        className="list-remove-btn"
+                                        onClick={() => deleteRequest(d)}
+                                    >
+                                        Remove
                                     </button>
                                 </div>
                             );
@@ -992,13 +1062,7 @@ export default function SponsorCatalog({
                     const rc = revClass(p.annualRevenue) || "rev-na";
 
                     let action: React.ReactNode;
-                    if (req !== undefined && !isPicking) {
-                        action = (
-                            <button className="requested-btn" disabled>
-                                👍 Requested
-                            </button>
-                        );
-                    } else if (isPicking) {
+                    if (isPicking) {
                         action = (
                             <div className="hcard-rank-picker">
                                 <span className="hcard-rank-label">
@@ -1024,6 +1088,20 @@ export default function SponsorCatalog({
                                     Cancel
                                 </button>
                             </div>
+                        );
+                    } else if (req !== undefined) {
+                        // Locked confirmation for 2s, then editable.
+                        action = justRequestedIds.has(d.salesforceId) ? (
+                            <button className="requested-btn" disabled>
+                                👍 Requested
+                            </button>
+                        ) : (
+                            <button
+                                className="req-btn"
+                                onClick={() => setPickingId(d.id)}
+                            >
+                                ✏️ Edit request
+                            </button>
                         );
                     } else {
                         action = (

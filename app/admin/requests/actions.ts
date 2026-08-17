@@ -138,8 +138,8 @@ function compareRows(
 export async function listRequestsPage(
     params: ListRequestsParams,
 ): Promise<RequestsPage> {
-    const sortField = params.sortField ?? "updatedAt";
-    const sortDir = params.sortDir ?? "desc";
+    const sortField = params.sortField ?? "requesterName";
+    const sortDir = params.sortDir ?? "asc";
     const q = (params.q ?? "").trim().toLowerCase();
 
     // Check if we're in mock mode and get the requests from the JSON file.

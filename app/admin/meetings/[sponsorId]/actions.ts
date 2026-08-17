@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, ne, or } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import {
@@ -9,6 +9,7 @@ import {
     type ScheduledMeetingRow,
 } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
+import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
 import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
@@ -87,10 +88,8 @@ export async function getMeetingDetail(params: {
                 .where(
                     and(
                         eq(scheduledMeetings.eventCode, params.eventCode),
-                        or(
-                            eq(scheduledMeetings.attendeeA, params.sponsorId),
-                            eq(scheduledMeetings.attendeeB, params.sponsorId),
-                        ),
+                        // The company is always the A side of a sponsor meeting.
+                        eq(scheduledMeetings.attendeeA, params.sponsorId),
                     ),
                 ),
             db
@@ -110,20 +109,21 @@ export async function getMeetingDetail(params: {
     // Look synced meetings up by their Cvent appointment instead, which keeps the real time and location.
     const appointmentById = new Map(appointments.map((a) => [a.id, a]));
 
-    const sponsor = attendees.find(
-        (a) => a.salesforceId === params.sponsorId && a.role === "sponsor",
-    );
-    if (!sponsor) return null;
+    // sponsorId is a company Account id; resolve the company (all its reps).
+    const company = sponsorCompaniesByAccountId(attendees).get(params.sponsorId);
+    if (!company) return null;
+    // A representative rep supplies the base Attendee fields for SponsorDetail.
+    const rep = company.reps[0];
 
     const attendeeMap = new Map(attendees.map((a) => [a.salesforceId, a]));
 
-    const contracted = contractedMeetings(sponsor.sponsorTier);
+    const contracted = contractedMeetings(company.tier);
     const bonus = 0;
 
     const meetings: MeetingRow[] = meetingRows
         .map((m) => {
-            const delegateId =
-                m.attendeeA === params.sponsorId ? m.attendeeB : m.attendeeA;
+            // The company is always attendeeA, so the delegate is attendeeB.
+            const delegateId = m.attendeeB;
             const delegate = attendeeMap.get(delegateId);
             // Once pushed, prefer the Cvent appointment itself for time/location
             // (see appointmentById above). Otherwise resolve from the event's
@@ -160,9 +160,14 @@ export async function getMeetingDetail(params: {
 
     return {
         sponsor: {
-            ...sponsor,
-            sponsorTier:
-                sponsor.sponsorTier === "diamond" ? "diamond" : "standard",
+            // Base Attendee fields come from a representative rep; company-level
+            // fields (name/company/tier/accountId/reps) are overridden below.
+            ...rep,
+            name: company.name,
+            company: company.name,
+            accountId: company.accountId,
+            reps: company.reps,
+            sponsorTier: company.tier === "diamond" ? "diamond" : "standard",
             contracted,
             bonus,
             requestCount: requestRows.length,
@@ -434,10 +439,8 @@ export async function pushAllForSponsor(params: {
             and(
                 eq(scheduledMeetings.eventCode, params.eventCode),
                 eq(scheduledMeetings.source, "portal"),
-                or(
-                    eq(scheduledMeetings.attendeeA, params.sponsorId),
-                    eq(scheduledMeetings.attendeeB, params.sponsorId),
-                ),
+                // The company (account id) is always the A side of its meetings.
+                eq(scheduledMeetings.attendeeA, params.sponsorId),
             ),
         );
 

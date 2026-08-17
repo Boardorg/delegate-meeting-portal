@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { pairKey, computeMutualPairs, findAvailableTimeslot, wouldViolateCompanyDiversity } from './helpers';
-import type { Attendee, MeetingRequest, Timeslot, ScheduledMeeting } from '@/types';
+import type { MeetingRequest, Timeslot, ScheduledMeeting } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Helpers for generating test data
@@ -36,20 +36,15 @@ function remainingOf(timeslots: Timeslot[]): Map<string, number> {
 }
 
 /**
- * Helper to generate a minimal fake attendee for testing.
+ * Minimal scheduling-entity stub carrying just the companyKey the diversity
+ * check reads. wouldViolateCompanyDiversity compares parties by companyKey
+ * (the account id), so two entities sharing a key model reps of one company.
  *
- * @param {string} id - The attendee's unique ID.
- * @param {string} company - The attendee's company name.
- * @returns {Attendee} A minimal attendee object with the specified ID and company.
+ * @param {string} companyKey - The party's company key (account id).
+ * @returns {{ companyKey: string }} The stub entity.
  */
-function makeAttendee(id: string, company: string): Attendee {
-    return {
-        id, company,
-        cventContactId: '', salesforceId: id, name: '', email: '', phone: '',
-        role: 'delegate', title: '', sponsorTier: null,
-        profile: { annualRevenue: null, budgetaryResponsibility: null, areasOfSpecialization: [], industrySectors: [], plannedSpend: null, companySize: null, regionsOverseen: [], strategicPriorities: [] },
-        scheduling: { maxSameCompanyMeetings: null },
-    };
+function ent(companyKey: string): { companyKey: string } {
+    return { companyKey };
 }
 
 /**
@@ -145,46 +140,47 @@ describe('findAvailableTimeslot', () => {
 });
 
 describe('wouldViolateCompanyDiversity', () => {
-    test('returns false when the candidate is not in the attendee map', () => {
-        const attendees = new Map([['d1', makeAttendee('d1', 'Acme')]]);
-        expect(wouldViolateCompanyDiversity([], attendees, 'd1', 'unknown', 2)).toBe(false);
+    test('returns false when the candidate is not in the entity map', () => {
+        const entities = new Map([['d1', ent('acct-acme')]]);
+        expect(wouldViolateCompanyDiversity([], entities, 'd1', 'unknown', 2)).toBe(false);
     });
 
     test('returns false when the attendee has no existing meetings', () => {
-        const attendees = new Map([
-            ['d1', makeAttendee('d1', 'Acme')],
-            ['s1', makeAttendee('s1', 'Globex')],
+        const entities = new Map([
+            ['d1', ent('acct-acme')],
+            ['s1', ent('acct-globex')],
         ]);
-        expect(wouldViolateCompanyDiversity([], attendees, 'd1', 's1', 2)).toBe(false);
+        expect(wouldViolateCompanyDiversity([], entities, 'd1', 's1', 2)).toBe(false);
     });
 
     test('returns false when same-company meetings are below the cap', () => {
-        const attendees = new Map([
-            ['d1', makeAttendee('d1', 'Acme')],
-            ['s1', makeAttendee('s1', 'Globex')],
-            ['s2', makeAttendee('s2', 'Globex')],
+        // s1 and s2 share a company key (reps of one company / same account).
+        const entities = new Map([
+            ['d1', ent('acct-acme')],
+            ['s1', ent('acct-globex')],
+            ['s2', ent('acct-globex')],
         ]);
         const meetings = [makeMeeting('d1', 's1')];
-        expect(wouldViolateCompanyDiversity(meetings, attendees, 'd1', 's2', 2)).toBe(false);
+        expect(wouldViolateCompanyDiversity(meetings, entities, 'd1', 's2', 2)).toBe(false);
     });
 
     test('returns true when same-company meetings equal the cap', () => {
-        const attendees = new Map([
-            ['d1', makeAttendee('d1', 'Acme')],
-            ['s1', makeAttendee('s1', 'Globex')],
-            ['s2', makeAttendee('s2', 'Globex')],
+        const entities = new Map([
+            ['d1', ent('acct-acme')],
+            ['s1', ent('acct-globex')],
+            ['s2', ent('acct-globex')],
         ]);
         const meetings = [makeMeeting('d1', 's1'), makeMeeting('d1', 's2')];
-        expect(wouldViolateCompanyDiversity(meetings, attendees, 'd1', 's2', 2)).toBe(true);
+        expect(wouldViolateCompanyDiversity(meetings, entities, 'd1', 's2', 2)).toBe(true);
     });
 
     test('counts meetings correctly when the attendee appears as either participant', () => {
-        const attendees = new Map([
-            ['d1', makeAttendee('d1', 'Acme')],
-            ['s1', makeAttendee('s1', 'Globex')],
-            ['s2', makeAttendee('s2', 'Globex')],
+        const entities = new Map([
+            ['d1', ent('acct-acme')],
+            ['s1', ent('acct-globex')],
+            ['s2', ent('acct-globex')],
         ]);
         const meetings = [makeMeeting('s1', 'd1')];
-        expect(wouldViolateCompanyDiversity(meetings, attendees, 'd1', 's2', 1)).toBe(true);
+        expect(wouldViolateCompanyDiversity(meetings, entities, 'd1', 's2', 1)).toBe(true);
     });
 });

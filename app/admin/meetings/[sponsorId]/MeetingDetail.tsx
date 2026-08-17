@@ -78,7 +78,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
     // Handler for pushing all meetings for the sponsor.
     function handlePushAll() {
         startTransition(async () => {
-            const result = await pushAllForSponsor({ sponsorId: sponsor.salesforceId, eventCode });
+            const result = await pushAllForSponsor({ sponsorId: sponsor.accountId, eventCode });
             setPushResult(result);
             router.refresh();
         });
@@ -100,8 +100,13 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                     <div>
                         <div className="adm-card-title">{sponsor.company}</div>
                         <div className="adm-card-sub">
-                            {sponsor.name} · {sponsor.title} ·{" "}
+                            {sponsor.reps.length}{" "}
+                            {sponsor.reps.length === 1 ? "rep" : "reps"} ·{" "}
                             <TierPill tier={sponsor.sponsorTier} />
+                        </div>
+                        {/* All reps host this company's Cvent appointments. */}
+                        <div className="adm-card-sub">
+                            {sponsor.reps.map((r) => r.name).join(" · ")}
                         </div>
                     </div>
                 </div>
@@ -227,7 +232,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
             {/* Create meeting modal */}
             {showCreate && (
                 <CreateMeetingModal
-                    sponsorId={sponsor.salesforceId}
+                    sponsorId={sponsor.accountId}
                     eventCode={eventCode}
                     timezone={timezone}
                     scheduledCount={sponsor.scheduledCount}

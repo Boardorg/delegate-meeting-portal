@@ -192,7 +192,6 @@ export default function SponsorsTable({
     const columns = useMemo<ColumnDef<SponsorRow>[]>(
         () => [
             { id: "company", header: "Company" },
-            { id: "name", header: "Contact" },
             { id: "tier", header: "Tier" },
             { id: "contracted", header: "Contracted", enableSorting: false },
             { id: "bonus", header: "Bonus", enableSorting: false },
@@ -237,10 +236,10 @@ export default function SponsorsTable({
     });
 
     // Handler for changing the selected event.
-    // Handler for navigating to a sponsor's detail page. The active event is
+    // Handler for navigating to a company's detail page. The active event is
     // global (cookie-backed), so no event param is needed on the URL.
-    function goToSponsor(salesforceId: string) {
-        router.push(`/admin/meetings/${encodeURIComponent(salesforceId)}`);
+    function goToSponsor(accountId: string) {
+        router.push(`/admin/meetings/${encodeURIComponent(accountId)}`);
     }
 
     // Render the table with toolbar and modals.
@@ -365,9 +364,9 @@ export default function SponsorsTable({
                     ) : (
                         data.rows.map((row) => (
                             <SponsorRow
-                                key={row.salesforceId}
+                                key={row.accountId}
                                 row={row}
-                                onView={() => goToSponsor(row.salesforceId)}
+                                onView={() => goToSponsor(row.accountId)}
                             />
                         ))
                     )}
@@ -406,10 +405,6 @@ function SponsorRow({
         <tr className="adm-row adm-row-clickable" onClick={onView}>
             <td>
                 <div className="adm-party-name">{row.company}</div>
-            </td>
-            <td>
-                <div className="adm-party-name">{row.name}</div>
-                <div className="adm-party-company">{row.title}</div>
             </td>
             <td>
                 <TierPill tier={row.sponsorTier} />

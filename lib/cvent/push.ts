@@ -4,6 +4,10 @@ import { db } from "@/lib/db/client";
 import { scheduledMeetings, type ScheduledMeetingRow } from "@/lib/db/schema";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { loadAttendees } from "@/lib/attendees/loader";
+import {
+    sponsorCompaniesByAccountId,
+    cventContactIdsOfCompany,
+} from "@/lib/attendees/companies";
 import { createAppointment, cancelAppointment } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 import {
@@ -141,15 +145,20 @@ export async function pushMeetingRows(
         loadEventScheduleData(eventCode),
         loadAttendees(false, eventCode),
     ]);
+    // Delegates (the appointment attendee) resolve by salesforceId; the sponsor
+    // side (attendeeA = a company Account id) resolves to a SponsorCompany whose
+    // reps all become hosts.
     const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
+    const companiesByAccountId = sponsorCompaniesByAccountId(attendees);
 
     const results: PushResult[] = [];
     for (const row of rows) {
-        // attendeeA is the requester (the party whose request produced the
-        // meeting) and hosts the Cvent appointment; attendeeB is the target.
-        const requester = attendeeById.get(row.attendeeA);
+        // attendeeA is the requesting COMPANY (party id = Account id); every one
+        // of its reps hosts the Cvent appointment. attendeeB is the target
+        // delegate — the single appointment attendee.
+        const company = companiesByAccountId.get(row.attendeeA);
         const target = attendeeById.get(row.attendeeB);
-        const label = `${requester?.name ?? row.attendeeA} & ${target?.name ?? row.attendeeB}`;
+        const label = `${company?.name ?? row.attendeeA} & ${target?.name ?? row.attendeeB}`;
 
         // A row with an existing appointment is a replacement (update); a fresh
         // row is a create. Recorded on every result so the report can split
@@ -184,23 +193,38 @@ export async function pushMeetingRows(
             continue;
         }
 
-        // The requester hosts the appointment, so a Cvent contact id is required.
-        const hostContactId = requester?.cventContactId;
-        if (!hostContactId) {
+        // All of the company's reps host the appointment, so at least one must
+        // have a Cvent contact id. This single guard covers both an unresolved
+        // company (attendeeA not found) and a company whose reps are all missing
+        // Cvent links.
+        const hostContactIds = company
+            ? cventContactIdsOfCompany(company)
+            : [];
+        if (hostContactIds.length === 0) {
             results.push({
                 meetingId: row.id,
                 label,
                 ok: false,
                 kind,
                 reason: "host_not_in_cvent",
-                error: `Requester ${requester?.name ?? row.attendeeA} has no Cvent contact id to host the appointment. Confirm they're a Cvent attendee for this event.`,
+                error: `No rep of ${company?.name ?? row.attendeeA} has a Cvent contact id to host the appointment. Confirm the company's reps are Cvent attendees for this event.`,
             });
             continue;
         }
 
-        // Attendees are the non-host participant(s); the target's contact id
+        // Non-fatal note when some — but not all — reps are missing a Cvent
+        // link, so they're absent as hosts on the created appointment.
+        const missingHostReps = (company?.reps ?? [])
+            .filter((r) => !r.cventContactId)
+            .map((r) => r.name);
+        const hostWarning =
+            missingHostReps.length > 0
+                ? `${missingHostReps.join(", ")} ${missingHostReps.length === 1 ? "isn't" : "aren't"} linked in Cvent, so ${missingHostReps.length === 1 ? "that rep was" : "those reps were"} not added as hosts.`
+                : undefined;
+
+        // The single appointment attendee is the target delegate's contact id
         // when known. A missing target contact id isn't fatal (the appointment
-        // is created host-only) but is worth flagging.
+        // is created without an attendee) but is worth flagging.
         const attendeeContactIds = target?.cventContactId
             ? [target.cventContactId]
             : [];
@@ -217,7 +241,7 @@ export async function pushMeetingRows(
             subject: label,
             startTime: new Date(timeslot.startTime),
             endTime: new Date(timeslot.endTime),
-            hostContactId,
+            hostContactIds,
             appointmentTypeId: timeslot.appointmentTypeId,
             locationId: row.locationId,
             attendeeContactIds,
@@ -232,6 +256,7 @@ export async function pushMeetingRows(
 
             // Collect non-fatal notes for an otherwise-successful push.
             const notes: string[] = [];
+            if (hostWarning) notes.push(hostWarning);
             if (targetWarning) notes.push(targetWarning);
 
             // Only cancel the old appointment once the replacement exists.

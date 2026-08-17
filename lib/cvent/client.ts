@@ -451,7 +451,14 @@ type RawCventAppointment = {
     deleted?: boolean;
     /** e.g. "ACTIVE", "CONFIRMED", "CANCELLED" — see AppointmentStatusJson. */
     status?: string;
-    participants?: Array<{ attendee?: { contact?: { id?: string } } }>;
+    // Cvent returns HOSTS and ATTENDEES together in `participants[]`,
+    // discriminated by `type` ("host" | "attendee") — there is no separate
+    // `hosts[]` on the appointment. A multi-host (company) appointment therefore
+    // lists every rep here too, so reading all participants captures the hosts.
+    participants?: Array<{
+        type?: string;
+        attendee?: { id?: string; contact?: { id?: string } };
+    }>;
 };
 
 /**
@@ -463,14 +470,17 @@ type RawCventAppointment = {
  * @param {RawCventAppointment[]} data - Appointment records from the SDK or a recovered body.
  * @returns {CventExistingAppointment[]} The reduced appointments.
  */
-function toExistingAppointments(
+export function toExistingAppointments(
     data: RawCventAppointment[],
 ): CventExistingAppointment[] {
     const out: CventExistingAppointment[] = [];
     for (const appt of data) {
         if (appt.deleted || appt.status === "CANCELLED" || !appt.start) continue;
+        // Include every participant (hosts + attendees). Fall back to the
+        // registration id when a host arrives without a nested contact, so a
+        // multi-host appointment never silently drops a rep.
         const participantContactIds = (appt.participants ?? [])
-            .map((p) => p.attendee?.contact?.id)
+            .map((p) => p.attendee?.contact?.id ?? p.attendee?.id)
             .filter((id): id is string => !!id);
         out.push({
             startTime:
@@ -557,14 +567,30 @@ async function fetchExistingAppointmentsPage(
  * these to avoid re-booking a pair that already meets, or putting an attendee
  * in a time they're already booked. Deleted appointments are skipped.
  *
- * Mock mode returns none — mock events start with a clean slate.
+ * Mock mode reads the optional data/mock/cvent/appointments.json fixture (raw
+ * Cvent appointment records) so reconciliation — including multi-host
+ * appointments — can be exercised end-to-end; if the fixture is absent, mock
+ * events start with a clean slate.
  *
  * @param {string} eventCode - Internal event code; resolved to the appointment-event id.
  * @returns {Promise<CventExistingAppointment[]>} Existing appointments for the event.
  */
 export const getEventAppointments = cache(
     async (eventCode: string): Promise<CventExistingAppointment[]> => {
-        if (isMock()) return [];
+        if (isMock()) {
+            try {
+                const raw = await fs.readFile(
+                    path.join(MOCK_DIR, "appointments.json"),
+                    "utf-8",
+                );
+                return toExistingAppointments(
+                    JSON.parse(raw) as RawCventAppointment[],
+                );
+            } catch {
+                // No fixture (ENOENT) or unparseable → clean slate.
+                return [];
+            }
+        }
 
         const eventId = await getAppointmentEventId(eventCode);
         const out: CventExistingAppointment[] = [];
@@ -592,13 +618,17 @@ export type CventAppointmentInput = {
     startTime: Date;
     /** Appointment end (UTC). */
     endTime: Date;
-    /** Cvent contact id of the appointment host (the meeting's requester). */
-    hostContactId: string;
+    /**
+     * Cvent contact ids of the appointment HOSTS — all reps of the requesting
+     * company. A company meeting is one appointment hosted by every rep; the
+     * single attendee is the requested delegate.
+     */
+    hostContactIds: string[];
     /** Cvent appointment-type id, taken from the booked timeslot. Required on create; Cvent's update endpoint doesn't accept it. */
     appointmentTypeId: string;
     /** Cvent location id. Omitted from the request when null/undefined. */
     locationId?: string | null;
-    /** Cvent contact ids of the appointment attendees (the non-host participant). */
+    /** Cvent contact ids of the appointment attendees (the requested delegate). */
     attendeeContactIds?: string[];
     /** External reference code (we pass our meeting id) for traceability. */
     code?: string;
@@ -607,6 +637,31 @@ export type CventAppointmentInput = {
 /** Maps a list of Cvent contact ids into the SDK's `{ id }[]` attendee/host shape. */
 function toUuidList(ids: string[]): Array<{ id: string }> {
     return ids.map((id) => ({ id }));
+}
+
+/**
+ * Builds the Cvent `createAppointmentRequest` payload from our input. Every host
+ * contact id becomes a member of `hosts[]` (a company meeting has N rep hosts),
+ * and the delegate(s) go in `attendees[]`. Extracted (and exported) so the
+ * host/attendee shaping can be unit-tested without the SDK or the mock-mode
+ * short-circuit in createAppointment.
+ *
+ * @param {CventAppointmentInput} input - The appointment fields.
+ * @returns The SDK create-appointment request body.
+ */
+export function buildCreateAppointmentRequest(input: CventAppointmentInput) {
+    return {
+        subject: input.subject,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        hosts: toUuidList(input.hostContactIds),
+        appointmentTypeId: input.appointmentTypeId,
+        ...(input.locationId ? { location: input.locationId } : {}),
+        ...(input.attendeeContactIds?.length
+            ? { attendees: toUuidList(input.attendeeContactIds) }
+            : {}),
+        ...(input.code ? { code: input.code } : {}),
+    };
 }
 
 /**
@@ -687,18 +742,7 @@ export async function createAppointment(
         const res = await getClient().appointments.createAppointment({
             id,
             suppressNotifications: suppressNotifications(),
-            createAppointmentRequest: {
-                subject: input.subject,
-                startTime: input.startTime,
-                endTime: input.endTime,
-                hosts: [{ id: input.hostContactId }],
-                appointmentTypeId: input.appointmentTypeId,
-                ...(input.locationId ? { location: input.locationId } : {}),
-                ...(input.attendeeContactIds?.length
-                    ? { attendees: toUuidList(input.attendeeContactIds) }
-                    : {}),
-                ...(input.code ? { code: input.code } : {}),
-            },
+            createAppointmentRequest: buildCreateAppointmentRequest(input),
         });
         return res.id;
     } catch (err) {

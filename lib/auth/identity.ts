@@ -35,6 +35,7 @@ function userToAttendee(user: User): Attendee {
         id: String(user.id),
         cventContactId: "",
         salesforceId: user.salesforceId ?? "",
+        accountId: "",
         name: user.username ?? "",
         email: user.email ?? "",
         phone: user.phone,

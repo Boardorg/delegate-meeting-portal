@@ -497,6 +497,14 @@
 .adm-row-clickable {
     cursor: pointer;
 }
+.adm-row-clickable td {
+    transition: background 0.12s;
+}
+/* Hover cue so it's clear the whole row is the click target into the
+   company detail page. */
+.adm-row-clickable:hover td {
+    background: var(--s2);
+}
 .adm-row-conflict {
     border-left: 3px solid var(--gold);
 }

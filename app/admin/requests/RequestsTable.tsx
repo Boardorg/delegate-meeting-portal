@@ -448,12 +448,10 @@ function RowFragment(props: RowFragmentProps) {
         <>
             <tr className="adm-row">
                 <td>
+                    {/* The requester is a company, so its name already carries
+                        the company identity — the company subtitle is redundant
+                        here and is intentionally omitted. */}
                     <div className="adm-party-name">{r.requesterName}</div>
-                    {r.requesterCompany && (
-                        <div className="adm-party-company">
-                            {r.requesterCompany}
-                        </div>
-                    )}
                 </td>
                 <td>
                     <div className="adm-party-name">{r.targetName}</div>

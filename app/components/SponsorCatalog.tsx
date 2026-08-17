@@ -190,16 +190,10 @@ function RequestActions({
         }
         return (
             <div className="req-edit-actions">
-                <button
-                    className="req-btn"
-                    onClick={() => onStartPick(d)}
-                >
+                <button className="req-btn" onClick={() => onStartPick(d)}>
                     Edit request
                 </button>
-                <button
-                    className="req-remove-btn"
-                    onClick={() => onRemove(d)}
-                >
+                <button className="req-remove-btn" onClick={() => onRemove(d)}>
                     Remove
                 </button>
             </div>
@@ -712,9 +706,7 @@ export default function SponsorCatalog({
                 // untouched above, so there's nothing to restore for re-ranks.
                 if (isNew) {
                     setRequests((prev) =>
-                        prev.filter(
-                            (r) => r.targetId !== target.salesforceId,
-                        ),
+                        prev.filter((r) => r.targetId !== target.salesforceId),
                     );
                 }
             }
@@ -1321,7 +1313,7 @@ export default function SponsorCatalog({
             <TopBar
                 user={{
                     name: currentSponsor.name,
-                    title: currentSponsor.title,
+                    title: currentSponsor.company || currentSponsor.title,
                 }}
                 eventLogo={eventLogo}
                 actions={

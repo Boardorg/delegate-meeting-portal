@@ -656,6 +656,9 @@ export function buildCreateAppointmentRequest(input: CventAppointmentInput) {
         endTime: input.endTime,
         hosts: toUuidList(input.hostContactIds),
         appointmentTypeId: input.appointmentTypeId,
+        // Auto-accept on the attendee's behalf so the appointment lands
+        // confirmed rather than sitting as a pending invite in Cvent.
+        autoAccept: true,
         ...(input.locationId ? { location: input.locationId } : {}),
         ...(input.attendeeContactIds?.length
             ? { attendees: toUuidList(input.attendeeContactIds) }

@@ -164,7 +164,7 @@
 .list-remove-btn { background:none; border:1px solid var(--border); border-radius:var(--r-pill); padding:5px 10px; font-family:var(--body); font-size:11px; font-weight:700; color:var(--t2); cursor:pointer; white-space:nowrap; transition:background .12s, border-color .12s, color .12s; }
 .list-remove-btn:hover { border-color:var(--red-b); color:var(--red); background:var(--red-s); }
 /* Trailing (header-less) column: opens the delegate details modal. */
-.list-details-cell { display:flex; align-items:center; }
+.list-details-cell { display:flex; align-items:center; justify-content:center; }
 .list-details-btn { background:none; border:1px solid var(--border-up); border-radius:var(--r-pill); padding:5px 10px; font-family:var(--body); font-size:11px; font-weight:600; color:var(--text); cursor:pointer; white-space:nowrap; transition:background .12s; }
 .list-details-btn:hover { background:var(--s2); }
 

@@ -877,7 +877,7 @@ export default function SponsorCatalog({
             }
             return (
                 <button className="req-btn" onClick={() => setPickingId(d.id)}>
-                    ✏️ Edit request
+                    Edit request
                 </button>
             );
         }
@@ -1177,7 +1177,7 @@ export default function SponsorCatalog({
                                 className="req-btn"
                                 onClick={() => setPickingId(d.id)}
                             >
-                                ✏️ Edit request
+                                Edit request
                             </button>
                         );
                     } else {

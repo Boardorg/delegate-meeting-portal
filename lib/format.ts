@@ -53,3 +53,20 @@ export function fmtTime(iso: string | null, timeZone: string = "UTC"): string {
         timeZone,
     });
 }
+
+/**
+ * Formats an ISO 8601 UTC string as a lowercase weekday name (e.g. "monday")
+ * in a given IANA timezone. Like fmtTime, pass the event's real timezone so the
+ * day matches the venue's local calendar rather than the viewer's. Defaults to
+ * UTC as a fallback.
+ *
+ * @param {string | null} iso - ISO 8601 string, or null.
+ * @param {string} [timeZone] - IANA timezone to resolve the day in. Defaults to "UTC".
+ * @returns {string} Lowercase weekday name, or "—" for null.
+ */
+export function fmtWeekday(iso: string | null, timeZone: string = "UTC"): string {
+    if (!iso) return "—";
+    return new Date(iso)
+        .toLocaleDateString("en-US", { weekday: "long", timeZone })
+        .toLowerCase();
+}

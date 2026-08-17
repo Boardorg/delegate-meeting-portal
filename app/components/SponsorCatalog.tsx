@@ -480,9 +480,13 @@ export default function SponsorCatalog({
     const [catalogWidth, setCatalogWidth] = useState(999);
     const catalogRef = useRef<HTMLDivElement>(null);
 
+    // The contracted amount is a reference point, not a cap: requesters can
+    // file as many requests as they like (the scheduling engine still only
+    // schedules up to the contracted amount). `reachedPackage` just drives an
+    // informational nudge once they've filed enough to fill that amount.
     const maxMeetings = contractedMeetings(currentSponsor.sponsorTier);
     const reqCount = requests.length;
-    const atCap = reqCount >= maxMeetings;
+    const reachedPackage = reqCount >= maxMeetings;
 
     // ── Filter config ──
 
@@ -898,13 +902,12 @@ export default function SponsorCatalog({
             <div className="card-grid">
                 {pool.map((d) => {
                     const req = requestByTarget.get(d.salesforceId);
-                    const capped = atCap && req === undefined;
                     const p = d.profile;
                     const rc = revClass(p.annualRevenue) || "rev-na";
                     return (
                         <div
                             key={d.id}
-                            className={`a-card ${req !== undefined ? "is-requested" : ""} ${capped ? "is-capped" : ""}`}
+                            className={`a-card ${req !== undefined ? "is-requested" : ""}`}
                         >
                             <div className="card-identity">
                                 <div className="card-company">{d.company}</div>
@@ -986,7 +989,6 @@ export default function SponsorCatalog({
                     {pool.map((d) => {
                         const req = requestByTarget.get(d.salesforceId);
                         const isPicking = pickingId === d.id;
-                        const capped = atCap && req === undefined;
                         const p = d.profile;
                         const rc = revClass(p.annualRevenue) || "rev-na";
 
@@ -1054,7 +1056,7 @@ export default function SponsorCatalog({
                         return (
                             <div
                                 key={d.id}
-                                className={`list-row ${req !== undefined ? "is-requested" : ""} ${capped ? "is-capped" : ""}`}
+                                className={`list-row ${req !== undefined ? "is-requested" : ""}`}
                             >
                                 <div className="list-cell">
                                     <div className="lc-name">{d.name}</div>
@@ -1133,7 +1135,6 @@ export default function SponsorCatalog({
                 {pool.map((d) => {
                     const req = requestByTarget.get(d.salesforceId);
                     const isPicking = pickingId === d.id;
-                    const capped = atCap && req === undefined;
                     const p = d.profile;
                     const rc = revClass(p.annualRevenue) || "rev-na";
 
@@ -1193,7 +1194,7 @@ export default function SponsorCatalog({
                     return (
                         <div
                             key={d.id}
-                            className={`hcard ${req !== undefined ? "is-requested" : ""} ${capped ? "is-capped" : ""}`}
+                            className={`hcard ${req !== undefined ? "is-requested" : ""}`}
                         >
                             <div className="hcard-top">
                                 <div className="hcard-identity">
@@ -1294,15 +1295,11 @@ export default function SponsorCatalog({
 
     const pkgLabel =
         currentSponsor.sponsorTier === "diamond" ? "◆ Diamond" : "● Standard";
-    // Counter sits on the solid --blue-deep "My Requests" button, so these
-    // need to read on a dark background rather than the light --red/--t2 tones
-    // used elsewhere.
-    const reqCountColor =
-        reqCount >= maxMeetings
-            ? "#ffb3ae"
-            : reqCount > 0
-              ? "#ffffff"
-              : "rgba(255,255,255,0.7)";
+    // Counter sits on the solid --blue-deep "My Requests" button, so this needs
+    // to read on a dark background. The count is a reference against the package
+    // amount, not a limit, so hitting it isn't flagged — full white once any
+    // request exists, dimmed when empty.
+    const reqCountColor = reqCount > 0 ? "#ffffff" : "rgba(255,255,255,0.7)";
 
     const showHCards = viewMode === "list" && catalogWidth < LIST_BREAK;
 
@@ -1329,7 +1326,7 @@ export default function SponsorCatalog({
                                 color: reqCountColor,
                             }}
                         >
-                            {reqCount}/{maxMeetings}
+                            {reqCount}
                         </span>
                     </button>
                 }
@@ -1430,13 +1427,14 @@ export default function SponsorCatalog({
                         </span>
                     </div>
 
-                    {atCap && (
-                        <div className="cap-banner">
-                            <span className="cap-banner-icon">⚠</span>
+                    {reachedPackage && (
+                        <div className="info-banner">
+                            <span className="info-banner-icon">✓</span>
                             <span>
-                                You&apos;ve reached your limit of {maxMeetings}{" "}
-                                meeting requests. Remove a request to add a new
-                                one.
+                                You&apos;ve made enough requests to meet your
+                                package amount. Keep adding requests so we can
+                                provide you the best match based on delegate
+                                availability.
                             </span>
                         </div>
                     )}
@@ -1509,10 +1507,11 @@ export default function SponsorCatalog({
                         >
                             {pkgLabel} package
                         </span>
-                        <span
-                            className={`pkg-val ${drawerEntries.length >= maxMeetings ? "pkg-full" : "pkg-ok"}`}
-                        >
-                            {drawerEntries.length} / {maxMeetings} meetings
+                        {/* The package amount is a reference, not a cap: show
+                            the contracted meeting count and make clear requests
+                            themselves are unlimited. */}
+                        <span className="pkg-val pkg-ok">
+                            {maxMeetings} meetings, unlimited requests
                         </span>
                     </div>
                     {drawerEntries.length === 0 ? (

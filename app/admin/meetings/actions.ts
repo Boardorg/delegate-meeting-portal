@@ -12,6 +12,7 @@ import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { getEventAppointments, cancelAppointment } from "@/lib/cvent/client";
 import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
+import { preexistingFromAppointments } from "@/lib/cvent/preexisting";
 import {
     buildSyncReport,
     isAppointmentAlreadyGone,
@@ -22,6 +23,7 @@ import {
     runScheduler,
     type PreexistingSchedule,
 } from "@/lib/scheduling/engine";
+import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
 import {
     buildSchedulerReport,
     type SchedulerReport,
@@ -44,14 +46,13 @@ import type { Attendee, MeetingRequest } from "@/types";
 // show as 0 until that field is available from Salesforce.
 // ---------------------------------------------------------------------------
 
-/** One sponsor row as returned to the client table. */
+/** One company row as returned to the client table (one row per sponsor company). */
 export type SponsorRow = {
-    salesforceId: string;
+    /** Company Salesforce Account id — the sponsor-side party id. */
+    accountId: string;
     company: string;
-    name: string;
-    title: string;
     sponsorTier: "diamond" | "standard";
-    /** Package meetings guaranteed by tier. Diamond: 8, Standard: 5. */
+    /** Package meetings guaranteed by tier (shared company budget). Diamond: 8, Standard: 5. */
     contracted: number;
     /** Bonus meetings beyond the package. Not yet in attendee data; always 0. */
     bonus: number;
@@ -62,7 +63,6 @@ export type SponsorRow = {
 /** Columns the sponsor list can be sorted by. */
 export type SponsorSortField =
     | "company"
-    | "name"
     | "tier"
     | "requestCount"
     | "scheduledCount";
@@ -99,7 +99,8 @@ export async function listSponsorsPage(params: {
             .where(eq(scheduledMeetings.eventCode, params.eventCode)),
     ]);
 
-    // Build a map of request counts keyed by attendee ID.
+    // Build a map of request counts keyed by requester party id (company
+    // account id on the sponsor side).
     const requestCountMap = new Map<string, number>();
     for (const r of requestRows) {
         requestCountMap.set(
@@ -108,7 +109,8 @@ export async function listSponsorsPage(params: {
         );
     }
 
-    // Build a map of scheduled meeting counts keyed by attendee ID.
+    // Build a map of scheduled meeting counts keyed by party id. attendeeA is the
+    // company account id, so a company's meetings all count under one key.
     const scheduledCountMap = new Map<string, number>();
     for (const m of meetingRows) {
         scheduledCountMap.set(
@@ -121,40 +123,30 @@ export async function listSponsorsPage(params: {
         );
     }
 
-    // Filter attendees to only include sponsors with a Salesforce ID.
-    const sponsors = attendees.filter(
-        (a) => a.role === "sponsor" && a.salesforceId,
-    );
+    // Group sponsor reps into companies — one row per company.
+    const companies = sponsorCompaniesByAccountId(attendees);
 
-    // Map sponsors to SponsorRow, attaching request and scheduled counts from the maps.
-    let rows: SponsorRow[] = sponsors.map((s) => ({
-        salesforceId: s.salesforceId,
-        company: s.company,
-        name: s.name,
-        title: s.title,
-        sponsorTier: s.sponsorTier === "diamond" ? "diamond" : "standard",
-        contracted: contractedMeetings(s.sponsorTier),
+    // Map companies to SponsorRow, attaching request and scheduled counts.
+    let rows: SponsorRow[] = [...companies.values()].map((c) => ({
+        accountId: c.accountId,
+        company: c.name,
+        sponsorTier: c.tier === "diamond" ? "diamond" : "standard",
+        contracted: contractedMeetings(c.tier),
         bonus: 0,
-        requestCount: requestCountMap.get(s.salesforceId) ?? 0,
-        scheduledCount: scheduledCountMap.get(s.salesforceId) ?? 0,
+        requestCount: requestCountMap.get(c.accountId) ?? 0,
+        scheduledCount: scheduledCountMap.get(c.accountId) ?? 0,
     }));
 
-    // Apply search filter if q is provided. Search matches company or name, case-insensitive.
+    // Apply search filter if q is provided. Search matches company, case-insensitive.
     const q = (params.q ?? "").trim().toLowerCase();
     if (q) {
-        rows = rows.filter(
-            (r) =>
-                r.company.toLowerCase().includes(q) ||
-                r.name.toLowerCase().includes(q),
-        );
+        rows = rows.filter((r) => r.company.toLowerCase().includes(q));
     }
 
     // Apply sorting if sortField is provided.
     const dir = params.sortDir === "asc" ? 1 : -1;
     rows.sort((a, b) => {
         switch (params.sortField) {
-            case "name":
-                return dir * a.name.localeCompare(b.name);
             case "tier":
                 return dir * a.sponsorTier.localeCompare(b.sponsorTier);
             case "requestCount":
@@ -182,15 +174,14 @@ export async function listSponsorsPage(params: {
 
 /**
  * Builds the engine's pre-existing schedule from the event's current Cvent
- * appointments: which attendee pairs already meet, and the start times each
- * attendee is already booked at. Cvent participant contact ids are mapped back
- * to Salesforce ids via the loaded attendees; unrecognized participants are
- * ignored. Returns an empty schedule (and logs) when Cvent is unavailable, so a
- * run still proceeds and falls back to the DB-based reconciliation.
+ * appointments. Wraps preexistingFromAppointments (which maps participant
+ * contact ids to party ids) around the Cvent fetch, returning an empty schedule
+ * (and logging) when Cvent is unavailable, so a run still proceeds and falls
+ * back to the DB-based reconciliation.
  *
  * @param {string} eventCode - The event to read existing Cvent appointments for.
- * @param {Attendee[]} attendees - Loaded attendees, for contact-id → Salesforce-id mapping.
- * @returns {Promise<PreexistingSchedule>} Pairs + per-attendee busy times to schedule around.
+ * @param {Attendee[]} attendees - Loaded attendees, for contact-id → party-id mapping.
+ * @returns {Promise<PreexistingSchedule>} Pairs + per-party busy times to schedule around.
  */
 async function buildPreexistingFromCvent(
     eventCode: string,
@@ -207,39 +198,7 @@ async function buildPreexistingFromCvent(
         return {};
     }
 
-    // Cvent contact id → our Salesforce id, to translate appointment participants.
-    const salesforceIdByContactId = new Map<string, string>();
-    for (const a of attendees) {
-        if (a.cventContactId)
-            salesforceIdByContactId.set(a.cventContactId, a.salesforceId);
-    }
-
-    const busyStartTimesByAttendee = new Map<string, Set<string>>();
-    const pairs = new Set<string>();
-
-    for (const appt of appointments) {
-        // Map participants to the Salesforce ids we schedule with; ignore any
-        // Cvent participant we don't recognize.
-        const sfIds = appt.participantContactIds
-            .map((cid) => salesforceIdByContactId.get(cid))
-            .filter((id): id is string => !!id);
-
-        // Each participant is busy at this appointment's start time.
-        for (const sfId of sfIds) {
-            const set = busyStartTimesByAttendee.get(sfId) ?? new Set<string>();
-            set.add(appt.startTime);
-            busyStartTimesByAttendee.set(sfId, set);
-        }
-
-        // Every pair among the participants already meets — don't re-schedule it.
-        for (let i = 0; i < sfIds.length; i++) {
-            for (let j = i + 1; j < sfIds.length; j++) {
-                pairs.add(pairKey(sfIds[i], sfIds[j]));
-            }
-        }
-    }
-
-    return { pairs, busyStartTimesByAttendee };
+    return preexistingFromAppointments(appointments, attendees);
 }
 
 /**
@@ -248,8 +207,9 @@ async function buildPreexistingFromCvent(
  * post-reconciliation: the engine runs freely, then any fresh meeting that duplicates
  * or conflicts with a pushed meeting is dropped before insert.
  *
- * The engine uses Salesforce IDs throughout, matching what the DB stores, so no ID
- * translation is needed in either mock or production mode.
+ * The engine and the DB both key meetings by PARTY id (a company Account id on
+ * the sponsor side, a delegate salesforceId on the other), so no id translation
+ * is needed here in either mock or production mode.
  *
  * @param {string} eventCode - The event to schedule meetings for.
  * @returns {Promise<SchedulerReport>} A DB-friendly summary of the run: counts,
@@ -306,8 +266,9 @@ export async function runSchedulerForEvent(
         preexisting,
     );
 
-    // Build reconciliation sets from pushed meetings. Salesforce IDs are used throughout
-    // so no conversion is needed here.
+    // Build reconciliation sets from pushed meetings. Party ids (company account
+    // ids / delegate salesforceIds) are used throughout — the same keys the
+    // engine emits — so no conversion is needed here.
     const pushedPairs = new Set<string>();
     const blockedSlots = new Set<string>(); // "${attendeeId}:${timeslotId}"
     for (const row of pushedRows) {
@@ -544,9 +505,11 @@ export async function unpushAllForEvent(
             ),
         );
 
-    // Names for the failure labels, mapped from Salesforce ids like the push flow.
+    // Names for the failure labels. attendeeA is a company party id (resolve via
+    // the company map); attendeeB is a delegate (resolve by salesforceId).
     const attendees = await loadAttendees(false, eventCode);
     const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
+    const companiesByAccountId = sponsorCompaniesByAccountId(attendees);
 
     const failures: { meetingId: string; label: string; detail: string }[] = [];
     const notes: { meetingId: string; label: string; detail: string }[] = [];
@@ -556,7 +519,7 @@ export async function unpushAllForEvent(
     for (const row of syncedRows) {
         // Guarded by the query above, but keep the type narrow for the DB call.
         if (!row.cventAppointmentId) continue;
-        const label = `${attendeeById.get(row.attendeeA)?.name ?? row.attendeeA} & ${
+        const label = `${companiesByAccountId.get(row.attendeeA)?.name ?? row.attendeeA} & ${
             attendeeById.get(row.attendeeB)?.name ?? row.attendeeB
         }`;
 

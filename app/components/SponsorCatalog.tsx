@@ -3,6 +3,7 @@
 import "@/app/frontend.css";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { contractedMeetings } from "@/lib/attendees/caps";
+import { partyId } from "@/lib/attendees/companies";
 import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
 import TopBar, { type TopBarEventLogo } from "@/app/components/TopBar";
 import DetailsModal from "@/app/components/DetailsModal";
@@ -446,8 +447,13 @@ export default function SponsorCatalog({
     currentSponsor,
     eventLogo,
 }: Props) {
-    // This sponsor's saved requests. Each links to its delegate via targetId
-    // (a Salesforce id), so the catalog never translates between id spaces.
+    // The current company's party id (its Account id) — the key the server uses
+    // for this company's shared request set. Extracted so it can be a stable,
+    // statically-checkable effect dependency.
+    const currentPartyId = partyId(currentSponsor);
+    // This company's saved requests (shared across all of the company's reps;
+    // the server keys them by the company party id). Each links to its delegate
+    // via targetId (a Salesforce id), so the catalog never translates ids.
     const [requests, setRequests] = useState<MeetingRequest[]>([]);
     const [pickingId, setPickingId] = useState<string | null>(null);
     // Targets (by salesforceId) whose request was just placed/edited in this
@@ -637,11 +643,14 @@ export default function SponsorCatalog({
 
     // ── Handlers ──
 
-    // Load the current sponsor's saved requests. Keyed on the sponsor id so it
-    // re-fetches when the identity changes without a reload — e.g. the
-    // testing-mode spoof-sponsor switch, where router.refresh() swaps in a new
-    // `currentSponsor` prop but doesn't remount this component. The `active`
-    // guard drops a stale in-flight response if the sponsor changes again mid-fetch.
+    // Load the current company's saved requests. Keyed on the party id (the
+    // company Account id for sponsors) so it re-fetches when the identity
+    // changes without a reload — e.g. the testing-mode spoof-sponsor switch,
+    // where router.refresh() swaps in a new `currentSponsor` prop but doesn't
+    // remount this component. Switching between reps of the SAME company keeps
+    // the same party id, so the shared request set isn't needlessly refetched.
+    // The `active` guard drops a stale in-flight response if it changes again
+    // mid-fetch.
     useEffect(() => {
         let active = true;
         fetch("/api/requests")
@@ -653,9 +662,9 @@ export default function SponsorCatalog({
         return () => {
             active = false;
         };
-    }, [currentSponsor.salesforceId]);
+    }, [currentPartyId]);
 
-    // Upsert a request for a delegate. `targetId` is the unique key per sponsor
+    // Upsert a request for a delegate. `targetId` is the unique key per company
     // (one request per delegate), so a save replaces any existing entry for that
     // target. New requests show optimistically; the server returns the saved row
     // (with its real id) which then replaces the optimistic one. The requester
@@ -671,12 +680,13 @@ export default function SponsorCatalog({
 
             // Optimistic add for brand-new requests (no id until the server
             // responds). Re-ranks are left until the response so an error keeps
-            // the prior rank.
+            // the prior rank. The requester id is cosmetic here (the server is
+            // authoritative and keys by the company party id).
             if (isNew) {
                 setRequests(
                     replaceTarget({
                         id: `temp:${target.salesforceId}`,
-                        requesterId: currentSponsor.salesforceId,
+                        requesterId: partyId(currentSponsor),
                         targetId: target.salesforceId,
                         rank,
                     }),
@@ -709,7 +719,7 @@ export default function SponsorCatalog({
                 }
             }
         },
-        [requestByTarget, currentSponsor.salesforceId],
+        [requestByTarget, currentSponsor],
     );
 
     // Remove a delegate's request: optimistically drop it, then tell the server.

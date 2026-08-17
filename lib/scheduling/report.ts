@@ -1,5 +1,6 @@
 import { Attendee, MeetingRequest, ScheduledMeeting } from "@/types";
 import { pairKey } from "./helpers";
+import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
 
 // ---------------------------------------------------------------------------
 // Scheduler run report
@@ -183,7 +184,9 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
     return {
         eventCode,
         generatedAt,
-        sponsorsConsidered: attendees.filter((a) => a.role === "sponsor").length,
+        // Count distinct sponsor COMPANIES (reps of one company are one party),
+        // not individual reps.
+        sponsorsConsidered: sponsorCompaniesByAccountId(attendees).size,
         requestsConsidered: requests.length,
         meetingsScheduled: reconciled.length,
         mutualMeetings: reconciled.filter((m) => m.mutual).length,

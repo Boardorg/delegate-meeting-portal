@@ -211,6 +211,7 @@ const MEETING_DATA_FIELDS = [
     "Delegate__r.Title",
     "Delegate__r.Email",
     "Delegate__r.Phone",
+    "Delegate__r.AccountId",
     "Delegate__r.Account.Name",
     "Delegate__r.Account.Website",
     "Delegate__r.Account.Industry_Category__c",

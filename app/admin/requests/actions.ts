@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { meetingRequests, type MeetingRequestRow } from "@/lib/db/schema";
-import { attendeesBySalesforceId } from "@/lib/attendees/byId";
+import { loadAttendees } from "@/lib/attendees/loader";
+import {
+    sponsorCompaniesByAccountId,
+    resolvePartyName,
+} from "@/lib/attendees/companies";
 import { loadMockRequests } from "@/lib/scheduling/loader";
 import { describeDbError } from "@/lib/db/errors";
 import { paginate, type Page } from "@/lib/admin/pagination";
@@ -146,13 +150,21 @@ export async function listRequestsPage(
         isMock
             ? loadMockRequests(mockPath)
             : db.select().from(meetingRequests).where(eq(meetingRequests.eventCode, params.eventCode)),
-        attendeesBySalesforceId(params.eventCode),
+        loadAttendees(false, params.eventCode),
     ]);
+
+    // The requester is a party id: a company Account id on the sponsor side (or
+    // a delegate salesforceId when a delegate initiated it). Resolve it via the
+    // company map first, then the per-attendee map. The target is a delegate.
+    const bySalesforceId = new Map(
+        attendees.filter((a) => a.salesforceId).map((a) => [a.salesforceId, a]),
+    );
+    const companies = sponsorCompaniesByAccountId(attendees);
 
     // Enrich with names + company (falling back to the raw id when unresolved).
     let enriched: RequestRow[] = rows.map((r) => {
-        const requester = attendees.get(r.requesterId);
-        const target = attendees.get(r.targetId);
+        const requester = resolvePartyName(r.requesterId, companies, bySalesforceId);
+        const target = bySalesforceId.get(r.targetId);
         return {
             id: Number(r.id),
             requesterId: r.requesterId,

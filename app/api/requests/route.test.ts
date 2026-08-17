@@ -34,17 +34,53 @@ import { meetingRequests } from '@/lib/db/schema';
 // ---------------------------------------------------------------------------
 
 /**
- * Minimal authenticated identity. The route only reads `salesforceId` from
- * this, so the other fields use placeholder values.
+ * Builds a minimal sponsor Attendee. The route derives the requester id from
+ * partyId(identity.attendee) — the company Account id for a sponsor — so the
+ * account id is what matters here.
+ */
+function sponsorAttendee(
+    accountId: string,
+    salesforceId = 'sf-rep-001',
+): ResolvedIdentity['attendee'] {
+    return {
+        id: salesforceId,
+        cventContactId: '',
+        salesforceId,
+        accountId,
+        name: 'Rep',
+        email: '',
+        phone: '',
+        role: 'sponsor',
+        company: 'Acme',
+        title: '',
+        sponsorTier: 'standard',
+        profile: {
+            annualRevenue: null,
+            budgetaryResponsibility: null,
+            areasOfSpecialization: [],
+            industrySectors: [],
+            plannedSpend: null,
+            companySize: null,
+            regionsOverseen: [],
+            strategicPriorities: [],
+        },
+        scheduling: { maxSameCompanyMeetings: null },
+    };
+}
+
+/**
+ * Minimal authenticated identity. The route reads the requester id from
+ * partyId(attendee) — the company Account id — so the account id drives the
+ * stored requesterId ('sf-requester-001' here to match the sample row).
  */
 const mockIdentity: ResolvedIdentity = {
     contact: '+15555550101',
     channel: 'sms',
     role: 'sponsor',
     source: 'salesforce',
-    salesforceId: 'sf-requester-001',
+    salesforceId: 'sf-rep-001',
     user: null,
-    attendee: {} as ResolvedIdentity['attendee'],
+    attendee: sponsorAttendee('sf-requester-001'),
 };
 
 /**
@@ -101,8 +137,12 @@ describe('POST /api/requests — auth', () => {
         expect(db.delete).not.toHaveBeenCalled();
     });
 
-    test('returns 403 when the identity has no Salesforce id', async () => {
-        vi.mocked(getCurrentIdentity).mockResolvedValue({ ...mockIdentity, salesforceId: null });
+    test('returns 403 when the identity has no party id', async () => {
+        // A sponsor with neither an account id nor a salesforceId → no party id.
+        vi.mocked(getCurrentIdentity).mockResolvedValue({
+            ...mockIdentity,
+            attendee: sponsorAttendee('', ''),
+        });
 
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', rank: 3 }));
 
@@ -273,10 +313,13 @@ describe('GET /api/requests', () => {
         expect(db.select).not.toHaveBeenCalled();
     });
 
-    test('returns an empty array when the identity has no Salesforce id', async () => {
-        // This case represents an admin viewing the page; they have no SF id and
-        // therefore no requests to return. The route handles it without hitting the DB.
-        vi.mocked(getCurrentIdentity).mockResolvedValue({ ...mockIdentity, salesforceId: null });
+    test('returns an empty array when the identity has no party id', async () => {
+        // This case represents an admin viewing the page; they have no party id
+        // and therefore no requests to return. Handled without hitting the DB.
+        vi.mocked(getCurrentIdentity).mockResolvedValue({
+            ...mockIdentity,
+            attendee: sponsorAttendee('', ''),
+        });
 
         const res = await GET();
         const json = await res.json();

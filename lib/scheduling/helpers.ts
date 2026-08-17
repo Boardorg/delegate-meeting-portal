@@ -1,4 +1,4 @@
-import { Timeslot, MeetingRequest, ScheduledMeeting, Attendee } from '@/types';
+import { Timeslot, MeetingRequest, ScheduledMeeting } from '@/types';
 
 /**
  * Produces a canonical, order-independent key for a pair of attendee IDs (e.g. `"d1|s2"`).
@@ -78,41 +78,46 @@ export function findAvailableTimeslot(
 }
 
 /**
- * Checks whether scheduling a meeting between two attendees would exceed the same-company cap.
+ * Checks whether scheduling a meeting between two parties would exceed the
+ * same-company cap. Parties are compared by `companyKey` — the Salesforce
+ * Account id (for sponsors, this is the party id itself; for delegates, their
+ * employer's account id) — rather than the company name string, so distinct
+ * companies that happen to share a name aren't conflated and reps of one
+ * company are treated as one.
  *
  * @param {ScheduledMeeting[]} scheduledMeetings - All meetings scheduled so far.
- * @param {Map<string, Attendee>} attendees - Lookup map of all attendees by ID.
- * @param {string} attendeeId - The attendee whose existing schedule is being checked.
- * @param {string} candidateId - The prospective meeting partner.
- * @param {number} maxSameCompany - Maximum allowed meetings with attendees from the same company.
+ * @param {Map<string, { companyKey: string }>} entities - Party-id → scheduling entity (carrying its companyKey).
+ * @param {string} attendeeId - The party whose existing schedule is being checked.
+ * @param {string} candidateId - The prospective meeting partner (party id).
+ * @param {number} maxSameCompany - Maximum allowed meetings with the same company.
  * @returns {boolean} `true` if adding this meeting would violate the diversity rule.
  */
 export function wouldViolateCompanyDiversity(
 	scheduledMeetings: ScheduledMeeting[],
-	attendees: Map<string, Attendee>,
+	entities: Map<string, { companyKey: string }>,
 	attendeeId: string,
 	candidateId: string,
 	maxSameCompany: number
 ): boolean {
 
-	// Look up the company of the person we're considering scheduling.
-	const candidateCompany = attendees.get(candidateId)?.company;
+	// The company (account key) of the party we're considering scheduling.
+	const candidateKey = entities.get(candidateId)?.companyKey;
 
-	// If the candidate doesn't exist in the map, allow the meeting.
-	if (!candidateCompany) return false;
+	// If the candidate isn't in the map, allow the meeting.
+	if (!candidateKey) return false;
 
-	// Count how many of the attendee's existing meetings are with people from the same company.
+	// Count how many of this party's existing meetings are with the same company.
 	const sameCompanyCount = scheduledMeetings.filter(m => {
 		const isInvolved = m.attendeeA === attendeeId || m.attendeeB === attendeeId;
 
-		// Skip meetings this attendee isn't part of.
+		// Skip meetings this party isn't part of.
 		if (!isInvolved) return false;
 
-		// Determine which participant is the other person in the meeting.
+		// Determine the other party in the meeting.
 		const otherId = m.attendeeA === attendeeId ? m.attendeeB : m.attendeeA;
 
-		// Check if the other person's company matches the candidate's company.
-		return attendees.get(otherId)?.company === candidateCompany;
+		// Check if the other party's company matches the candidate's.
+		return entities.get(otherId)?.companyKey === candidateKey;
 	}).length;
 
 	// Return true if adding this meeting would meet or exceed the cap.

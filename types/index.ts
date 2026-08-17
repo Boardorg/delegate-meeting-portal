@@ -159,6 +159,17 @@ export interface Attendee {
      */
     salesforceId: string;
 
+    /**
+     * Salesforce Account id of the attendee's employer (company).
+     *
+     * For SPONSORS this is the scheduling/storage "party id": all reps of a
+     * company share it, so requests and meetings are keyed by company rather
+     * than by the individual rep. For delegates it is informational only —
+     * delegates still schedule by their own salesforceId. See
+     * lib/attendees/companies.ts (`partyId`). Empty string when unknown.
+     */
+    accountId: string;
+
     /** Full display name. */
     name: string;
 
@@ -211,6 +222,10 @@ export interface Attendee {
  */
 export type SponsorDetail = Attendee & {
     sponsorTier: "diamond" | "standard";
+    /** Company Salesforce Account id — the sponsor-side party id. */
+    accountId: string;
+    /** All reps belonging to the company (each hosts the company's Cvent appointments). */
+    reps: Attendee[];
     contracted: number;
     bonus: number;
     requestCount: number;

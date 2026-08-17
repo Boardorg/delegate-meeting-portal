@@ -64,9 +64,13 @@ export function fmtTime(iso: string | null, timeZone: string = "UTC"): string {
  * @param {string} [timeZone] - IANA timezone to resolve the day in. Defaults to "UTC".
  * @returns {string} Lowercase weekday name, or "—" for null.
  */
-export function fmtWeekday(iso: string | null, timeZone: string = "UTC"): string {
+export function fmtWeekday(
+    iso: string | null,
+    timeZone: string = "UTC",
+): string {
     if (!iso) return "—";
-    return new Date(iso)
-        .toLocaleDateString("en-US", { weekday: "long", timeZone })
-        .toLowerCase();
+    return new Date(iso).toLocaleDateString("en-US", {
+        weekday: "long",
+        timeZone,
+    });
 }

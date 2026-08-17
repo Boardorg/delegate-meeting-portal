@@ -207,6 +207,63 @@ export async function listRequestsPage(
 }
 
 // ---------------------------------------------------------------------------
+// Party picker (requester / target options)
+// ---------------------------------------------------------------------------
+
+/** One selectable party for the new-request pickers. */
+export type RequestPartyOption = {
+    /** The party id stored on the request: a company Account id, or a delegate salesforceId. */
+    id: string;
+    /** Display name (company name for companies; person name for delegates). */
+    name: string;
+    /** Employer company (same as `name` for companies). */
+    company: string;
+    /** Which kind of party this is, for labeling/grouping in the picker. */
+    kind: "company" | "delegate";
+};
+
+/**
+ * Lists every party that can be a requester or target for an event: each sponsor
+ * COMPANY once (party id = Account id, so individual reps are collapsed into
+ * their company) plus every DELEGATE. Powers the searchable name pickers in the
+ * new-request form, so admins choose a name and the underlying id is captured
+ * behind it instead of being typed by hand.
+ *
+ * @param {string} eventCode - The event to list parties for.
+ * @returns {Promise<RequestPartyOption[]>} Companies + delegates, sorted by name.
+ */
+export async function listRequestParties(
+    eventCode: string,
+): Promise<RequestPartyOption[]> {
+    const attendees = await loadAttendees(false, eventCode);
+
+    // One option per sponsor company (keyed by Account id) — reps are grouped,
+    // never listed individually.
+    const companies: RequestPartyOption[] = [
+        ...sponsorCompaniesByAccountId(attendees).values(),
+    ].map((c) => ({
+        id: c.accountId,
+        name: c.name,
+        company: c.name,
+        kind: "company",
+    }));
+
+    // Delegates stay individuals (party id = salesforceId).
+    const delegates: RequestPartyOption[] = attendees
+        .filter((a) => a.role === "delegate" && a.salesforceId)
+        .map((a) => ({
+            id: a.salesforceId,
+            name: a.name,
+            company: a.company,
+            kind: "delegate",
+        }));
+
+    return [...companies, ...delegates].sort((a, b) =>
+        a.name.localeCompare(b.name),
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
 

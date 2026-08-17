@@ -11,6 +11,7 @@ import {
     type SortingState,
 } from "@tanstack/react-table";
 import { useDebounce } from "use-debounce";
+import Select, { type StylesConfig } from "react-select";
 import { fmtDateTime } from "@/lib/format";
 import { SortableHeaders } from "../_components/SortableHeaders";
 import { TablePagination } from "../_components/TablePagination";
@@ -18,9 +19,11 @@ import {
     createRequest,
     updateRequest,
     deleteRequest,
+    listRequestParties,
     type RequestRow,
     type RequestsPage,
     type RequestSortField,
+    type RequestPartyOption,
 } from "./actions";
 
 // ---------------------------------------------------------------------------
@@ -55,6 +58,130 @@ const COL_COUNT = 6;
 
 function emptyDraft(): NewDraft {
     return { requesterId: "", targetId: "", rank: 5 };
+}
+
+// ---------------------------------------------------------------------------
+// PartySelect — searchable name picker (react-select) for the requester/target
+// fields. Displays company + delegate names and reports the selected party id,
+// so admins never type a raw Salesforce/Account id. Options are loaded once per
+// event and filtered client-side.
+// ---------------------------------------------------------------------------
+
+/** A react-select option wrapping one selectable party. */
+type PartyOption = {
+    value: string; // party id (company Account id or delegate salesforceId)
+    label: string; // display name
+    company: string; // employer (== label for companies)
+    kind: RequestPartyOption["kind"];
+};
+
+/** Maps a party from the server action to a react-select option. */
+function toPartyOption(p: RequestPartyOption): PartyOption {
+    return { value: p.id, label: p.name, company: p.company, kind: p.kind };
+}
+
+// react-select styling tuned to match .adm-input (see backend.css): same
+// border, radius, surface, and 12px body font. CSS vars resolve at render, so
+// the picker tracks the admin theme like the native inputs it replaces.
+const partySelectStyles: StylesConfig<PartyOption, false> = {
+    control: (base, state) => ({
+        ...base,
+        minHeight: 30,
+        fontSize: 12,
+        fontFamily: "var(--body)",
+        backgroundColor: "var(--surface)",
+        borderColor: state.isFocused ? "var(--border-up)" : "var(--border)",
+        borderRadius: "var(--r)",
+        boxShadow: "none",
+        "&:hover": { borderColor: "var(--border-up)" },
+    }),
+    valueContainer: (base) => ({ ...base, padding: "0 8px" }),
+    input: (base) => ({ ...base, margin: 0, padding: 0, color: "var(--text)" }),
+    placeholder: (base) => ({ ...base, color: "var(--t3)" }),
+    singleValue: (base) => ({ ...base, color: "var(--text)" }),
+    dropdownIndicator: (base) => ({ ...base, padding: 4 }),
+    clearIndicator: (base) => ({ ...base, padding: 4 }),
+    menu: (base) => ({
+        ...base,
+        fontSize: 12,
+        backgroundColor: "var(--surface)",
+        border: "1px solid var(--border)",
+    }),
+    // The menu is portaled to <body> so the table's overflow can't clip it.
+    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+    option: (base, state) => ({
+        ...base,
+        color: "var(--text)",
+        backgroundColor: state.isFocused ? "var(--s2)" : "transparent",
+        cursor: "pointer",
+        ":active": { backgroundColor: "var(--s2)" },
+    }),
+};
+
+function PartySelect({
+    parties,
+    value,
+    onChange,
+    placeholder,
+    disabled,
+    instanceId,
+}: {
+    /** Loaded options, or null while still loading. */
+    parties: PartyOption[] | null;
+    /** Currently selected party id ("" for none). */
+    value: string;
+    onChange: (id: string) => void;
+    placeholder: string;
+    disabled: boolean;
+    /** Stable id so SSR/CSR markup matches (avoids hydration id churn). */
+    instanceId: string;
+}) {
+    const options = parties ?? [];
+    const selected = options.find((o) => o.value === value) ?? null;
+    return (
+        <Select<PartyOption>
+            instanceId={instanceId}
+            classNamePrefix="adm-party-select"
+            options={options}
+            value={selected}
+            onChange={(o) => onChange(o?.value ?? "")}
+            isDisabled={disabled}
+            isLoading={parties === null}
+            isClearable
+            placeholder={placeholder}
+            styles={partySelectStyles}
+            menuPortalTarget={
+                typeof document !== "undefined" ? document.body : undefined
+            }
+            menuPosition="fixed"
+            // Match on the name AND the employer company so searching either finds
+            // the party (react-select otherwise only filters on the label).
+            filterOption={(option, input) => {
+                if (!input) return true;
+                const q = input.toLowerCase();
+                const o = option.data;
+                return (
+                    o.label.toLowerCase().includes(q) ||
+                    o.company.toLowerCase().includes(q)
+                );
+            }}
+            // In the dropdown, tag each option with its kind (companies) or its
+            // employer (delegates) so same-named parties are distinguishable.
+            formatOptionLabel={(o, meta) =>
+                meta.context === "menu" ? (
+                    <span>
+                        {o.label}
+                        <span className="adm-party-select-sub">
+                            {o.kind === "company" ? "Company" : o.company}
+                        </span>
+                    </span>
+                ) : (
+                    o.label
+                )
+            }
+            noOptionsMessage={() => "No matching companies or delegates"}
+        />
+    );
 }
 
 export default function RequestsTable({
@@ -165,6 +292,33 @@ export default function RequestsTable({
     } | null>(null);
 
     const [pending, startTransition] = useTransition();
+
+    // ── Party pick-list (requester / target options) ─────────────────────────
+    // Loaded once per event and filtered client-side by react-select. `null`
+    // means "not loaded yet" (drives the picker's loading state).
+    const [parties, setParties] = useState<PartyOption[] | null>(null);
+
+    // Reset when the active event changes so we never show a stale event's
+    // companies/delegates.
+    useEffect(() => setParties(null), [selectedEvent]);
+
+    // Load the parties lazily the first time the create row is opened for an
+    // event. The `active` guard drops a stale response if the event changes
+    // mid-fetch.
+    useEffect(() => {
+        if (!creating || !selectedEvent || parties !== null) return;
+        let active = true;
+        listRequestParties(selectedEvent)
+            .then((ps) => {
+                if (active) setParties(ps.map(toPartyOption));
+            })
+            .catch(() => {
+                if (active) setParties([]);
+            });
+        return () => {
+            active = false;
+        };
+    }, [creating, selectedEvent, parties]);
 
     // ── Edit handlers ─────────────────────────────────────────────────────────
 
@@ -281,33 +435,33 @@ export default function RequestsTable({
                         <>
                             <tr className="adm-row adm-row-new">
                                 <td>
-                                    <input
-                                        type="text"
-                                        className="adm-input"
+                                    <PartySelect
+                                        instanceId="new-request-requester"
+                                        parties={parties}
                                         value={newDraft.requesterId}
-                                        onChange={(e) =>
+                                        onChange={(id) =>
                                             setNewDraft({
                                                 ...newDraft,
-                                                requesterId: e.target.value,
+                                                requesterId: id,
                                             })
                                         }
                                         disabled={pending}
-                                        placeholder="Requester Salesforce ID"
+                                        placeholder="Search companies & delegates…"
                                     />
                                 </td>
                                 <td>
-                                    <input
-                                        type="text"
-                                        className="adm-input"
+                                    <PartySelect
+                                        instanceId="new-request-target"
+                                        parties={parties}
                                         value={newDraft.targetId}
-                                        onChange={(e) =>
+                                        onChange={(id) =>
                                             setNewDraft({
                                                 ...newDraft,
-                                                targetId: e.target.value,
+                                                targetId: id,
                                             })
                                         }
                                         disabled={pending}
-                                        placeholder="Target Salesforce ID"
+                                        placeholder="Search companies & delegates…"
                                     />
                                 </td>
                                 <td>

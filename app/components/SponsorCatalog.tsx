@@ -996,6 +996,9 @@ export default function SponsorCatalog({
                         if (isPicking) {
                             action = (
                                 <div className="list-rank-picker">
+                                    <span className="list-rank-label">
+                                        Rate interest level
+                                    </span>
                                     <div className="list-rank-pips">
                                         {[1, 2, 3, 4, 5].map((n) => (
                                             <div
@@ -1008,16 +1011,16 @@ export default function SponsorCatalog({
                                                 {n}
                                             </div>
                                         ))}
-                                        <button
-                                            className="list-rank-cancel"
-                                            onClick={() => setPickingId(null)}
-                                        >
-                                            ✕
-                                        </button>
                                     </div>
-                                    <span className="list-rank-label">
-                                        Rate interest level
-                                    </span>
+                                    {/* Cancel on its own line — inside the pip
+                                        row it overflowed the narrow name column
+                                        and got clipped by .list-cell. */}
+                                    <button
+                                        className="list-rank-cancel"
+                                        onClick={() => setPickingId(null)}
+                                    >
+                                        Cancel
+                                    </button>
                                 </div>
                             );
                         } else if (req !== undefined) {

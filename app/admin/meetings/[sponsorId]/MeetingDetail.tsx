@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { fmtTime } from "@/lib/format";
+import { fmtTime, fmtWeekday } from "@/lib/format";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail } from "@/types";
 import type { SyncReport } from "@/lib/cvent/syncReport";
@@ -190,6 +190,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                                 <th>Delegate</th>
                                 <th>Company</th>
                                 <th>Rank</th>
+                                <th>Day</th>
                                 <th>Time Slot</th>
                                 <th>Location</th>
                                 <th>Cvent Sync</th>
@@ -300,6 +301,13 @@ function MeetingTableRow({
                 ) : (
                     <span className="adm-dim">—</span>
                 )}
+            </td>
+
+            {/* Day (weekday of the slot, in the event's timezone) */}
+            <td>
+                <span className={m.startTime ? "adm-text-sm-muted" : "adm-text-sm-dim"}>
+                    {fmtWeekday(m.startTime, timezone)}
+                </span>
             </td>
 
             {/* Time slot */}

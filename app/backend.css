@@ -211,6 +211,13 @@
 .adm-input:disabled {
     opacity: 0.6;
 }
+/* Secondary line on a party-picker (react-select) option: the "Company" tag or
+   a delegate's employer, shown after the name in the dropdown. */
+.adm-party-select-sub {
+    margin-left: 8px;
+    font-size: 10px;
+    color: var(--t3);
+}
 /* Brand-color field: native swatch + hex text input on one row. */
 .adm-color-row {
     display: flex;

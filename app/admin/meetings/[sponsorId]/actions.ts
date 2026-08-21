@@ -76,9 +76,11 @@ function getSyncStatus(m: ScheduledMeetingRow): SyncStatus {
 export async function getMeetingDetail(params: {
     sponsorId: string;
     eventCode: string;
-}): Promise<
-    { sponsor: SponsorDetail; meetings: MeetingRow[]; timezone: string } | null
-> {
+}): Promise<{
+    sponsor: SponsorDetail;
+    meetings: MeetingRow[];
+    timezone: string;
+} | null> {
     const [attendees, meetingRows, requestRows, scheduleData, appointments] =
         await Promise.all([
             loadAttendees(false, params.eventCode),
@@ -110,7 +112,9 @@ export async function getMeetingDetail(params: {
     const appointmentById = new Map(appointments.map((a) => [a.id, a]));
 
     // sponsorId is a company Account id; resolve the company (all its reps).
-    const company = sponsorCompaniesByAccountId(attendees).get(params.sponsorId);
+    const company = sponsorCompaniesByAccountId(attendees).get(
+        params.sponsorId,
+    );
     if (!company) return null;
     // A representative rep supplies the base Attendee fields for SponsorDetail.
     const rep = company.reps[0];
@@ -144,8 +148,14 @@ export async function getMeetingDetail(params: {
                 rank: m.rank,
                 timeslotId: m.timeslotId,
                 locationId: m.locationId,
-                startTime: appointment?.startTime.toISOString() ?? timeslot?.startTime ?? null,
-                endTime: appointment?.endTime.toISOString() ?? timeslot?.endTime ?? null,
+                startTime:
+                    appointment?.startTime.toISOString() ??
+                    timeslot?.startTime ??
+                    null,
+                endTime:
+                    appointment?.endTime.toISOString() ??
+                    timeslot?.endTime ??
+                    null,
                 location: appointment?.locationName ?? location?.name ?? null,
                 syncStatus: getSyncStatus(m),
                 source: m.source as MeetingSource,
@@ -189,41 +199,70 @@ export type SlotOption = {
     locationName: string | null;
 };
 
+/** A booked time span (epoch ms) an attendee is already committed to. */
+type BookedInterval = { start: number; end: number };
+
 /**
- * Builds the set of timeslot ids an attendee is already booked into, from a list
- * of meetings (excluding the meeting being edited, if any).
+ * Builds the list of time intervals an attendee is already booked into, from a
+ * list of meetings (the meeting being edited having been excluded upstream).
+ * Meetings whose timeslot can't be resolved are skipped.
+ *
+ * @param {{ attendeeA: string; attendeeB: string; timeslotId: string }[]} meetings - Meetings to scan.
+ * @param {string} attendeeId - The attendee (party id) to collect bookings for.
+ * @param {Map<string, Timeslot>} timeslotById - Timeslot lookup for resolving times.
+ * @returns {BookedInterval[]} The attendee's booked time spans.
  */
-function bookedTimeslotIds(
+function bookedIntervals(
     meetings: { attendeeA: string; attendeeB: string; timeslotId: string }[],
     attendeeId: string,
-): Set<string> {
-    const booked = new Set<string>();
+    timeslotById: Map<string, Timeslot>,
+): BookedInterval[] {
+    const intervals: BookedInterval[] = [];
     for (const m of meetings) {
-        if (m.attendeeA === attendeeId || m.attendeeB === attendeeId) {
-            booked.add(m.timeslotId);
-        }
+        if (m.attendeeA !== attendeeId && m.attendeeB !== attendeeId) continue;
+        const ts = timeslotById.get(m.timeslotId);
+        if (!ts) continue;
+        intervals.push({
+            start: new Date(ts.startTime).getTime(),
+            end: new Date(ts.endTime).getTime(),
+        });
     }
-    return booked;
+    return intervals;
+}
+
+/**
+ * Whether a timeslot's time span overlaps any of the given booked intervals.
+ * Two spans overlap when each starts before the other ends.
+ *
+ * @param {Timeslot} t - The candidate timeslot.
+ * @param {BookedInterval[]} intervals - Already-booked spans to test against.
+ * @returns {boolean} True when the timeslot collides with a booked span.
+ */
+function overlapsBooked(t: Timeslot, intervals: BookedInterval[]): boolean {
+    const start = new Date(t.startTime).getTime();
+    const end = new Date(t.endTime).getTime();
+    return intervals.some((i) => start < i.end && i.start < end);
 }
 
 /**
  * Builds the list of timeslot options available to BOTH attendees: timeslots
- * neither attendee is already booked into. (Capacity is enforced by the engine;
- * the admin picker keeps it simple by treating a timeslot as taken once either
- * attendee holds it.) Sorted by day then start time.
+ * whose time overlaps no existing booking for either attendee. (Capacity is
+ * enforced by the engine; the admin picker keeps it simple by treating a time
+ * as taken once either attendee holds any meeting then.) Sorted by day then
+ * start time.
  */
 function buildSlotOptions(
     timeslots: Timeslot[],
     locationById: Map<string, Location>,
-    bookedA: Set<string>,
-    bookedB: Set<string>,
+    bookedA: BookedInterval[],
+    bookedB: BookedInterval[],
 ): SlotOption[] {
     return timeslots
         .filter(
             (t) =>
                 (t.day === 1 || t.day === 2) &&
-                !bookedA.has(t.id) &&
-                !bookedB.has(t.id),
+                !overlapsBooked(t, bookedA) &&
+                !overlapsBooked(t, bookedB),
         )
         .map((t) => ({
             timeslotId: t.id,
@@ -246,7 +285,9 @@ function buildSlotOptions(
  * modal — each option carries its own native location, so there's no separate
  * location picker to keep in sync.
  *
- * Timeslots already taken by other meetings for either attendee are excluded.
+ * Timeslots whose time overlaps another meeting for either attendee are
+ * excluded — including a different Cvent location at the same time — so an edit
+ * can't move the meeting into a slot that double-books the requester or target.
  * The current meeting's own timeslot is always included so the admin can save
  * without changing the time.
  *
@@ -283,8 +324,16 @@ export async function getSlotOptions(params: {
 
     const { timeslots, timeslotById, locationById } = scheduleData;
 
-    const bookedA = bookedTimeslotIds(otherMeetings, meeting.attendeeA);
-    const bookedB = bookedTimeslotIds(otherMeetings, meeting.attendeeB);
+    const bookedA = bookedIntervals(
+        otherMeetings,
+        meeting.attendeeA,
+        timeslotById,
+    );
+    const bookedB = bookedIntervals(
+        otherMeetings,
+        meeting.attendeeB,
+        timeslotById,
+    );
     const options = buildSlotOptions(timeslots, locationById, bookedA, bookedB);
 
     // The current timeslot, resolved for display. Always included so the admin
@@ -509,9 +558,17 @@ export async function getNewMeetingSlots(params: {
         loadEventScheduleData(params.eventCode),
     ]);
 
-    const { timeslots, locationById } = scheduleData;
-    const bookedSponsor = bookedTimeslotIds(allMeetings, params.sponsorId);
-    const bookedDelegate = bookedTimeslotIds(allMeetings, params.delegateId);
+    const { timeslots, timeslotById, locationById } = scheduleData;
+    const bookedSponsor = bookedIntervals(
+        allMeetings,
+        params.sponsorId,
+        timeslotById,
+    );
+    const bookedDelegate = bookedIntervals(
+        allMeetings,
+        params.delegateId,
+        timeslotById,
+    );
 
     return {
         options: buildSlotOptions(

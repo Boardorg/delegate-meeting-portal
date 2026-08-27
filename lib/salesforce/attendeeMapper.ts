@@ -25,6 +25,9 @@ export type MeetingDataRecord = {
         Title?: string | null;
         Email?: string | null;
         Phone?: string | null;
+        // Salesforce Account id of the contact's employer. The company key that
+        // groups a sponsor's reps (see lib/attendees/companies.ts).
+        AccountId?: string | null;
         Account?: {
             Name?: string | null;
             Website?: string | null;
@@ -144,6 +147,13 @@ export const attendeeFieldMappers: AttendeeFieldMappers = {
     // Attendee__c.Id from Salesforce. Coerced to string for safety.
     salesforceId: (record) => String(record.Id ?? ""),
 
+    // Salesforce Account id of the contact's employer. For sponsors this is the
+    // party id that bundles all of a company's reps (lib/attendees/companies.ts).
+    accountId: (record, ctx) =>
+        ctx.usePlaceholders
+            ? `acct-${placeholderId(ctx)}`
+            : String(record.Delegate__r?.AccountId ?? ""),
+
     // Combine first + last into a single display name.
     name: (record) => {
         const first = record.Delegate__r?.FirstName ?? "";
@@ -216,6 +226,7 @@ function buildAttendee(
         id: attendeeFieldMappers.id(record, ctx),
         cventContactId: attendeeFieldMappers.cventContactId(record, ctx),
         salesforceId: attendeeFieldMappers.salesforceId(record, ctx),
+        accountId: attendeeFieldMappers.accountId(record, ctx),
         name: attendeeFieldMappers.name(record, ctx),
         email: attendeeFieldMappers.email(record, ctx),
         phone: attendeeFieldMappers.phone(record, ctx),

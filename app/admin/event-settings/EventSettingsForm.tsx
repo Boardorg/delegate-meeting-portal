@@ -19,6 +19,8 @@ type Props = {
 /** The editable settings fields (code is handled separately). */
 type Draft = {
     name: string;
+    themeColor: string;
+    logoUrl: string;
     cventEventId: string;
     cventAppointmentEventId: string;
 };
@@ -27,10 +29,17 @@ type Draft = {
 function draftFrom(row: EventSettingsRow | null): Draft {
     return {
         name: row?.name ?? "",
+        themeColor: row?.themeColor ?? "",
+        logoUrl: row?.logoUrl ?? "",
         cventEventId: row?.cventEventId ?? "",
         cventAppointmentEventId: row?.cventAppointmentEventId ?? "",
     };
 }
+
+// The default frontend brand color (globals.css --accent). Shown as the swatch's
+// value when no per-event color is set, so the picker opens on the real
+// fallback rather than an arbitrary default.
+const FALLBACK_COLOR = "#089e9d";
 
 // The Cvent id fields, in display order. Kept as data so the inputs render
 // from one list instead of near-identical blocks. The appointment host is not
@@ -132,7 +141,7 @@ export default function EventSettingsForm({ active, hasEvents }: Props) {
                 {!creating && (
                     <button
                         type="button"
-                        className="adm-new-btn"
+                        className="adm-new-btn adm-new-btn-primary"
                         onClick={beginCreate}
                         disabled={pending}
                     >
@@ -181,6 +190,59 @@ export default function EventSettingsForm({ active, hasEvents }: Props) {
                             onChange={(e) => set("name", e.target.value)}
                             disabled={pending}
                         />
+                    </label>
+
+                    {/* Event color — drives the frontend's primary accent
+                        (buttons, request highlights). Empty falls back to the
+                        default teal. The native swatch and the hex text input
+                        stay in sync; the swatch always shows a concrete color,
+                        so it opens on the fallback when nothing is set. */}
+                    <label className="adm-field adm-field-mb">
+                        <span className="adm-field-label">Event Color</span>
+                        <div className="adm-color-row">
+                            <input
+                                type="color"
+                                className="adm-color-swatch"
+                                aria-label="Event color picker"
+                                value={draft.themeColor || FALLBACK_COLOR}
+                                onChange={(e) =>
+                                    set("themeColor", e.target.value)
+                                }
+                                disabled={pending}
+                            />
+                            <input
+                                type="text"
+                                className="adm-input"
+                                placeholder={`${FALLBACK_COLOR} (default)`}
+                                value={draft.themeColor}
+                                onChange={(e) =>
+                                    set("themeColor", e.target.value)
+                                }
+                                disabled={pending}
+                            />
+                        </div>
+                        <span className="adm-field-hint">
+                            Primary accent color for this event’s frontend.
+                            Leave blank to use the default teal.
+                        </span>
+                    </label>
+
+                    {/* Logo URL — shown in the header next to the Assemble mark
+                        (frontend + admin). Absolute (https://…) or root-relative
+                        (/…); blank hides it. */}
+                    <label className="adm-field adm-field-mb">
+                        <span className="adm-field-label">Logo URL</span>
+                        <input
+                            type="text"
+                            className="adm-input"
+                            placeholder="https://… or /path.png (optional)"
+                            value={draft.logoUrl}
+                            onChange={(e) => set("logoUrl", e.target.value)}
+                            disabled={pending}
+                        />
+                        <span className="adm-field-hint">
+                            Event logo shown in the header. Leave blank for none.
+                        </span>
                     </label>
 
                     {ID_FIELDS.map((f) => (

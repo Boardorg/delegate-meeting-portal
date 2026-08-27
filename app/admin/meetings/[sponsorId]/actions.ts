@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gt, isNull, isNotNull, ne, or } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import {
@@ -9,13 +9,14 @@ import {
     type ScheduledMeetingRow,
 } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
+import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
-import { pushMeetingRows } from "@/lib/cvent/push";
+import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
+import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import { cancelAppointment, getAppointmentsByEvent } from "@/lib/cvent/client";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail, Timeslot, Location } from "@/types";
-import type { PushResult, PushSummary } from "@/lib/cvent/push";
 
 // ---------------------------------------------------------------------------
 // Server actions for /admin/meetings/[sponsorId] — the per-sponsor meeting
@@ -75,9 +76,11 @@ function getSyncStatus(m: ScheduledMeetingRow): SyncStatus {
 export async function getMeetingDetail(params: {
     sponsorId: string;
     eventCode: string;
-}): Promise<
-    { sponsor: SponsorDetail; meetings: MeetingRow[]; timezone: string } | null
-> {
+}): Promise<{
+    sponsor: SponsorDetail;
+    meetings: MeetingRow[];
+    timezone: string;
+} | null> {
     const [attendees, meetingRows, requestRows, scheduleData, appointments] =
         await Promise.all([
             loadAttendees(false, params.eventCode),
@@ -87,10 +90,8 @@ export async function getMeetingDetail(params: {
                 .where(
                     and(
                         eq(scheduledMeetings.eventCode, params.eventCode),
-                        or(
-                            eq(scheduledMeetings.attendeeA, params.sponsorId),
-                            eq(scheduledMeetings.attendeeB, params.sponsorId),
-                        ),
+                        // The company is always the A side of a sponsor meeting.
+                        eq(scheduledMeetings.attendeeA, params.sponsorId),
                     ),
                 ),
             db
@@ -110,20 +111,23 @@ export async function getMeetingDetail(params: {
     // Look synced meetings up by their Cvent appointment instead, which keeps the real time and location.
     const appointmentById = new Map(appointments.map((a) => [a.id, a]));
 
-    const sponsor = attendees.find(
-        (a) => a.salesforceId === params.sponsorId && a.role === "sponsor",
+    // sponsorId is a company Account id; resolve the company (all its reps).
+    const company = sponsorCompaniesByAccountId(attendees).get(
+        params.sponsorId,
     );
-    if (!sponsor) return null;
+    if (!company) return null;
+    // A representative rep supplies the base Attendee fields for SponsorDetail.
+    const rep = company.reps[0];
 
     const attendeeMap = new Map(attendees.map((a) => [a.salesforceId, a]));
 
-    const contracted = contractedMeetings(sponsor.sponsorTier);
+    const contracted = contractedMeetings(company.tier);
     const bonus = 0;
 
     const meetings: MeetingRow[] = meetingRows
         .map((m) => {
-            const delegateId =
-                m.attendeeA === params.sponsorId ? m.attendeeB : m.attendeeA;
+            // The company is always attendeeA, so the delegate is attendeeB.
+            const delegateId = m.attendeeB;
             const delegate = attendeeMap.get(delegateId);
             // Once pushed, prefer the Cvent appointment itself for time/location
             // (see appointmentById above). Otherwise resolve from the event's
@@ -144,8 +148,14 @@ export async function getMeetingDetail(params: {
                 rank: m.rank,
                 timeslotId: m.timeslotId,
                 locationId: m.locationId,
-                startTime: appointment?.startTime.toISOString() ?? timeslot?.startTime ?? null,
-                endTime: appointment?.endTime.toISOString() ?? timeslot?.endTime ?? null,
+                startTime:
+                    appointment?.startTime.toISOString() ??
+                    timeslot?.startTime ??
+                    null,
+                endTime:
+                    appointment?.endTime.toISOString() ??
+                    timeslot?.endTime ??
+                    null,
                 location: appointment?.locationName ?? location?.name ?? null,
                 syncStatus: getSyncStatus(m),
                 source: m.source as MeetingSource,
@@ -160,9 +170,14 @@ export async function getMeetingDetail(params: {
 
     return {
         sponsor: {
-            ...sponsor,
-            sponsorTier:
-                sponsor.sponsorTier === "diamond" ? "diamond" : "standard",
+            // Base Attendee fields come from a representative rep; company-level
+            // fields (name/company/tier/accountId/reps) are overridden below.
+            ...rep,
+            name: company.name,
+            company: company.name,
+            accountId: company.accountId,
+            reps: company.reps,
+            sponsorTier: company.tier === "diamond" ? "diamond" : "standard",
             contracted,
             bonus,
             requestCount: requestRows.length,
@@ -184,41 +199,70 @@ export type SlotOption = {
     locationName: string | null;
 };
 
+/** A booked time span (epoch ms) an attendee is already committed to. */
+type BookedInterval = { start: number; end: number };
+
 /**
- * Builds the set of timeslot ids an attendee is already booked into, from a list
- * of meetings (excluding the meeting being edited, if any).
+ * Builds the list of time intervals an attendee is already booked into, from a
+ * list of meetings (the meeting being edited having been excluded upstream).
+ * Meetings whose timeslot can't be resolved are skipped.
+ *
+ * @param {{ attendeeA: string; attendeeB: string; timeslotId: string }[]} meetings - Meetings to scan.
+ * @param {string} attendeeId - The attendee (party id) to collect bookings for.
+ * @param {Map<string, Timeslot>} timeslotById - Timeslot lookup for resolving times.
+ * @returns {BookedInterval[]} The attendee's booked time spans.
  */
-function bookedTimeslotIds(
+function bookedIntervals(
     meetings: { attendeeA: string; attendeeB: string; timeslotId: string }[],
     attendeeId: string,
-): Set<string> {
-    const booked = new Set<string>();
+    timeslotById: Map<string, Timeslot>,
+): BookedInterval[] {
+    const intervals: BookedInterval[] = [];
     for (const m of meetings) {
-        if (m.attendeeA === attendeeId || m.attendeeB === attendeeId) {
-            booked.add(m.timeslotId);
-        }
+        if (m.attendeeA !== attendeeId && m.attendeeB !== attendeeId) continue;
+        const ts = timeslotById.get(m.timeslotId);
+        if (!ts) continue;
+        intervals.push({
+            start: new Date(ts.startTime).getTime(),
+            end: new Date(ts.endTime).getTime(),
+        });
     }
-    return booked;
+    return intervals;
+}
+
+/**
+ * Whether a timeslot's time span overlaps any of the given booked intervals.
+ * Two spans overlap when each starts before the other ends.
+ *
+ * @param {Timeslot} t - The candidate timeslot.
+ * @param {BookedInterval[]} intervals - Already-booked spans to test against.
+ * @returns {boolean} True when the timeslot collides with a booked span.
+ */
+function overlapsBooked(t: Timeslot, intervals: BookedInterval[]): boolean {
+    const start = new Date(t.startTime).getTime();
+    const end = new Date(t.endTime).getTime();
+    return intervals.some((i) => start < i.end && i.start < end);
 }
 
 /**
  * Builds the list of timeslot options available to BOTH attendees: timeslots
- * neither attendee is already booked into. (Capacity is enforced by the engine;
- * the admin picker keeps it simple by treating a timeslot as taken once either
- * attendee holds it.) Sorted by day then start time.
+ * whose time overlaps no existing booking for either attendee. (Capacity is
+ * enforced by the engine; the admin picker keeps it simple by treating a time
+ * as taken once either attendee holds any meeting then.) Sorted by day then
+ * start time.
  */
 function buildSlotOptions(
     timeslots: Timeslot[],
     locationById: Map<string, Location>,
-    bookedA: Set<string>,
-    bookedB: Set<string>,
+    bookedA: BookedInterval[],
+    bookedB: BookedInterval[],
 ): SlotOption[] {
     return timeslots
         .filter(
             (t) =>
                 (t.day === 1 || t.day === 2) &&
-                !bookedA.has(t.id) &&
-                !bookedB.has(t.id),
+                !overlapsBooked(t, bookedA) &&
+                !overlapsBooked(t, bookedB),
         )
         .map((t) => ({
             timeslotId: t.id,
@@ -241,7 +285,9 @@ function buildSlotOptions(
  * modal — each option carries its own native location, so there's no separate
  * location picker to keep in sync.
  *
- * Timeslots already taken by other meetings for either attendee are excluded.
+ * Timeslots whose time overlaps another meeting for either attendee are
+ * excluded — including a different Cvent location at the same time — so an edit
+ * can't move the meeting into a slot that double-books the requester or target.
  * The current meeting's own timeslot is always included so the admin can save
  * without changing the time.
  *
@@ -278,8 +324,16 @@ export async function getSlotOptions(params: {
 
     const { timeslots, timeslotById, locationById } = scheduleData;
 
-    const bookedA = bookedTimeslotIds(otherMeetings, meeting.attendeeA);
-    const bookedB = bookedTimeslotIds(otherMeetings, meeting.attendeeB);
+    const bookedA = bookedIntervals(
+        otherMeetings,
+        meeting.attendeeA,
+        timeslotById,
+    );
+    const bookedB = bookedIntervals(
+        otherMeetings,
+        meeting.attendeeB,
+        timeslotById,
+    );
     const options = buildSlotOptions(timeslots, locationById, bookedA, bookedB);
 
     // The current timeslot, resolved for display. Always included so the admin
@@ -379,15 +433,16 @@ export async function removeMeeting(params: { id: string }): Promise<void> {
 
 /**
  * Pushes a single portal meeting to Cvent (create, or update if already synced)
- * and returns the structured result so the UI can report success/failure.
+ * and returns a sync report so the UI can render the same result panel as the
+ * event-wide push. The meeting is always attempted, so "already synced" is 0.
  *
  * @param {{ id: string; eventCode: string }} params
- * @returns {Promise<PushSummary>} The push outcome (a single-meeting summary).
+ * @returns {Promise<SyncReport>} The push outcome as a (single-meeting) report.
  */
 export async function pushMeeting(params: {
     id: string;
     eventCode: string;
-}): Promise<PushSummary> {
+}): Promise<SyncReport> {
     const rows = await db
         .select()
         .from(scheduledMeetings)
@@ -400,50 +455,57 @@ export async function pushMeeting(params: {
 
     const summary = await pushMeetingRows(params.eventCode, rows);
     revalidatePath("/admin/meetings", "layout");
-    return summary;
+
+    return buildSyncReport({
+        eventCode: params.eventCode,
+        generatedAt: new Date().toISOString(),
+        totalPortalMeetings: rows.length,
+        alreadySynced: 0,
+        results: summary.results,
+    });
 }
 
 /**
  * Pushes all un-synced portal meetings for a single sponsor to Cvent. Covers
  * both not-yet-pushed meetings (create) and meetings edited since their last
- * push (update). Returns the structured result so the UI can report how many
- * succeeded and detail any failures.
+ * push (update), and returns a sync report scoped to that sponsor — so the UI
+ * can render the same result panel as the event-wide push, including how many
+ * of the sponsor's meetings were already synced.
  *
  * @param {{ sponsorId: string; eventCode: string }} params
- * @returns {Promise<PushSummary>} Aggregate counts plus per-meeting results.
+ * @returns {Promise<SyncReport>} A DB-friendly summary of the sponsor's push.
  */
 export async function pushAllForSponsor(params: {
     sponsorId: string;
     eventCode: string;
-}): Promise<PushSummary> {
-    const rows = await db
+}): Promise<SyncReport> {
+    // Load every portal meeting for this sponsor, then partition in memory so
+    // the untouched (already-synced) ones are still counted in the report.
+    const sponsorRows = await db
         .select()
         .from(scheduledMeetings)
         .where(
             and(
                 eq(scheduledMeetings.eventCode, params.eventCode),
                 eq(scheduledMeetings.source, "portal"),
-                or(
-                    eq(scheduledMeetings.attendeeA, params.sponsorId),
-                    eq(scheduledMeetings.attendeeB, params.sponsorId),
-                ),
-                or(
-                    isNull(scheduledMeetings.cventAppointmentId),
-                    and(
-                        isNotNull(scheduledMeetings.lastModifiedAt),
-                        isNotNull(scheduledMeetings.lastPushedAt),
-                        gt(
-                            scheduledMeetings.lastModifiedAt,
-                            scheduledMeetings.lastPushedAt,
-                        ),
-                    ),
-                ),
+                // The company (account id) is always the A side of its meetings.
+                eq(scheduledMeetings.attendeeA, params.sponsorId),
             ),
         );
 
-    const summary = await pushMeetingRows(params.eventCode, rows);
+    const toPush = sponsorRows.filter(needsSync);
+    const alreadySynced = sponsorRows.length - toPush.length;
+
+    const summary = await pushMeetingRows(params.eventCode, toPush);
     revalidatePath("/admin/meetings", "layout");
-    return summary;
+
+    return buildSyncReport({
+        eventCode: params.eventCode,
+        generatedAt: new Date().toISOString(),
+        totalPortalMeetings: sponsorRows.length,
+        alreadySynced,
+        results: summary.results,
+    });
 }
 
 /** One selectable delegate in the create meeting modal. */
@@ -496,9 +558,17 @@ export async function getNewMeetingSlots(params: {
         loadEventScheduleData(params.eventCode),
     ]);
 
-    const { timeslots, locationById } = scheduleData;
-    const bookedSponsor = bookedTimeslotIds(allMeetings, params.sponsorId);
-    const bookedDelegate = bookedTimeslotIds(allMeetings, params.delegateId);
+    const { timeslots, timeslotById, locationById } = scheduleData;
+    const bookedSponsor = bookedIntervals(
+        allMeetings,
+        params.sponsorId,
+        timeslotById,
+    );
+    const bookedDelegate = bookedIntervals(
+        allMeetings,
+        params.delegateId,
+        timeslotById,
+    );
 
     return {
         options: buildSlotOptions(

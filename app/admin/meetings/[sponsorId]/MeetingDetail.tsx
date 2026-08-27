@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { fmtTime } from "@/lib/format";
+import { fmtTime, fmtWeekday } from "@/lib/format";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail } from "@/types";
-import type { PushSummary } from "@/lib/cvent/push";
+import type { SyncReport } from "@/lib/cvent/syncReport";
+import SyncReportPanel from "../SyncReportPanel";
 import {
     createMeeting,
     editMeeting,
@@ -43,7 +44,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
     const [editTarget, setEditTarget] = useState<MeetingRow | null>(null);
     const [showCreate, setShowCreate] = useState(false);
     const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
-    const [pushResult, setPushResult] = useState<PushSummary | null>(null);
+    const [pushResult, setPushResult] = useState<SyncReport | null>(null);
     const [isPending, startTransition] = useTransition();
 
     // Detect duplicate delegate companies within this sponsor's meetings.
@@ -77,7 +78,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
     // Handler for pushing all meetings for the sponsor.
     function handlePushAll() {
         startTransition(async () => {
-            const result = await pushAllForSponsor({ sponsorId: sponsor.salesforceId, eventCode });
+            const result = await pushAllForSponsor({ sponsorId: sponsor.accountId, eventCode });
             setPushResult(result);
             router.refresh();
         });
@@ -99,8 +100,13 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                     <div>
                         <div className="adm-card-title">{sponsor.company}</div>
                         <div className="adm-card-sub">
-                            {sponsor.name} · {sponsor.title} ·{" "}
+                            {sponsor.reps.length}{" "}
+                            {sponsor.reps.length === 1 ? "rep" : "reps"} ·{" "}
                             <TierPill tier={sponsor.sponsorTier} />
+                        </div>
+                        {/* All reps host this company's Cvent appointments. */}
+                        <div className="adm-card-sub">
+                            {sponsor.reps.map((r) => r.name).join(" · ")}
                         </div>
                     </div>
                 </div>
@@ -121,7 +127,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                             sponsor.scheduledCount > total
                                 ? "var(--red)"
                                 : sponsor.scheduledCount === total
-                                  ? "var(--green)"
+                                  ? "var(--green-ink)"
                                   : sponsor.scheduledCount > 0
                                     ? "var(--text)"
                                     : "var(--gold)"
@@ -129,7 +135,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                     />
                     <button
                         type="button"
-                        className="adm-new-btn adm-ml-auto"
+                        className="adm-new-btn adm-new-btn-primary adm-ml-auto"
                         disabled={isPending}
                         onClick={handlePushAll}
                     >
@@ -138,10 +144,10 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                 </div>
             </div>
 
-            {/* Push-to-Cvent result banner */}
+            {/* Push-to-Cvent result report */}
             {pushResult && (
-                <PushResultBanner
-                    result={pushResult}
+                <SyncReportPanel
+                    report={pushResult}
                     onDismiss={() => setPushResult(null)}
                 />
             )}
@@ -164,7 +170,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                 </div>
                 <button
                     type="button"
-                    className="adm-new-btn"
+                    className="adm-new-btn adm-new-btn-primary"
                     onClick={() => setShowCreate(true)}
                 >
                     + Create Meeting
@@ -184,6 +190,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                                 <th>Delegate</th>
                                 <th>Company</th>
                                 <th>Rank</th>
+                                <th>Day</th>
                                 <th>Time Slot</th>
                                 <th>Location</th>
                                 <th>Cvent Sync</th>
@@ -226,7 +233,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
             {/* Create meeting modal */}
             {showCreate && (
                 <CreateMeetingModal
-                    sponsorId={sponsor.salesforceId}
+                    sponsorId={sponsor.accountId}
                     eventCode={eventCode}
                     timezone={timezone}
                     scheduledCount={sponsor.scheduledCount}
@@ -235,92 +242,6 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                     onCreated={() => { setShowCreate(false); router.refresh(); }}
                 />
             )}
-        </div>
-    );
-}
-
-// ---------------------------------------------------------------------------
-// PushResultBanner — shows the outcome of a push to Cvent.
-// ---------------------------------------------------------------------------
-
-function PushResultBanner({
-    result,
-    onDismiss,
-}: {
-    result: PushSummary;
-    onDismiss: () => void;
-}) {
-    const allOk = result.failed === 0 && result.total > 0;
-    const nothing = result.total === 0;
-    const failures = result.results.filter((r) => !r.ok);
-    const warnings = result.results.filter((r) => r.ok && r.warning);
-
-    // Accent color: green (all pushed), red (any failed), muted (nothing to push).
-    const accent = nothing ? "var(--border)" : allOk ? "var(--green)" : "var(--red)";
-
-    return (
-        <div
-            className="adm-card"
-            style={{ borderLeft: `3px solid ${accent}`, marginBottom: 12 }}
-            role="status"
-        >
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600 }}>
-                        {nothing
-                            ? "Nothing to push — all meetings are already synced."
-                            : `${allOk ? "✓" : "⚠"} Pushed ${result.pushed} of ${result.total} to Cvent` +
-                              (result.failed > 0 ? ` · ${result.failed} failed` : "")}
-                    </div>
-
-                    {failures.length > 0 && (
-                        <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
-                            {failures.map((f) => (
-                                <li
-                                    key={f.meetingId}
-                                    style={{
-                                        fontSize: 13,
-                                        marginBottom: 4,
-                                        color: "var(--red)",
-                                        // Expanded (testing-mode) errors can be multi-line.
-                                        whiteSpace: "pre-wrap",
-                                    }}
-                                >
-                                    <span style={{ color: "var(--text)", fontWeight: 500 }}>
-                                        {f.label}:
-                                    </span>{" "}
-                                    {f.error ?? "Unknown error"}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-
-                    {warnings.length > 0 && (
-                        <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
-                            {warnings.map((w) => (
-                                <li
-                                    key={w.meetingId}
-                                    style={{
-                                        fontSize: 13,
-                                        marginBottom: 4,
-                                        color: "var(--gold)",
-                                        whiteSpace: "pre-wrap",
-                                    }}
-                                >
-                                    <span style={{ color: "var(--text)", fontWeight: 500 }}>
-                                        {w.label}:
-                                    </span>{" "}
-                                    {w.warning}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-
-                <button type="button" className="adm-link-btn" onClick={onDismiss}>
-                    Dismiss
-                </button>
-            </div>
         </div>
     );
 }
@@ -380,6 +301,13 @@ function MeetingTableRow({
                 ) : (
                     <span className="adm-dim">—</span>
                 )}
+            </td>
+
+            {/* Day (weekday of the slot, in the event's timezone) */}
+            <td>
+                <span className={m.startTime ? "adm-text-sm-muted" : "adm-text-sm-dim"}>
+                    {fmtWeekday(m.startTime, timezone)}
+                </span>
             </td>
 
             {/* Time slot */}

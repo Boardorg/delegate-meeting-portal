@@ -11,14 +11,19 @@ import type { Attendee, Location, MeetingRequest, Timeslot } from '@/types';
  * Helper to generate a minimal fake attendee for testing. Availability is no
  * longer per-attendee — it comes from the global Timeslot[] passed to runScheduler.
  *
+ * `accountId` defaults to `id`, so by default each sponsor is its own company
+ * (party id === its own id) and existing single-rep tests are unchanged. Pass a
+ * shared accountId to model multiple reps of one company.
+ *
  * @param {string} id - The attendee's unique ID.
  * @param {string} company - The attendee's company name.
  * @param {'sponsor' | 'delegate'} role - The attendee's role.
+ * @param {string} [accountId=id] - Salesforce Account id (the sponsor party id).
  * @returns {Attendee} A minimal attendee object ready for use with runScheduler.
  */
-function makeAttendee(id: string, company: string, role: 'sponsor' | 'delegate'): Attendee {
+function makeAttendee(id: string, company: string, role: 'sponsor' | 'delegate', accountId: string = id): Attendee {
     return {
-        id, company, role,
+        id, company, role, accountId,
         cventContactId: '', salesforceId: id, name: id, email: '', phone: '',
         title: '', sponsorTier: role === 'sponsor' ? 'standard' : null,
         profile: { annualRevenue: null, budgetaryResponsibility: null, areasOfSpecialization: [], industrySectors: [], plannedSpend: null, companySize: null, regionsOverseen: [], strategicPriorities: [] },
@@ -208,32 +213,33 @@ describe('runScheduler — cap enforcement', () => {
     });
 });
 
-// Same-company cap blocks meetings once reached and sponsors from other companies are unaffected.
-describe('runScheduler — company diversity', () => {
-    test('blocks a third meeting when the delegate has already met the same-company cap', async () => {
-        // makeAttendee sets maxSameCompanyMeetings: 2, so the third Acme sponsor is blocked.
-        const s1 = makeAttendee('s1', 'Acme', 'sponsor');
-        const s2 = makeAttendee('s2', 'Acme', 'sponsor');
-        const s3 = makeAttendee('s3', 'Acme', 'sponsor');
+// Company diversity now keys on the account id (party id), and a company's reps
+// collapse to one scheduling entity.
+describe('runScheduler — company diversity (by account)', () => {
+    test('collapses reps of one company into a single meeting with a delegate', async () => {
+        // Two reps sharing an account request the same delegate → one company
+        // meeting, keyed by the account id on attendeeA (not a rep id).
+        const s1 = makeAttendee('s1', 'Acme', 'sponsor', 'acct-acme');
+        const s2 = makeAttendee('s2', 'Acme', 'sponsor', 'acct-acme');
         const d1 = makeAttendee('d1', 'Globex', 'delegate');
         const timeslots = day1Grid(['09:00', '10:00', '11:00']);
         const requests = [
             makeRequest('s1', 'd1', 5),
             makeRequest('s2', 'd1', 5),
-            makeRequest('s3', 'd1', 5),
         ];
 
-        const { schedule } = await runScheduler([s1, s2, s3, d1], requests, timeslots, NO_LOCATIONS);
+        const { schedule } = await runScheduler([s1, s2, d1], requests, timeslots, NO_LOCATIONS);
 
-        expect(schedule).toHaveLength(2);
-        expect(schedule.every(m => m.attendeeB === 'd1')).toBe(true);
+        expect(schedule).toHaveLength(1);
+        expect(schedule[0]).toMatchObject({ attendeeA: 'acct-acme', attendeeB: 'd1' });
     });
 
-    test('does not block sponsors from different companies after the same-company cap is reached', async () => {
-        // s1 and s2 fill d1's Acme cap. s3 is from a different company and should still get through.
-        const s1 = makeAttendee('s1', 'Acme',   'sponsor');
-        const s2 = makeAttendee('s2', 'Acme',   'sponsor');
-        const s3 = makeAttendee('s3', 'Globex', 'sponsor');
+    test('does not block companies from different accounts meeting the same delegate', async () => {
+        // Three distinct-account sponsors each meet d1 — different companies, so
+        // the delegate's same-company cap never triggers.
+        const s1 = makeAttendee('s1', 'Acme',   'sponsor', 'acct-a');
+        const s2 = makeAttendee('s2', 'Initech', 'sponsor', 'acct-b');
+        const s3 = makeAttendee('s3', 'Globex', 'sponsor', 'acct-c');
         const d1 = makeAttendee('d1', 'Initech', 'delegate');
         const timeslots = day1Grid(['09:00', '10:00', '11:00']);
         const requests = [
@@ -245,6 +251,89 @@ describe('runScheduler — company diversity', () => {
         const { schedule } = await runScheduler([s1, s2, s3, d1], requests, timeslots, NO_LOCATIONS);
 
         expect(schedule).toHaveLength(3);
+    });
+
+    test('blocks a delegate from over-meeting the same company on day 2', async () => {
+        // dx mutually requests three delegates who share an account. dx's
+        // same-company cap (2) allows only two of them.
+        const dx  = makeAttendee('dx',  'Xco',  'delegate', 'acct-dx');
+        const dd1 = makeAttendee('dd1', 'Sco', 'delegate', 'acct-s');
+        const dd2 = makeAttendee('dd2', 'Sco', 'delegate', 'acct-s');
+        const dd3 = makeAttendee('dd3', 'Sco', 'delegate', 'acct-s');
+        const timeslots = [makeTimeslot('t1', 2, '09:00'), makeTimeslot('t2', 2, '10:00'), makeTimeslot('t3', 2, '11:00')];
+        const requests = [
+            makeRequest('dx', 'dd1', 5), makeRequest('dd1', 'dx', 5),
+            makeRequest('dx', 'dd2', 5), makeRequest('dd2', 'dx', 5),
+            makeRequest('dx', 'dd3', 5), makeRequest('dd3', 'dx', 5),
+        ];
+
+        const { schedule } = await runScheduler([dx, dd1, dd2, dd3], requests, timeslots, NO_LOCATIONS);
+
+        const dxMeetings = schedule.filter(m => m.attendeeA === 'dx' || m.attendeeB === 'dx');
+        expect(dxMeetings).toHaveLength(2);
+    });
+});
+
+// A company (all its reps) is one scheduling unit: combined schedule + one
+// shared meeting budget, and meetings are keyed by the company account id.
+describe('runScheduler — company-level (multi-rep) scheduling', () => {
+    test('unions reps\' pre-existing busy times under the company account', async () => {
+        // A rep is already booked at 09:00 (seeded under the company account id).
+        // The company must book the only other slot, 10:00.
+        const s1 = makeAttendee('s1', 'Acme', 'sponsor', 'acct-acme');
+        const s2 = makeAttendee('s2', 'Acme', 'sponsor', 'acct-acme');
+        const d1 = makeAttendee('d1', 'Globex', 'delegate');
+        const timeslots = day1Grid(['09:00', '10:00']);
+        const requests = [makeRequest('s1', 'd1', 5)];
+
+        const { schedule } = await runScheduler([s1, s2, d1], requests, timeslots, NO_LOCATIONS, {
+            busyStartTimesByAttendee: new Map([['acct-acme', new Set(['09:00'])]]),
+        });
+
+        expect(schedule).toHaveLength(1);
+        expect(schedule[0]).toMatchObject({ attendeeA: 'acct-acme', timeslotId: 'ts-2' });
+    });
+
+    test('shares one standard budget (5) across a company\'s reps', async () => {
+        // Two reps of one standard company request 8 distinct delegates between
+        // them; the shared cap holds the company to 5 meetings total.
+        const s1 = makeAttendee('s1', 'Acme', 'sponsor', 'acct-acme');
+        const s2 = makeAttendee('s2', 'Acme', 'sponsor', 'acct-acme');
+        const delegates = Array.from({ length: 8 }, (_, i) => makeAttendee(`d${i + 1}`, `Co${i + 1}`, 'delegate'));
+        const timeslots = day1Grid(Array.from({ length: 8 }, (_, i) => `${String(i + 9).padStart(2, '0')}:00`));
+        const requests = delegates.map((d, i) => makeRequest(i % 2 === 0 ? 's1' : 's2', d.id, 5));
+
+        const { schedule } = await runScheduler([s1, s2, ...delegates], requests, timeslots, NO_LOCATIONS);
+
+        const companyMeetings = schedule.filter(m => m.attendeeA === 'acct-acme');
+        expect(companyMeetings).toHaveLength(5);
+    });
+
+    test('shares one diamond budget (8) across a company\'s reps', async () => {
+        const s1 = { ...makeAttendee('s1', 'DiamondCo', 'sponsor', 'acct-dia'), sponsorTier: 'diamond' as const };
+        // Second rep is standard; highest-tier-wins keeps the company diamond (8).
+        const s2 = makeAttendee('s2', 'DiamondCo', 'sponsor', 'acct-dia');
+        const delegates = Array.from({ length: 10 }, (_, i) => makeAttendee(`d${i + 1}`, `Co${i + 1}`, 'delegate'));
+        const timeslots = day1Grid(Array.from({ length: 10 }, (_, i) => `${String(i + 9).padStart(2, '0')}:00`));
+        const requests = delegates.map((d, i) => makeRequest(i % 2 === 0 ? 's1' : 's2', d.id, 5));
+
+        const { schedule } = await runScheduler([s1, s2, ...delegates], requests, timeslots, NO_LOCATIONS);
+
+        const companyMeetings = schedule.filter(m => m.attendeeA === 'acct-dia');
+        expect(companyMeetings).toHaveLength(8);
+    });
+
+    test('keys a meeting by the company account even when the request used a rep id', async () => {
+        const s1 = makeAttendee('s1', 'Acme', 'sponsor', 'acct-acme');
+        const d1 = makeAttendee('d1', 'Globex', 'delegate');
+        const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
+        // Request keyed by the rep's salesforceId — must resolve to the account.
+        const requests = [makeRequest('s1', 'd1', 5)];
+
+        const { schedule } = await runScheduler([s1, d1], requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(1);
+        expect(schedule[0].attendeeA).toBe('acct-acme');
     });
 });
 

@@ -90,44 +90,6 @@ function getSortVal(d: Attendee, field: string): string | number {
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function CardMoreToggle({ p }: { p: AttendeeProfile }) {
-    const [open, setOpen] = useState(false);
-    const groups = [
-        { label: "Specialization", items: p.areasOfSpecialization },
-        { label: "Industries", items: p.industrySectors },
-        { label: "Regions", items: p.regionsOverseen },
-        { label: "Priorities", items: p.strategicPriorities },
-    ].filter((g) => g.items?.length);
-
-    if (!groups.length) return null;
-
-    return (
-        <div className={`card-more ${open ? "open" : ""}`}>
-            <button
-                className="card-more-trigger"
-                onClick={() => setOpen((o) => !o)}
-            >
-                <span>More details</span>
-                <span className="card-more-chevron">▼</span>
-            </button>
-            {open && (
-                <div className="card-more-body">
-                    {groups.map((g) => (
-                        <div key={g.label}>
-                            <div className="card-more-group-label">
-                                {g.label}
-                            </div>
-                            <div className="card-more-group-val">
-                                {g.items.join(" · ")}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
-
 /**
  * The Request → Edit / Remove action group for a single delegate, including the
  * interest-level picker. Presentational: all state (which target is being
@@ -948,7 +910,14 @@ export default function SponsorCatalog({
                                     </span>
                                 </div>
                             </div>
-                            <CardMoreToggle p={p} />
+                            {/* Opens the same DetailsModal the list view uses,
+                                replacing the old inline expand/collapse. */}
+                            <button
+                                className="card-details-btn"
+                                onClick={() => setDetailsDelegate(d)}
+                            >
+                                More details
+                            </button>
                             <div className="card-action">
                                 {renderCardAction(d)}
                             </div>

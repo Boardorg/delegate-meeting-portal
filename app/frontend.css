@@ -99,13 +99,11 @@
 .ca-label { color:var(--t3); flex-shrink:0; }
 .ca-value { color:var(--t2); text-align:right; }
 
-.card-more { border:1px solid var(--border); border-radius:var(--r); overflow:hidden; margin-bottom:10px; }
-.card-more-trigger { width:100%; background:var(--s2); border:none; padding:4px 8px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-family:var(--body); font-size:10px; color:var(--t3); transition:background .12s, color .12s; gap:4px; }
-.card-more-trigger:hover { background:var(--s3); color:var(--t2); }
-.card-more-chevron { font-size:8px; color:var(--t3); transition:transform .15s var(--ease); flex-shrink:0; }
-.card-more.open .card-more-chevron { transform:rotate(180deg); }
-.card-more-body { display:none; padding:8px 9px; background:var(--surface); }
-.card-more.open .card-more-body { display:flex; flex-direction:column; gap:7px; }
+/* Opens the shared "More details" modal from a grid card (mirrors the list
+   view's .list-details-btn, full-width to sit within the card). */
+.card-details-btn { width:100%; background:none; border:1px solid var(--border-up); border-radius:var(--r-pill); padding:6px 10px; margin-bottom:10px; font-family:var(--body); font-size:11px; font-weight:600; color:var(--text); cursor:pointer; transition:background .12s; }
+.card-details-btn:hover { background:var(--s2); }
+/* Grouped label/value pair — shared by the "More details" modal (DetailsModal). */
 .card-more-group-label { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:var(--t3); margin-bottom:2px; }
 .card-more-group-val { font-size:10px; color:var(--t2); line-height:1.5; }
 .c-tag { font-size:9px; padding:1px 5px; border-radius:100px; background:var(--s3); color:var(--t2); border:1px solid var(--border); }

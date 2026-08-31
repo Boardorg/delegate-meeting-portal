@@ -46,16 +46,7 @@ function att(
         company: partial.company ?? "",
         title: "",
         sponsorTier: partial.role === "sponsor" ? "standard" : null,
-        profile: {
-            annualRevenue: null,
-            budgetaryResponsibility: null,
-            areasOfSpecialization: [],
-            industrySectors: [],
-            plannedSpend: null,
-            companySize: null,
-            regionsOverseen: [],
-            strategicPriorities: [],
-        },
+        formFields: [],
         scheduling: { maxSameCompanyMeetings: partial.role === "sponsor" ? null : 2 },
     };
 }

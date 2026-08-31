@@ -43,16 +43,8 @@ function userToAttendee(user: User): Attendee {
         company: "",
         title: "",
         sponsorTier: null,
-        profile: {
-            annualRevenue: null,
-            budgetaryResponsibility: null,
-            areasOfSpecialization: [],
-            industrySectors: [],
-            plannedSpend: null,
-            companySize: null,
-            regionsOverseen: [],
-            strategicPriorities: [],
-        },
+        // No intake-form answers for a bare users-table identity.
+        formFields: [],
         scheduling: { maxSameCompanyMeetings: null },
     };
 }

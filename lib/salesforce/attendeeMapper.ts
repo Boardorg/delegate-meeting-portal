@@ -1,9 +1,7 @@
-import type {
-    Attendee,
-    AttendeeProfile,
-    AttendeeRole,
-    SponsorTier,
-} from "@/types";
+import type { Attendee, AttendeeRole, SponsorTier } from "@/types";
+import type { AttendeeFormField } from "@/lib/attendees/formFields";
+import { INDUSTRIES_KEY } from "@/lib/attendees/formFields";
+import { formatIndustrySectors } from "@/lib/attendees/formatProfile";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -102,32 +100,38 @@ type FieldMapper<K extends keyof Attendee> = (
 type AttendeeFieldMappers = { [K in keyof Attendee]: FieldMapper<K> };
 
 /**
- * Maps the SF record's nested Account fields into the Attendee `profile`
- * sub-object. Only `industrySectors` has a clean SF source today; the
- * bucketed string fields the UI expects need derivation rules and currently
- * default to null/empty.
+ * Builds the Attendee's `formFields` from the meeting-data record. Only the
+ * Account-derived **Industries** field comes from this record; the intake-form
+ * picklist answers live on a separate object (CventEvents__Attendee__c) and are
+ * joined onto delegates in the loader (see lib/attendees/loader.ts).
+ *
+ * Industries is a delegate browse field, so it's only built for delegates.
+ * `Industry_Category__c` can pack several sectors into one `;`-delimited string
+ * (e.g. "Healthcare;Pharmaceuticals"), which formatIndustrySectors splits out.
  *
  * @param {MeetingDataRecord} record - The raw SF record.
- * @returns {AttendeeProfile} The mapped profile.
+ * @param {MappingContext} ctx - Role / index / placeholders flag.
+ * @returns {AttendeeFormField[]} The Account-derived fields (Industries, if any).
  */
-const profileMapper: FieldMapper<"profile"> = (record): AttendeeProfile => {
-    // Pull the joined Account once; many profile fields read from it.
-    const account = record.Delegate__r?.Account ?? null;
-    const industry = account?.Industry_Category__c ?? null;
+const formFieldsMapper: FieldMapper<"formFields"> = (
+    record,
+    ctx,
+): AttendeeFormField[] => {
+    if (ctx.role !== "delegate") return [];
 
-    // Only industrySectors has a clean SF source today. The remaining profile
-    // fields are bucketed strings the UI expects; we have no mapping yet, so
-    // they default. Add derivation logic here as sources are identified.
-    return {
-        annualRevenue: account?.AnnualRevenue ?? null,
-        budgetaryResponsibility: null,
-        areasOfSpecialization: [],
-        industrySectors: industry ? [industry] : [],
-        plannedSpend: null,
-        companySize: account?.NumberOfEmployees ?? null,
-        regionsOverseen: [],
-        strategicPriorities: [],
-    };
+    const industry = record.Delegate__r?.Account?.Industry_Category__c ?? null;
+    const values = industry ? formatIndustrySectors([industry]) : [];
+    if (values.length === 0) return [];
+
+    return [
+        {
+            key: INDUSTRIES_KEY,
+            label: "Industries",
+            values,
+            multi: true,
+            core: true,
+        },
+    ];
 };
 
 /**
@@ -192,8 +196,9 @@ export const attendeeFieldMappers: AttendeeFieldMappers = {
         return packageType;
     },
 
-    // Delegated to profileMapper to keep this object readable.
-    profile: profileMapper,
+    // Account-derived browse fields (Industries). Intake-form picklist answers
+    // are joined on in the loader.
+    formFields: formFieldsMapper,
 
     // Availability is no longer per-attendee — it comes from the event-global
     // Timeslot[] sourced from Cvent (see lib/cvent/mapper.ts). The only
@@ -234,7 +239,7 @@ function buildAttendee(
         company: attendeeFieldMappers.company(record, ctx),
         title: attendeeFieldMappers.title(record, ctx),
         sponsorTier: attendeeFieldMappers.sponsorTier(record, ctx),
-        profile: attendeeFieldMappers.profile(record, ctx),
+        formFields: attendeeFieldMappers.formFields(record, ctx),
         scheduling: attendeeFieldMappers.scheduling(record, ctx),
     };
 }

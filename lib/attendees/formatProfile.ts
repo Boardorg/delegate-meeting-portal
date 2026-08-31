@@ -1,4 +1,7 @@
-import { AttendeeProfile } from '@/types';
+// ---------------------------------------------------------------------------
+// Value formatters shared by the mock→formFields mapping (lib/attendees/loader)
+// and the Account-derived Industries field (lib/salesforce/attendeeMapper).
+// ---------------------------------------------------------------------------
 
 /**
  * Converts a raw annual revenue number to the display tier string used by the
@@ -39,17 +42,4 @@ export function formatCompanySize(n: number | string | null): string | null {
  */
 export function formatIndustrySectors(raw: string[]): string[] {
     return raw.flatMap(s => s.split(';').map(v => v.trim())).filter(Boolean);
-}
-
-/**
- * Applies all display-layer transformations to a raw profile object. Safe to
- * call on already-formatted profiles — string fields pass through unchanged.
- */
-export function formatProfile(profile: AttendeeProfile): AttendeeProfile {
-    return {
-        ...profile,
-        annualRevenue: formatRevenue(profile.annualRevenue),
-        companySize: formatCompanySize(profile.companySize),
-        industrySectors: formatIndustrySectors(profile.industrySectors),
-    };
 }

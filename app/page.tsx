@@ -1,6 +1,6 @@
 import "@/app/frontend.css";
 import { redirect } from "next/navigation";
-import { loadAttendees } from "@/lib/attendees/loader";
+import { loadAttendees, loadAttendeeFieldMeta } from "@/lib/attendees/loader";
 import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventSettings } from "@/lib/events/settings";
@@ -16,7 +16,10 @@ export default async function Home() {
     // Admins can't act on the frontend — send them to the admin portal.
     if (identity.role === "admin") redirect("/admin");
 
-    const attendees = await loadAttendees();
+    const [attendees, fieldMeta] = await Promise.all([
+        loadAttendees(),
+        loadAttendeeFieldMeta(),
+    ]);
     const delegates = attendees.filter((a) => a.role === "delegate");
 
     // Resolve the active event's per-event Brand Color (drives the catalog's
@@ -44,6 +47,7 @@ export default async function Home() {
             <SponsorCatalog
                 delegates={delegates}
                 currentSponsor={identity.attendee}
+                fieldMeta={fieldMeta}
                 eventLogo={eventLogo}
             />
         </div>

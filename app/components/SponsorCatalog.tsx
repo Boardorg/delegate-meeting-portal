@@ -4,55 +4,26 @@ import "@/app/frontend.css";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import { partyId } from "@/lib/attendees/companies";
-import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
+import { Attendee, MeetingRequest } from "@/types";
+import {
+    CORE_FIELDS,
+    type AttendeeFieldMeta,
+    type AttendeeFormField,
+} from "@/lib/attendees/formFields";
 import TopBar, { type TopBarEventLogo } from "@/app/components/TopBar";
 import DetailsModal from "@/app/components/DetailsModal";
-import {
-    REV_TIERS,
-    revClass,
-    dotTags,
-    str,
-    hasValue,
-} from "@/app/components/catalogFormat";
+import { dotTags } from "@/app/components/catalogFormat";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const SORT_ORDER: Record<string, string[]> = {
-    annualRevenue: REV_TIERS,
-    budgetaryResponsibility: [
-        "<1M",
-        "1M-10M",
-        "10M-50M",
-        "50M-100M",
-        "100M-500M",
-        "500M-1B",
-        ">1B",
-    ],
-    plannedSpend: ["<1M", "1M-5M", "5M-25M", "25M-100M", ">100M"],
-    companySize: [
-        "1-50",
-        "51-200",
-        "200-500",
-        "500-1000",
-        "1000-5000",
-        ">5000",
-    ],
-};
-
 const LIST_BREAK = 860;
-// Trailing 96px column is the (header-less) "More details" button.
-const LIST_COLS = "140px 110px 72px 82px 72px 68px 1fr 1fr 1fr 96px";
-const LIST_HEADERS = [
-    "Name / Title",
-    "Company",
-    "Revenue",
-    "Budget Resp.",
-    "Planned Spend",
-    "Co. Size",
-    "Specialization",
-    "Industries",
-    "Priorities",
-    "",
+// Core columns shown on cards / list rows, in display order (see CORE_FIELDS).
+const CORE_COLUMNS = CORE_FIELDS.map((f) => ({ key: f.key, label: f.label }));
+// Identity sorts always available; core fields are appended at render time.
+const IDENTITY_SORTS = [
+    { field: "company", label: "Company" },
+    { field: "name", label: "Name" },
+    { field: "title", label: "Title" },
 ];
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -70,22 +41,50 @@ interface FilterConfig {
 interface Props {
     delegates: Attendee[];
     currentSponsor: Attendee;
+    /**
+     * Browse-field metadata (labels, multi-ness, value order) for this event —
+     * one entry per qualifying intake-form picklist field plus Industries. From
+     * loadAttendeeFieldMeta; drives the sidebar filters + core-field sort order.
+     */
+    fieldMeta: AttendeeFieldMeta[];
     /** Current-event logo for the header, or null when the event has none. */
     eventLogo?: TopBarEventLogo | null;
 }
 
-// ── Pure helpers ───────────────────────────────────────────────────────────
-// Presentational helpers (revClass, dotTags, str, hasValue) live in
-// ./catalogFormat and are imported above so DetailsModal can share them.
+// ── Pure helpers ─────────────────────────────────────────────────────────────
 
-function getSortVal(d: Attendee, field: string): string | number {
+/** The attendee's form field for a key, or undefined. */
+function fieldOf(d: Attendee, key: string): AttendeeFormField | undefined {
+    return d.formFields.find((f) => f.key === key);
+}
+
+/** The attendee's selected value(s) for a field key (empty when unanswered). */
+function valuesOf(d: Attendee, key: string): string[] {
+    return fieldOf(d, key)?.values ?? [];
+}
+
+/**
+ * Sort key for a delegate on a given field. Identity fields (name/company/title)
+ * sort as lowercased strings; a form field sorts by its value's position in the
+ * field's defined order (multi → earliest position), so ordinal ranges order
+ * correctly. Unanswered fields sort last.
+ */
+function getSortVal(
+    d: Attendee,
+    field: string,
+    orderIndex: Map<string, Map<string, number>>,
+): string | number {
     if (field === "name") return d.name.toLowerCase();
     if (field === "title") return d.title.toLowerCase();
     if (field === "company") return d.company.toLowerCase();
-    const v = (d.profile as unknown as Record<string, unknown>)[field];
-    if (v == null) return -1;
-    const ord = SORT_ORDER[field];
-    return ord ? ord.indexOf(String(v)) : -1;
+
+    const values = valuesOf(d, field);
+    if (values.length === 0) return Number.MAX_SAFE_INTEGER; // unanswered → last
+    const idx = orderIndex.get(field);
+    // Position in the field's defined order (multi → earliest). Values not in
+    // the order map (rare — e.g. a retired picklist value) sort last.
+    const positions = values.map((v) => idx?.get(v) ?? Number.MAX_SAFE_INTEGER);
+    return Math.min(...positions);
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -181,8 +180,6 @@ function DrawerItem({
     onRemove: (delegate: Attendee) => void;
 }) {
     const [detailOpen, setDetailOpen] = useState(false);
-    const p = d.profile;
-    const rc = revClass(p.annualRevenue) || "rev-na";
 
     return (
         <div className="d-item">
@@ -213,98 +210,36 @@ function DrawerItem({
                 </span>
             </button>
             <div className={`d-detail-body ${detailOpen ? "open" : ""}`}>
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                        fontSize: "11px",
-                        alignItems: "center",
-                    }}
-                >
-                    <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Revenue
+                {/* Every intake-form answer we have for this delegate. */}
+                {d.formFields.length === 0 ? (
+                    <span style={{ color: "var(--t3)", fontSize: "11px" }}>
+                        No details provided.
                     </span>
-                    <span className={`${rc} rev-chip`}>
-                        {str(p.annualRevenue)}
-                    </span>
-                </div>
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                        fontSize: "11px",
-                    }}
-                >
-                    <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Budget resp.
-                    </span>
-                    <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {p.budgetaryResponsibility || "N/A"}
-                    </span>
-                </div>
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                        fontSize: "11px",
-                    }}
-                >
-                    <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Planned spend
-                    </span>
-                    <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {p.plannedSpend || "N/A"}
-                    </span>
-                </div>
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                        fontSize: "11px",
-                    }}
-                >
-                    <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Co. size
-                    </span>
-                    <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {str(p.companySize)}
-                    </span>
-                </div>
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                        fontSize: "11px",
-                        marginTop: "2px",
-                    }}
-                >
-                    <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Specialization
-                    </span>
-                    <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {dotTags(p.areasOfSpecialization) || "N/A"}
-                    </span>
-                </div>
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                        fontSize: "11px",
-                    }}
-                >
-                    <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Industries
-                    </span>
-                    <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {dotTags(p.industrySectors) || "N/A"}
-                    </span>
-                </div>
+                ) : (
+                    d.formFields.map((f) => (
+                        <div
+                            key={f.key}
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: "8px",
+                                fontSize: "11px",
+                            }}
+                        >
+                            <span style={{ color: "var(--t3)", flexShrink: 0 }}>
+                                {f.label}
+                            </span>
+                            <span
+                                style={{
+                                    color: "var(--t2)",
+                                    textAlign: "right",
+                                }}
+                            >
+                                {dotTags(f.values) || "N/A"}
+                            </span>
+                        </div>
+                    ))
+                )}
             </div>
             <div className="d-rank-label">Interest level</div>
             <div className="d-rank-pips">
@@ -401,8 +336,47 @@ function FiltersPanel({
 export default function SponsorCatalog({
     delegates,
     currentSponsor,
+    fieldMeta,
     eventLogo,
 }: Props) {
+    // value → position lookup per field, for ordinal core-field sorting.
+    const orderIndex = useMemo(() => {
+        const m = new Map<string, Map<string, number>>();
+        for (const f of fieldMeta) {
+            m.set(f.key, new Map(f.order.map((v, i) => [v, i])));
+        }
+        return m;
+    }, [fieldMeta]);
+
+    const metaByKey = useMemo(
+        () => new Map(fieldMeta.map((m) => [m.key, m])),
+        [fieldMeta],
+    );
+
+    // Core columns annotated with whether their field is multi-select (drives
+    // list column width + which display style to use).
+    const listColumns = useMemo(
+        () =>
+            CORE_COLUMNS.map((c) => ({
+                ...c,
+                multi: metaByKey.get(c.key)?.multi ?? false,
+            })),
+        [metaByKey],
+    );
+
+    // List grid template: Name/Title + Company (identity) + one per core column
+    // (wider for multi-value tag columns) + the trailing details button.
+    const listCols = useMemo(() => {
+        const core = listColumns
+            .map((c) => (c.multi ? "minmax(120px,1.4fr)" : "minmax(90px,0.9fr)"))
+            .join(" ");
+        return `minmax(140px,1.4fr) minmax(120px,1fr) ${core} 96px`;
+    }, [listColumns]);
+
+    const listHeaders = useMemo(
+        () => ["Name / Title", "Company", ...CORE_COLUMNS.map((c) => c.label), ""],
+        [],
+    );
     // The current company's party id (its Account id) — the key the server uses
     // for this company's shared request set. Extracted so it can be a stable,
     // statically-checkable effect dependency.
@@ -452,76 +426,37 @@ export default function SponsorCatalog({
 
     // ── Filter config ──
 
+    // One filter per qualifying field (all pulled picklists + Industries).
+    // Options are the field's defined value order, narrowed to values actually
+    // present across delegates; a field with no defined order (e.g. Industries)
+    // falls back to the observed unique values, sorted. Empty fields drop out.
     const filterConfig = useMemo((): FilterConfig[] => {
-        const collect = (key: keyof AttendeeProfile): string[] =>
-            [
-                ...new Set(
-                    delegates.flatMap((d) => {
-                        const v = d.profile[key];
-                        return Array.isArray(v) ? (v as string[]) : [];
-                    }),
-                ),
-            ].sort();
+        // Present values per field key, across all delegates.
+        const present = new Map<string, Set<string>>();
+        for (const d of delegates) {
+            for (const f of d.formFields) {
+                let set = present.get(f.key);
+                if (!set) present.set(f.key, (set = new Set()));
+                for (const v of f.values) set.add(v);
+            }
+        }
 
-        return [
-            {
-                id: "annualRevenue",
-                label: "Annual company revenue",
-                type: "single" as const,
-                options: REV_TIERS,
-            },
-            {
-                id: "budgetaryResponsibility",
-                label: "Personal budgetary responsibility",
-                type: "single" as const,
-                options: [
-                    "<1M",
-                    "1M-10M",
-                    "10M-50M",
-                    "50M-100M",
-                    "100M-500M",
-                    "500M-1B",
-                    ">1B",
-                ],
-            },
-            {
-                id: "areasOfSpecialization",
-                label: "Areas of specialization",
-                type: "multi" as const,
-                options: collect("areasOfSpecialization"),
-            },
-            {
-                id: "plannedSpend",
-                label: "Planned spend (next 12–24 months)",
-                type: "single" as const,
-                options: ["<1M", "1M-5M", "5M-25M", "25M-100M", ">100M"],
-            },
-            {
-                id: "industrySectors",
-                label: "Industry sectors",
-                type: "multi" as const,
-                options: collect("industrySectors"),
-            },
-            {
-                id: "companySize",
-                label: "Company size (employees)",
-                type: "single" as const,
-                options: SORT_ORDER.companySize,
-            },
-            {
-                id: "regionsOverseen",
-                label: "Regions overseen",
-                type: "multi" as const,
-                options: collect("regionsOverseen"),
-            },
-            {
-                id: "strategicPriorities",
-                label: "Strategic priorities",
-                type: "multi" as const,
-                options: collect("strategicPriorities"),
-            },
-        ].filter((f) => f.options.length > 0);
-    }, [delegates]);
+        return fieldMeta
+            .map((meta): FilterConfig => {
+                const seen = present.get(meta.key) ?? new Set<string>();
+                const options =
+                    meta.order.length > 0
+                        ? meta.order.filter((v) => seen.has(v))
+                        : [...seen].sort();
+                return {
+                    id: meta.key,
+                    label: meta.label,
+                    type: meta.multi ? "multi" : "single",
+                    options,
+                };
+            })
+            .filter((f) => f.options.length > 0);
+    }, [delegates, fieldMeta]);
 
     useEffect(() => {
         setOpenAccordions(new Set(filterConfig.slice(0, 2).map((f) => f.id)));
@@ -554,22 +489,19 @@ export default function SponsorCatalog({
             );
         }
 
+        // Keep a delegate when, for every active filter, their answer for that
+        // field intersects the selected values.
         for (const [key, vals] of Object.entries(activeFilters)) {
             if (!vals?.length) continue;
             result = result.filter((d) => {
-                const v = (d.profile as unknown as Record<string, unknown>)[
-                    key
-                ];
-                if (v == null) return false;
-                return Array.isArray(v)
-                    ? vals.some((x) => (v as string[]).includes(x))
-                    : vals.includes(String(v));
+                const values = valuesOf(d, key);
+                return values.some((v) => vals.includes(v));
             });
         }
 
         result.sort((a, b) => {
-            const av = getSortVal(a, sortField);
-            const bv = getSortVal(b, sortField);
+            const av = getSortVal(a, sortField, orderIndex);
+            const bv = getSortVal(b, sortField, orderIndex);
             if (typeof av === "string") {
                 return sortDir === "asc"
                     ? av.localeCompare(bv as string)
@@ -581,7 +513,7 @@ export default function SponsorCatalog({
         });
 
         return result;
-    }, [delegates, searchQuery, activeFilters, sortField, sortDir]);
+    }, [delegates, searchQuery, activeFilters, sortField, sortDir, orderIndex]);
 
     // ── Request lookups ──
 
@@ -864,8 +796,6 @@ export default function SponsorCatalog({
             <div className="card-grid">
                 {pool.map((d) => {
                     const req = requestByTarget.get(d.salesforceId);
-                    const p = d.profile;
-                    const rc = revClass(p.annualRevenue) || "rev-na";
                     return (
                         <div
                             key={d.id}
@@ -876,39 +806,19 @@ export default function SponsorCatalog({
                                 <div className="card-name">{d.name}</div>
                                 <div className="card-title">{d.title}</div>
                             </div>
+                            {/* The hardcoded core columns, in order. */}
                             <div className="card-attrs">
-                                <div className="card-attr">
-                                    <span className="ca-label">Revenue</span>
-                                    <span className={`${rc} rev-chip`}>
-                                        {str(p.annualRevenue)}
-                                    </span>
-                                </div>
-                                {hasValue(p.budgetaryResponsibility) && (
-                                    <div className="card-attr">
+                                {CORE_COLUMNS.map((c) => (
+                                    <div className="card-attr" key={c.key}>
                                         <span className="ca-label">
-                                            Budget resp.
+                                            {c.label}
                                         </span>
                                         <span className="ca-value">
-                                            {p.budgetaryResponsibility}
+                                            {dotTags(valuesOf(d, c.key)) ||
+                                                "N/A"}
                                         </span>
                                     </div>
-                                )}
-                                {hasValue(p.plannedSpend) && (
-                                    <div className="card-attr">
-                                        <span className="ca-label">
-                                            Planned spend
-                                        </span>
-                                        <span className="ca-value">
-                                            {p.plannedSpend}
-                                        </span>
-                                    </div>
-                                )}
-                                <div className="card-attr">
-                                    <span className="ca-label">Co. size</span>
-                                    <span className="ca-value">
-                                        {str(p.companySize)}
-                                    </span>
-                                </div>
+                                ))}
                             </div>
                             {/* Opens the same DetailsModal the list view uses,
                                 replacing the old inline expand/collapse. */}
@@ -941,16 +851,16 @@ export default function SponsorCatalog({
             <div className="list-wrap">
                 <div
                     className="list-view"
-                    style={{ "--list-cols": LIST_COLS } as React.CSSProperties}
+                    style={{ "--list-cols": listCols } as React.CSSProperties}
                 >
                     <div
                         className="list-header"
                         style={
-                            { "--list-cols": LIST_COLS } as React.CSSProperties
+                            { "--list-cols": listCols } as React.CSSProperties
                         }
                     >
-                        {LIST_HEADERS.map((h) => (
-                            <div key={h} className="list-header-cell">
+                        {listHeaders.map((h, i) => (
+                            <div key={h || `col-${i}`} className="list-header-cell">
                                 {h}
                             </div>
                         ))}
@@ -958,8 +868,6 @@ export default function SponsorCatalog({
                     {pool.map((d) => {
                         const req = requestByTarget.get(d.salesforceId);
                         const isPicking = pickingId === d.id;
-                        const p = d.profile;
-                        const rc = revClass(p.annualRevenue) || "rev-na";
 
                         let action: React.ReactNode;
                         if (isPicking) {
@@ -1042,41 +950,16 @@ export default function SponsorCatalog({
                                         {d.company}
                                     </div>
                                 </div>
-                                <div className="list-cell">
-                                    <span className={`${rc} rev-chip`}>
-                                        {str(p.annualRevenue)}
-                                    </span>
-                                </div>
-                                <div className="list-cell">
-                                    <span className="lc-val">
-                                        {p.budgetaryResponsibility || "N/A"}
-                                    </span>
-                                </div>
-                                <div className="list-cell">
-                                    <span className="lc-val">
-                                        {p.plannedSpend || "N/A"}
-                                    </span>
-                                </div>
-                                <div className="list-cell">
-                                    <span className="lc-val">
-                                        {str(p.companySize)}
-                                    </span>
-                                </div>
-                                <div className="list-cell">
-                                    <span className="lc-tags">
-                                        {dotTags(p.areasOfSpecialization)}
-                                    </span>
-                                </div>
-                                <div className="list-cell">
-                                    <span className="lc-tags">
-                                        {dotTags(p.industrySectors)}
-                                    </span>
-                                </div>
-                                <div className="list-cell">
-                                    <span className="lc-tags">
-                                        {dotTags(p.strategicPriorities)}
-                                    </span>
-                                </div>
+                                {/* One cell per hardcoded core column, in order. */}
+                                {listColumns.map((c) => (
+                                    <div className="list-cell" key={c.key}>
+                                        <span
+                                            className={c.multi ? "lc-tags" : "lc-val"}
+                                        >
+                                            {dotTags(valuesOf(d, c.key)) || "N/A"}
+                                        </span>
+                                    </div>
+                                ))}
                                 <div className="list-cell list-details-cell">
                                     <button
                                         className="list-details-btn"
@@ -1107,8 +990,8 @@ export default function SponsorCatalog({
                 {pool.map((d) => {
                     const req = requestByTarget.get(d.salesforceId);
                     const isPicking = pickingId === d.id;
-                    const p = d.profile;
-                    const rc = revClass(p.annualRevenue) || "rev-na";
+                    // Split the core columns across the hcard's two body columns.
+                    const half = Math.ceil(listColumns.length / 2);
 
                     let action: React.ReactNode;
                     if (isPicking) {
@@ -1176,78 +1059,48 @@ export default function SponsorCatalog({
                                     <div className="hcard-name">{d.name}</div>
                                     <div className="hcard-title">{d.title}</div>
                                 </div>
-                                <span className={`${rc} rev-chip`}>
-                                    {str(p.annualRevenue)}
-                                </span>
                             </div>
+                            {/* Core columns split across the two body columns. */}
                             <div className="hcard-body-cols">
                                 <div className="hcard-left">
-                                    {hasValue(p.budgetaryResponsibility) && (
-                                        <div className="hcard-attr">
+                                    {listColumns.slice(0, half).map((c) => (
+                                        <div
+                                            key={c.key}
+                                            className={
+                                                c.multi
+                                                    ? "hcard-tag-attr"
+                                                    : "hcard-attr"
+                                            }
+                                        >
                                             <span className="hca-label">
-                                                Budget resp.
+                                                {c.label}
                                             </span>
                                             <span className="hca-value">
-                                                {p.budgetaryResponsibility}
+                                                {dotTags(valuesOf(d, c.key)) ||
+                                                    "N/A"}
                                             </span>
                                         </div>
-                                    )}
-                                    {hasValue(p.plannedSpend) && (
-                                        <div className="hcard-attr">
-                                            <span className="hca-label">
-                                                Planned spend
-                                            </span>
-                                            <span className="hca-value">
-                                                {p.plannedSpend}
-                                            </span>
-                                        </div>
-                                    )}
-                                    <div className="hcard-attr">
-                                        <span className="hca-label">
-                                            Co. size
-                                        </span>
-                                        <span className="hca-value">
-                                            {str(p.companySize)}
-                                        </span>
-                                    </div>
+                                    ))}
                                 </div>
                                 <div className="hcard-right">
-                                    <div className="hcard-tag-attr">
-                                        <span className="hca-label">
-                                            Specialization
-                                        </span>
-                                        <span className="hca-value">
-                                            {dotTags(p.areasOfSpecialization) ||
-                                                "N/A"}
-                                        </span>
-                                    </div>
-                                    <div className="hcard-tag-attr">
-                                        <span className="hca-label">
-                                            Industries
-                                        </span>
-                                        <span className="hca-value">
-                                            {dotTags(p.industrySectors) ||
-                                                "N/A"}
-                                        </span>
-                                    </div>
-                                    <div className="hcard-tag-attr">
-                                        <span className="hca-label">
-                                            Regions
-                                        </span>
-                                        <span className="hca-value">
-                                            {dotTags(p.regionsOverseen) ||
-                                                "N/A"}
-                                        </span>
-                                    </div>
-                                    <div className="hcard-tag-attr">
-                                        <span className="hca-label">
-                                            Priorities
-                                        </span>
-                                        <span className="hca-value">
-                                            {dotTags(p.strategicPriorities) ||
-                                                "N/A"}
-                                        </span>
-                                    </div>
+                                    {listColumns.slice(half).map((c) => (
+                                        <div
+                                            key={c.key}
+                                            className={
+                                                c.multi
+                                                    ? "hcard-tag-attr"
+                                                    : "hcard-attr"
+                                            }
+                                        >
+                                            <span className="hca-label">
+                                                {c.label}
+                                            </span>
+                                            <span className="hca-value">
+                                                {dotTags(valuesOf(d, c.key)) ||
+                                                    "N/A"}
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                             <div className="hcard-action">{action}</div>
@@ -1351,21 +1204,17 @@ export default function SponsorCatalog({
                                 value={sortField}
                                 onChange={(e) => setSortField(e.target.value)}
                             >
-                                <option value="company">Company</option>
-                                <option value="name">Name</option>
-                                <option value="title">Title</option>
-                                <option value="annualRevenue">
-                                    Annual Revenue
-                                </option>
-                                <option value="budgetaryResponsibility">
-                                    Budgetary Resp.
-                                </option>
-                                <option value="plannedSpend">
-                                    Planned Spend
-                                </option>
-                                <option value="companySize">
-                                    Company Size
-                                </option>
+                                {/* Identity sorts, then each core column. */}
+                                {IDENTITY_SORTS.map((s) => (
+                                    <option key={s.field} value={s.field}>
+                                        {s.label}
+                                    </option>
+                                ))}
+                                {CORE_COLUMNS.map((c) => (
+                                    <option key={c.key} value={c.key}>
+                                        {c.label}
+                                    </option>
+                                ))}
                             </select>
                             <button
                                 className="sort-dir-btn"

@@ -401,6 +401,142 @@ export async function getAttendeeById(
 }
 
 // ---------------------------------------------------------------------------
+// CventEvents__Attendee__c — intake-form picklist fields (delegate profiles)
+//
+// A separate object from Attendee__c (the meeting-data source). It holds each
+// delegate's answers to the pre-event intake form. We read only its "set
+// response" (picklist / multipicklist) fields to drive the delegate browse UI.
+// ---------------------------------------------------------------------------
+
+/** The Salesforce object holding delegates' pre-event intake-form answers. */
+export const CVENT_ATTENDEE_OBJECT = "CventEvents__Attendee__c";
+
+// TODO: confirm the relationship API name from CventEvents__Attendee__c to the
+// fuller Contact object it links to. Used to (a) join a form record back to a
+// delegate (by email) and (b) reach the Account for anything else we need.
+const CONTACT_REL = "CventEvents__Contact__r";
+
+/** One qualifying picklist field on CventEvents__Attendee__c. */
+export type AttendeePicklistFieldDef = {
+    /** Field API name (e.g. "CventEvents__Annual_Revenue__c"). */
+    name: string;
+    /** Human-readable field label — the filter/column title. */
+    label: string;
+    /** True for multipicklist (multi-select) fields. */
+    multi: boolean;
+    /** Active picklist values in Salesforce's defined order. */
+    values: string[];
+};
+
+/**
+ * Describes CventEvents__Attendee__c and returns its picklist / multipicklist
+ * fields — the "set-response" intake-form questions. Each field's `label` is
+ * its display title and `values` are its options in Salesforce's defined order
+ * (used to order filter options and sort ordinal ranges correctly).
+ *
+ * TODO: narrow to intake-FORM fields only — this currently returns every
+ * picklist on the object. The distinguishing metadata/naming (e.g. a field-name
+ * prefix, or a per-event mapping) is TBD until the form wiring is known.
+ *
+ * @returns {Promise<AttendeePicklistFieldDef[]>} Qualifying picklist fields.
+ */
+export async function describeAttendeePicklistFields(): Promise<
+    AttendeePicklistFieldDef[]
+> {
+    return withConnection(async (conn) => {
+        const meta = await conn.describe(CVENT_ATTENDEE_OBJECT);
+        const picklists = meta.fields
+            .filter((f) => f.type === "picklist" || f.type === "multipicklist")
+            .map((f) => ({
+                name: f.name,
+                label: f.label,
+                multi: f.type === "multipicklist",
+                values: (f.picklistValues ?? [])
+                    .filter((v) => v.active)
+                    .map((v) => v.value),
+            }));
+
+        // Opt-in diagnostic (DEBUG_SF_FIELDS=true): dump the detected picklist
+        // fields so their API names + labels can be matched against the intake
+        // form and the CORE_FIELDS labels while the form/event scoping is still
+        // being wired up.
+        if (process.env.DEBUG_SF_FIELDS === "true") {
+            console.log(
+                `[describeAttendeePicklistFields] ${CVENT_ATTENDEE_OBJECT}: ` +
+                    `${picklists.length} of ${meta.fields.length} fields are picklists`,
+            );
+            for (const f of picklists) {
+                const sample = f.values.slice(0, 5).join(", ");
+                console.log(
+                    `  ${f.name} | "${f.label}" | ` +
+                        `${f.multi ? "multipicklist" : "picklist"} | ` +
+                        `${f.values.length} value(s)${sample ? `: ${sample}${f.values.length > 5 ? ", …" : ""}` : ""}`,
+                );
+            }
+        }
+
+        return picklists;
+    });
+}
+
+/** One CventEvents__Attendee__c form record, reduced to what the loader joins. */
+export type AttendeeFormRecord = {
+    /** Linked Contact email (lowercased) — the delegate join key. */
+    email: string;
+    /** Picklist field API name → raw value ("A;B" for multipicklist), or null. */
+    fields: Record<string, string | null>;
+};
+
+/**
+ * Fetches intake-form records from CventEvents__Attendee__c for the event's
+ * delegates, selecting the given picklist field API names plus the linked
+ * Contact's email — the key used to join a form record back to a delegate.
+ * Returns a reduced `{ email, fields }` shape so the Contact-relationship path
+ * stays encapsulated here.
+ *
+ * TODO: scope to the CURRENT EVENT. The event lookup/field on
+ * CventEvents__Attendee__c is TBD, so this currently pulls all records and may
+ * span events until the WHERE clause is added. `eventCode` is already accepted
+ * so the signature won't change when scoping lands.
+ * TODO: confirm CONTACT_REL and the email field path.
+ *
+ * @param {string} eventCode - The current event code (unused until scoping is known).
+ * @param {readonly string[]} fieldNames - Picklist field API names to select.
+ * @returns {Promise<AttendeeFormRecord[]>} The reduced form records.
+ */
+export async function getEventAttendeeForms(
+    eventCode: string,
+    fieldNames: readonly string[],
+): Promise<AttendeeFormRecord[]> {
+    // Nothing to select beyond the join key — skip the round trip.
+    if (fieldNames.length === 0) return [];
+
+    const emailPath = `${CONTACT_REL}.Email`;
+    const selectFields = ["Id", emailPath, ...fieldNames];
+
+    // TODO: append `WHERE <event field> = '<eventCode>'` once the event
+    // relationship on CventEvents__Attendee__c is confirmed.
+    void eventCode;
+
+    const soql = `SELECT ${selectFields.join(", ")} FROM ${CVENT_ATTENDEE_OBJECT}`;
+    const records = await query(soql);
+
+    return records.map((r) => {
+        const row = r as Record<string, unknown>;
+        // jsforce nests a lookup relationship as an object under its rel name.
+        const contact = row[CONTACT_REL] as { Email?: string | null } | null;
+        const email = (contact?.Email ?? "").toString().trim().toLowerCase();
+
+        const fields: Record<string, string | null> = {};
+        for (const name of fieldNames) {
+            const v = row[name];
+            fields[name] = v == null ? null : String(v);
+        }
+        return { email, fields };
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Local filesystem helpers
 // ---------------------------------------------------------------------------
 

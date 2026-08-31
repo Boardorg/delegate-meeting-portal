@@ -87,36 +87,43 @@ describe('attendeeFieldMappers.sponsorTier', () => {
     });
 });
 
-// Maps Account fields into the profile sub-object (industry is the only field with a clean SF source today).
-describe('attendeeFieldMappers.profile', () => {
-    const ctx = makeContext();
+// Builds the Account-derived browse fields. Only Industries comes from the
+// meeting-data record (the intake-form picklist answers are joined in the loader);
+// it's built for delegates only and splits a ';'-packed industry string.
+describe('attendeeFieldMappers.formFields', () => {
+    const ctx = makeContext(); // delegate by default
 
-    test('maps industry category into industrySectors array', () => {
+    test('maps a single industry category into an Industries field', () => {
         const record: MeetingDataRecord = {
             Delegate__r: { Account: { Industry_Category__c: 'Technology' } },
         };
-        expect(attendeeFieldMappers.profile(record, ctx).industrySectors).toEqual(['Technology']);
+        expect(attendeeFieldMappers.formFields(record, ctx)).toEqual([
+            { key: 'industries', label: 'Industries', values: ['Technology'], multi: true, core: true },
+        ]);
     });
 
-    test('returns empty industrySectors when industry is missing', () => {
-        const record: MeetingDataRecord = { Delegate__r: { Account: { Industry_Category__c: null } } };
-        expect(attendeeFieldMappers.profile(record, ctx).industrySectors).toEqual([]);
-    });
-
-    test('passes through annualRevenue and companySize from the Account', () => {
+    test('splits a semicolon-packed industry string into multiple values', () => {
         const record: MeetingDataRecord = {
-            Delegate__r: { Account: { AnnualRevenue: 5_000_000, NumberOfEmployees: 250 } },
+            Delegate__r: { Account: { Industry_Category__c: 'Healthcare;Pharmaceuticals' } },
         };
-        const profile = attendeeFieldMappers.profile(record, ctx);
-        expect(profile.annualRevenue).toBe(5_000_000);
-        expect(profile.companySize).toBe(250);
+        expect(attendeeFieldMappers.formFields(record, ctx)[0].values).toEqual([
+            'Healthcare',
+            'Pharmaceuticals',
+        ]);
     });
 
-    test('returns nulls for all fields when Delegate__r is missing', () => {
-        const profile = attendeeFieldMappers.profile({}, ctx);
-        expect(profile.annualRevenue).toBeNull();
-        expect(profile.companySize).toBeNull();
-        expect(profile.industrySectors).toEqual([]);
+    test('returns no fields when the industry is missing', () => {
+        const record: MeetingDataRecord = { Delegate__r: { Account: { Industry_Category__c: null } } };
+        expect(attendeeFieldMappers.formFields(record, ctx)).toEqual([]);
+    });
+
+    test('returns no fields for sponsors', () => {
+        const record: MeetingDataRecord = {
+            Delegate__r: { Account: { Industry_Category__c: 'Technology' } },
+        };
+        expect(
+            attendeeFieldMappers.formFields(record, makeContext({ role: 'sponsor' })),
+        ).toEqual([]);
     });
 });
 

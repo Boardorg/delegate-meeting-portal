@@ -26,7 +26,7 @@ function makeAttendee(id: string, company: string, role: 'sponsor' | 'delegate',
         id, company, role, accountId,
         cventContactId: '', salesforceId: id, name: id, email: '', phone: '',
         title: '', sponsorTier: role === 'sponsor' ? 'standard' : null,
-        profile: { annualRevenue: null, budgetaryResponsibility: null, areasOfSpecialization: [], industrySectors: [], plannedSpend: null, companySize: null, regionsOverseen: [], strategicPriorities: [] },
+        formFields: [],
         scheduling: { maxSameCompanyMeetings: 2 },
     };
 }

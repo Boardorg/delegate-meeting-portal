@@ -54,16 +54,7 @@ function sponsorAttendee(
         company: 'Acme',
         title: '',
         sponsorTier: 'standard',
-        profile: {
-            annualRevenue: null,
-            budgetaryResponsibility: null,
-            areasOfSpecialization: [],
-            industrySectors: [],
-            plannedSpend: null,
-            companySize: null,
-            regionsOverseen: [],
-            strategicPriorities: [],
-        },
+        formFields: [],
         scheduling: { maxSameCompanyMeetings: null },
     };
 }

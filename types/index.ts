@@ -1,4 +1,5 @@
 import type { User, MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
+import type { AttendeeFormField } from "@/lib/attendees/formFields";
 
 export type CachedAuth = {
     accessToken: string;
@@ -82,63 +83,6 @@ export interface Location {
 }
 
 /**
- * Profile attributes used by the browse and filter UI when attendees are submitting meeting requests.
- * These fields are not used by the scheduling engine.
- */
-export interface AttendeeProfile {
-    /**
-     * Attendee's company annual revenue range.
-     * Null for sponsors.
-     * Example values: '<10M' | '10M-50M' | '50M-100M' | '100M-500M' | '500M-1B' | '1B-5B' | '>5B'
-     */
-    annualRevenue: number | string | null;
-
-    /**
-     * Attendee's budgetary responsibility level.
-     * Null for sponsors.
-     * Example values: '<1M' | '1M-10M' | '10M-50M' | '50M-100M' | '100M-500M' | '500M-1B' | '>1B'
-     */
-    budgetaryResponsibility: string | null;
-
-    /**
-     * The attendee's areas of professional specialization.
-     * Example values: ['cybersecurity', 'cloud infrastructure', 'AI/ML']
-     */
-    areasOfSpecialization: string[];
-
-    /**
-     * The industry sector the attendee's company operates in.
-     * Example values: ['technology', 'healthcare', 'financial services', 'manufacturing']
-     */
-    industrySectors: string[];
-
-    /**
-     * Planned company spend on the attendee's selected areas of specialization over the next 12–24 months.
-     * Example values: '<1M' | '1M-5M' | '5M-25M' | '25M-100M' | '>100M'
-     */
-    plannedSpend: string | null;
-
-    /**
-     * Attendee's company size.
-     * Null for sponsors.
-     * Example values: '1-50' | '51-200' | '200-500' | '500-1000' | '1000-5000' | '>5000'
-     */
-    companySize: number | string | null;
-
-    /**
-     * The geographic regions the attendee oversees or is responsible for.
-     * Example values: ['North America', 'EMEA', 'APAC', 'LATAM']
-     */
-    regionsOverseen: string[];
-
-    /**
-     * The attendee's top strategic priorities for the coming year.
-     * Example values: ['cost reduction', 'digital transformation', 'talent acquisition']
-     */
-    strategicPriorities: string[];
-}
-
-/**
  * The single event attendee object.
  * Contains all relevant information about an attendee. The primary input to the scheduling engine.
  */
@@ -198,8 +142,12 @@ export interface Attendee {
      */
     sponsorTier: SponsorTier;
 
-    /** Profile attributes used by the browse and filter UI. */
-    profile: AttendeeProfile;
+    /**
+     * Intake-form answers used by the browse and filter UI (delegate cards,
+     * rows, details modal, sidebar filters). Dynamic per event — see
+     * lib/attendees/formFields.ts. Empty for sponsors. Not used by the engine.
+     */
+    formFields: AttendeeFormField[];
 
     /**
      * Existing scheduling constraints for this attendee. Availability is no

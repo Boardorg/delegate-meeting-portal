@@ -1,4 +1,5 @@
 import {
+    answerOrNull,
     formatCompanySize,
     formatRevenue,
     splitPicklist,
@@ -159,19 +160,6 @@ type AttendeeFieldMappers<R> = {
 };
 
 /**
- * Trims a raw Salesforce text value down to a display string, collapsing blanks
- * to null so the UI's `|| "N/A"` fallbacks and the catalog's filters (which drop
- * null values) behave consistently.
- *
- * @param {string | null | undefined} raw - The raw SF value.
- * @returns {string | null} The trimmed value, or null when absent/blank.
- */
-function textOrNull(raw: string | null | undefined): string | null {
-    const trimmed = (raw ?? "").trim();
-    return trimmed || null;
-}
-
-/**
  * Maps a sponsor record's nested Account fields into the Attendee `profile`
  * sub-object.
  *
@@ -225,16 +213,16 @@ const delegateProfileMapper: FieldMapper<CventAttendeeRecord, "profile"> = (
     const account = record.CventEvents__Contact__r?.Account ?? null;
 
     return {
-        annualRevenue: textOrNull(record.CventEvents_NP_Annual_Revenue__c),
-        budgetaryResponsibility: textOrNull(
+        annualRevenue: answerOrNull(record.CventEvents_NP_Annual_Revenue__c),
+        budgetaryResponsibility: answerOrNull(
             record.CventEvents_NP_Budget_Responsibility__c,
         ),
-        companySize: textOrNull(record.CventEvents_NP_Company_Size__c),
+        companySize: answerOrNull(record.CventEvents_NP_Company_Size__c),
         industrySectors: splitPicklist(account?.Industry_Category__c),
         interestAreas: splitPicklist(
             record.CventEvents_NP_Current_Focus_Topics__c,
         ),
-        transformationStage: textOrNull(
+        transformationStage: answerOrNull(
             record.CventEvents_NP_Transformation_Stage__c,
         ),
         systemsAndPlatforms: splitPicklist(
@@ -243,7 +231,7 @@ const delegateProfileMapper: FieldMapper<CventAttendeeRecord, "profile"> = (
         meetingInterests: splitPicklist(
             record.CventEvents_NP_One_to_One_Interests__c,
         ),
-        priorityInitiative: textOrNull(
+        priorityInitiative: answerOrNull(
             record.CventEvents_NP_Initiative_Priority__c,
         ),
     };

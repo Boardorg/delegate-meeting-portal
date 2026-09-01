@@ -77,11 +77,13 @@ export function orderValues(values: string[]): string[] {
     const keyed = values.map((value) => {
         const lower = value.toLowerCase();
         const magnitude = parseMagnitude(value);
-        // Tie-break identically-bounded values: "under 10M" < "10M-50M" < "10M+".
+        // Tie-break identically-bounded values: "Under $500M" < "$500M–$1B", and
+        // "$10M+" after "$10M–$50M". Word boundaries on both sides so a value
+        // like "Discovery" isn't read as "over".
         let bias = 0;
         if (/^(<|under\b|less than\b|up to\b|fewer than\b)/.test(lower.trim())) {
             bias = -1;
-        } else if (/(\+|>|over\b|more than\b|or more\b)/.test(lower)) {
+        } else if (/(\+|>|\bover\b|\bmore than\b|\bor more\b)/.test(lower)) {
             bias = 1;
         }
         return { value, magnitude, bias };
@@ -107,9 +109,14 @@ export function orderValues(values: string[]): string[] {
  * event's own ordered revenue values, or "" when the value is empty or absent
  * from that list.
  *
- * Ranking rather than matching a fixed tier table means the chips stay graded
- * across the full palette whatever wording — and however many bands — the intake
- * form uses. Callers keep the `revClass(…) || "rev-na"` idiom for the empty case.
+ * The bands are spread across the WHOLE palette rather than taking one class
+ * each from the bottom up. rev-1…rev-7 runs dark→light, so an event with only
+ * three revenue bands would otherwise get rev-1/2/3 — three near-identical dark
+ * purples that read as broken. Spreading gives rev-1/rev-4/rev-7 instead, so the
+ * lowest band is always the darkest and the highest always the lightest however
+ * many bands the intake form offers.
+ *
+ * Callers keep the `revClass(…) || "rev-na"` idiom for the empty case.
  *
  * @param {string | null | undefined} val - The revenue value.
  * @param {string[]} ordered - The event's revenue values, ordered by orderValues.
@@ -124,11 +131,56 @@ export function revClass(
     const i = ordered.indexOf(String(val));
     if (i < 0) return "";
 
-    // One band per class when there are few, otherwise spread the bands evenly
-    // across the palette so the lowest is always rev-1 and the highest rev-7.
-    if (ordered.length <= REV_CLASS_COUNT) return `rev-${i + 1}`;
+    // A single band conveys no gradient, so sit it mid-palette rather than
+    // implying "lowest".
+    if (ordered.length === 1) return `rev-${Math.ceil(REV_CLASS_COUNT / 2)}`;
+
     const scaled = Math.round((i / (ordered.length - 1)) * (REV_CLASS_COUNT - 1));
     return `rev-${scaled + 1}`;
+}
+
+// Longest a single tag may render as in the compact views (grid card, list
+// column, horizontal card). The intake form's topic answers run to 130+
+// characters, which no column can carry; the full text stays in the sidebar
+// filter and the details modal.
+const SHORT_TAG_MAX = 20;
+
+/**
+ * Shortens one long answer for display in a compact view.
+ *
+ * The form's topic answers are written as "Label: elaboration" — e.g.
+ * "Leadership Development: Building the Pipeline from Emerging Leader to
+ * Executive" — so the elaboration is dropped at the colon first, which is both
+ * lossless as a label and usually enough. Anything still over the limit is cut
+ * and ellipsized.
+ *
+ * @param {string} value - The full answer text.
+ * @param {number} [max] - Maximum characters, ellipsis included.
+ * @returns {string} The shortened label.
+ */
+export function shortenValue(value: string, max: number = SHORT_TAG_MAX): string {
+    // Keep only the part before the first colon — the topic name itself.
+    const label = value.split(":")[0].trim();
+    if (label.length <= max) return label;
+
+    // Trim trailing spaces and dangling punctuation so we don't end on "&" or ",".
+    const cut = label.slice(0, max - 1).replace(/[\s,;&/-]+$/, "");
+    return `${cut}…`;
+}
+
+/**
+ * Joins a tag list for a compact view: each value shortened, then dot-separated.
+ * Use `dotTags` where the full text should show (the details modal).
+ *
+ * @param {string[] | null | undefined} arr - The tag values.
+ * @param {number} [max] - Maximum characters per value.
+ * @returns {string} The joined, shortened string, or "".
+ */
+export function shortTags(
+    arr: string[] | null | undefined,
+    max: number = SHORT_TAG_MAX,
+): string {
+    return (arr || []).map((v) => shortenValue(v, max)).join(" · ");
 }
 
 /**

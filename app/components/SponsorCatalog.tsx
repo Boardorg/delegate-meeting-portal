@@ -11,6 +11,7 @@ import {
     orderValues,
     revClass,
     dotTags,
+    shortTags,
     str,
     hasValue,
 } from "@/app/components/catalogFormat";
@@ -56,6 +57,13 @@ type SortDir = "asc" | "desc";
 interface FilterConfig {
     id: string;
     label: string;
+    /**
+     * "multi" renders checkboxes and ORs the selections; "single" renders radios
+     * and keeps one value. Every filter is "multi" for now — including the
+     * single-answer profile fields, where checkboxes let a requester pick, say,
+     * two adjacent revenue bands — but the radio path is kept so any filter can
+     * be switched back by changing this one value.
+     */
     type: "single" | "multi";
     options: string[];
 }
@@ -289,7 +297,7 @@ function DrawerItem({
                         Interest areas
                     </span>
                     <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {dotTags(p.interestAreas) || "N/A"}
+                        {shortTags(p.interestAreas) || "N/A"}
                     </span>
                 </div>
                 <div
@@ -506,25 +514,25 @@ export default function SponsorCatalog({
             {
                 id: "annualRevenue",
                 label: "Annual Revenue",
-                type: "single" as const,
+                type: "multi" as const,
                 options: valueOrder.annualRevenue,
             },
             {
                 id: "budgetaryResponsibility",
                 label: "Budget Responsibility",
-                type: "single" as const,
+                type: "multi" as const,
                 options: valueOrder.budgetaryResponsibility,
             },
             {
                 id: "companySize",
                 label: "Company Size",
-                type: "single" as const,
+                type: "multi" as const,
                 options: valueOrder.companySize,
             },
             {
                 id: "transformationStage",
                 label: "Progress on Interest Areas",
-                type: "single" as const,
+                type: "multi" as const,
                 options: valueOrder.transformationStage,
             },
             {
@@ -536,7 +544,7 @@ export default function SponsorCatalog({
             {
                 id: "priorityInitiative",
                 label: "Priority Initiative",
-                type: "single" as const,
+                type: "multi" as const,
                 options: valueOrder.priorityInitiative,
             },
             {
@@ -931,7 +939,7 @@ export default function SponsorCatalog({
                                             Interest areas
                                         </span>
                                         <span className="ca-value">
-                                            {dotTags(p.interestAreas)}
+                                            {shortTags(p.interestAreas)}
                                         </span>
                                     </div>
                                 )}
@@ -1086,7 +1094,7 @@ export default function SponsorCatalog({
                                 </div>
                                 <div className="list-cell">
                                     <span className="lc-tags">
-                                        {dotTags(p.interestAreas)}
+                                        {shortTags(p.interestAreas)}
                                     </span>
                                 </div>
                                 <div className="list-cell">
@@ -1225,7 +1233,7 @@ export default function SponsorCatalog({
                                                 Interest areas
                                             </span>
                                             <span className="hca-value">
-                                                {dotTags(p.interestAreas)}
+                                                {shortTags(p.interestAreas)}
                                             </span>
                                         </div>
                                     )}

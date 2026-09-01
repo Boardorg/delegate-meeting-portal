@@ -1,5 +1,13 @@
 import { describe, test, expect } from "vitest";
-import { orderValues, revClass, dotTags, str, hasValue } from "./catalogFormat";
+import {
+    orderValues,
+    revClass,
+    dotTags,
+    shortTags,
+    shortenValue,
+    str,
+    hasValue,
+} from "./catalogFormat";
 
 // ---------------------------------------------------------------------------
 // orderValues — the ordering the whole catalog leans on.
@@ -11,6 +19,34 @@ import { orderValues, revClass, dotTags, str, hasValue } from "./catalogFormat";
 // ---------------------------------------------------------------------------
 
 describe("orderValues", () => {
+    // The exact wordings the live BMWS intake answers use.
+    test("orders the live revenue bands", () => {
+        expect(
+            orderValues(["$5B–$10B", "Under $500M", "$500M–$1B"]),
+        ).toEqual(["Under $500M", "$500M–$1B", "$5B–$10B"]);
+    });
+
+    test("orders the live budget bands", () => {
+        expect(
+            orderValues(["$1M–$5M", "Under $500k", "$500k–$1M"]),
+        ).toEqual(["Under $500k", "$500k–$1M", "$1M–$5M"]);
+    });
+
+    test("orders the live company-size bands", () => {
+        expect(
+            orderValues(["5,000–25,000", "Under 1,000", "1,000–5,000"]),
+        ).toEqual(["Under 1,000", "1,000–5,000", "5,000–25,000"]);
+    });
+
+    test('does not read "over" out of the middle of a word', () => {
+        // "Discovery" contains "over"; it must not be treated as an upper bound
+        // and sorted after an identically-bounded value.
+        expect(orderValues(["$1M Discovery", "$1M–$5M"])).toEqual([
+            "$1M Discovery",
+            "$1M–$5M",
+        ]);
+    });
+
     test("orders currency bands by magnitude, not alphabetically", () => {
         expect(
             orderValues([
@@ -90,12 +126,24 @@ describe("orderValues", () => {
 // ---------------------------------------------------------------------------
 
 describe("revClass", () => {
-    const ordered = ["Less than $50M", "$50M–$250M", "$1B–$10B"];
+    const ordered = ["Under $500M", "$500M–$1B", "$5B–$10B"];
 
-    test("assigns one class per band when they fit the palette", () => {
-        expect(revClass("Less than $50M", ordered)).toBe("rev-1");
-        expect(revClass("$50M–$250M", ordered)).toBe("rev-2");
-        expect(revClass("$1B–$10B", ordered)).toBe("rev-3");
+    test("spreads a few bands across the whole palette", () => {
+        // The palette runs dark (rev-1) → light (rev-7). Three bands must not
+        // collapse onto rev-1/2/3, which are three near-identical dark purples.
+        expect(revClass("Under $500M", ordered)).toBe("rev-1");
+        expect(revClass("$500M–$1B", ordered)).toBe("rev-4");
+        expect(revClass("$5B–$10B", ordered)).toBe("rev-7");
+    });
+
+    test("keeps the extremes pinned for two bands", () => {
+        const two = ["Under $500M", "$5B–$10B"];
+        expect(revClass("Under $500M", two)).toBe("rev-1");
+        expect(revClass("$5B–$10B", two)).toBe("rev-7");
+    });
+
+    test("puts a lone band mid-palette rather than implying lowest", () => {
+        expect(revClass("$500M–$1B", ["$500M–$1B"])).toBe("rev-4");
     });
 
     test("spreads more bands than classes across the full palette", () => {
@@ -113,6 +161,68 @@ describe("revClass", () => {
 
     test('returns "" for a value absent from the ordered list', () => {
         expect(revClass("$900T", ordered)).toBe("");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// shortenValue / shortTags — keeping the long intake topics inside a column.
+// ---------------------------------------------------------------------------
+
+describe("shortenValue", () => {
+    test("drops the elaboration after the colon", () => {
+        expect(
+            shortenValue(
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+                40,
+            ),
+        ).toBe("Leadership Development");
+    });
+
+    test("caps the label at the maximum, ellipsis included", () => {
+        const out = shortenValue(
+            "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It",
+        );
+        expect(out).toBe("Talent Mobility & S…");
+        expect(out.length).toBeLessThanOrEqual(20);
+    });
+
+    test("leaves a short label untouched", () => {
+        expect(shortenValue("Data & Insights: Proving L&D's ROI")).toBe(
+            "Data & Insights",
+        );
+    });
+
+    test("never ends on dangling punctuation before the ellipsis", () => {
+        // Cutting "Coaching & Mentorship Programs" at 19 chars would land on
+        // "Coaching & Mentorsh" — fine — but a cut landing on "&" or "," must
+        // not produce "Coaching &…" style trailing junk beyond the conjunction.
+        expect(shortenValue("A, B, C, D, E, F, G, H, I, J")).not.toMatch(/[\s,;&/-]…$/);
+    });
+
+    test("handles a value with no colon at all", () => {
+        expect(shortenValue("Organizational Development")).toBe(
+            "Organizational Deve…",
+        );
+    });
+
+    test("respects a caller-supplied maximum", () => {
+        expect(shortenValue("Leadership Development", 12)).toBe("Leadership…");
+    });
+});
+
+describe("shortTags", () => {
+    test("shortens each value and dot-joins them", () => {
+        expect(
+            shortTags([
+                "Data & Insights: Proving L&D's ROI and Business Impact",
+                "Leadership Development: Building the Pipeline",
+            ]),
+        ).toBe("Data & Insights · Leadership Developm…");
+    });
+
+    test("tolerates empty input like dotTags", () => {
+        expect(shortTags([])).toBe("");
+        expect(shortTags(null)).toBe("");
     });
 });
 

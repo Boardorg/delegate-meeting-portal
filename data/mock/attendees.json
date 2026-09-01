@@ -182,28 +182,29 @@
         "title": "Chief Quality Officer & SVP, Global Operations",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": "$1B\u2013$10B",
-            "budgetaryResponsibility": "$50M\u2013$250M",
-            "companySize": "More than 5,000",
+            "annualRevenue": "$5B–$10B",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
             "industrySectors": [
                 "Healthcare;Pharmaceuticals"
             ],
             "interestAreas": [
-                "AI & Machine Learning",
-                "Data Governance",
-                "Clinical Trial Automation"
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+                "Data & Insights: Proving L&D's ROI and Business Impact",
+                "Other"
             ],
-            "transformationStage": "Scaling up",
+            "transformationStage": "Embedded in core operations",
             "systemsAndPlatforms": [
-                "Veeva Vault",
-                "Snowflake",
-                "AWS"
+                "Workday",
+                "SuccessFactors",
+                "Go1"
             ],
             "meetingInterests": [
-                "Data & Analytics",
-                "Automation"
+                "Leadership Development",
+                "Data, Reporting & Learning Analytics",
+                "Other"
             ],
-            "priorityInitiative": "AI-assisted drug discovery"
+            "priorityInitiative": "LMS / Learning Tech Stack Consolidation"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -221,30 +222,28 @@
         "title": "Executive Vice President & President, Manufacturing Operations",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": "$1B\u2013$10B",
-            "budgetaryResponsibility": "$10M\u2013$50M",
-            "companySize": "1,001\u20135,000",
+            "annualRevenue": "$500M–$1B",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
             "industrySectors": [
                 "Biotechnology;Healthcare;Pharmaceuticals"
             ],
             "interestAreas": [
-                "Cloud Migration",
-                "Cybersecurity",
-                "Data Governance",
-                "Regulatory Compliance"
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes",
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It",
+                "Professional Development & Skills: Moving to Skills-Based Career Frameworks"
             ],
-            "transformationStage": "Piloting",
+            "transformationStage": "Piloting in key areas",
             "systemsAndPlatforms": [
-                "Microsoft Azure",
-                "Databricks",
-                "SAP"
+                "UKG",
+                "Litmos LMS",
+                "SkillJar"
             ],
             "meetingInterests": [
-                "Cloud Infrastructure",
-                "Cybersecurity",
-                "Regulatory Technology"
+                "HiPo & Succession Programs",
+                "Organizational Development"
             ],
-            "priorityInitiative": "Unified clinical data platform"
+            "priorityInitiative": "Learning Analytics & ROI Measurement"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -262,27 +261,26 @@
         "title": "SVP, Head of Global MSAT, Engineering & Sustainability",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": "$1B\u2013$10B",
-            "budgetaryResponsibility": "$1M\u2013$10M",
-            "companySize": "More than 5,000",
+            "annualRevenue": "Under $500M",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
             "industrySectors": [
                 "Healthcare;Pharmaceuticals"
             ],
             "interestAreas": [
-                "Supply Chain Resilience",
-                "Regulatory Compliance",
-                "Data Governance"
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Learning Design & Delivery: Engaging Time-Constrained, Distracted Learners at Scale"
             ],
-            "transformationStage": "Fully operational",
+            "transformationStage": "No active initiatives",
             "systemsAndPlatforms": [
-                "SAP",
-                "Oracle"
+                "Go1",
+                "SkillJar"
             ],
             "meetingInterests": [
-                "Automation",
-                "Regulatory Technology"
+                "Digital Learning Strategy",
+                "Onboarding & New-to-Career Learning"
             ],
-            "priorityInitiative": "Supply chain visibility overhaul"
+            "priorityInitiative": "Digital Learning Content Modernization"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -300,25 +298,24 @@
         "title": "Vice President, Quality Assurance",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": "$50M\u2013$250M",
-            "budgetaryResponsibility": "Under $1M",
-            "companySize": "51\u2013250",
+            "annualRevenue": "Undisclosed",
+            "budgetaryResponsibility": "Undisclosed",
+            "companySize": "1,000–5,000",
             "industrySectors": [],
             "interestAreas": [
-                "AI & Machine Learning",
-                "Patient Engagement",
-                "Cloud Migration"
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite",
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive"
             ],
-            "transformationStage": "Exploring options",
+            "transformationStage": "Early planning",
             "systemsAndPlatforms": [
-                "Salesforce",
-                "AWS"
+                "Korn Ferry",
+                "BTS"
             ],
             "meetingInterests": [
-                "Patient Experience",
-                "Data & Analytics"
+                "Coaching & Mentorship Programs",
+                "Leadership Development"
             ],
-            "priorityInitiative": "Patient-facing digital front door"
+            "priorityInitiative": "Leadership & Succession Pipeline Investment"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -336,29 +333,28 @@
         "title": "Executive Director, Manufacturing Plant Manager",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": "$1B\u2013$10B",
-            "budgetaryResponsibility": "More than $250M",
-            "companySize": "1,001\u20135,000",
+            "annualRevenue": "$5B–$10B",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
             "industrySectors": [
                 "Biotechnology;Healthcare;Pharmaceuticals"
             ],
             "interestAreas": [
-                "AI & Machine Learning",
-                "Cybersecurity",
-                "Clinical Trial Automation"
+                "Professional Development & Skills: Moving to Skills-Based Career Frameworks",
+                "Data & Insights: Proving L&D's ROI and Business Impact",
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes"
             ],
-            "transformationStage": "Scaling up",
+            "transformationStage": "Embedded in core operations",
             "systemsAndPlatforms": [
-                "Databricks",
-                "Snowflake",
-                "Veeva Vault",
-                "AWS"
+                "Workday",
+                "Oracle",
+                "SuccessFactors"
             ],
             "meetingInterests": [
-                "Data & Analytics",
-                "Cybersecurity"
+                "Personalized & Skills-Based Learning",
+                "Learning Governance & Team Structure"
             ],
-            "priorityInitiative": "Enterprise AI governance program"
+            "priorityInitiative": "Skills Taxonomy & Career Frameworks"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -402,26 +398,25 @@
         "title": "SVP, Product Development & Clinical Supply",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": "More than $10B",
-            "budgetaryResponsibility": "$10M\u2013$50M",
-            "companySize": "More than 5,000",
+            "annualRevenue": "$500M–$1B",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
             "industrySectors": [
                 "Healthcare;Pharmaceuticals"
             ],
             "interestAreas": [
-                "Data Governance",
-                "Regulatory Compliance"
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It"
             ],
-            "transformationStage": "Piloting",
+            "transformationStage": "Piloting in key areas",
             "systemsAndPlatforms": [
-                "Oracle",
-                "Microsoft Azure"
+                "SuccessFactors",
+                "UKG"
             ],
             "meetingInterests": [
-                "Regulatory Technology",
-                "Automation"
+                "Global Learning Governance",
+                "HiPo & Succession Programs"
             ],
-            "priorityInitiative": "Automated regulatory submissions"
+            "priorityInitiative": "Global Learning Governance Model"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -439,29 +434,28 @@
         "title": "Vice President, Manufacturing Sciences",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": "More than $10B",
-            "budgetaryResponsibility": "$50M\u2013$250M",
-            "companySize": "More than 5,000",
+            "annualRevenue": "Under $500M",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
             "industrySectors": [
                 "Healthcare;Pharmaceuticals"
             ],
             "interestAreas": [
-                "Cloud Migration",
-                "Supply Chain Resilience",
-                "Patient Engagement",
-                "Automation"
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Learning Design & Delivery: Engaging Time-Constrained, Distracted Learners at Scale",
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite"
             ],
-            "transformationStage": "Fully operational",
+            "transformationStage": "Early planning",
             "systemsAndPlatforms": [
-                "SAP",
-                "AWS",
-                "Salesforce"
+                "SkillJar",
+                "Go1",
+                "Korn Ferry"
             ],
             "meetingInterests": [
-                "Cloud Infrastructure",
-                "Patient Experience"
+                "Onboarding & New-to-Career Learning",
+                "Digital Learning Strategy"
             ],
-            "priorityInitiative": "Global ERP consolidation"
+            "priorityInitiative": "Onboarding Experience Redesign"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2

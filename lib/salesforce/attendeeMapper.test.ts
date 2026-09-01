@@ -256,6 +256,22 @@ describe('delegateFieldMappers.profile', () => {
         expect(profile.transformationStage).toBeNull();
     });
 
+    test('treats "Undisclosed" as unanswered and drops an "Other" selection', () => {
+        const declined: CventAttendeeRecord = {
+            CventEvents_NP_Annual_Revenue__c: 'Undisclosed',
+            CventEvents_NP_Budget_Responsibility__c: 'Undisclosed',
+            CventEvents_NP_One_to_One_Interests__c:
+                'Coaching & Mentorship Programs; Leadership Development; Other',
+        };
+        const profile = delegateFieldMappers.profile(declined, ctx);
+        expect(profile.annualRevenue).toBeNull();
+        expect(profile.budgetaryResponsibility).toBeNull();
+        expect(profile.meetingInterests).toEqual([
+            'Coaching & Mentorship Programs',
+            'Leadership Development',
+        ]);
+    });
+
     test('returns an unset profile for a delegate who never filled in the form', () => {
         const profile = delegateFieldMappers.profile({}, ctx);
         expect(profile.annualRevenue).toBeNull();

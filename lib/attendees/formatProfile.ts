@@ -35,25 +35,64 @@ export function formatCompanySize(n: number | string | null): string | null {
     return '>5000';
 }
 
+// Intake answers that carry no information: the respondent either declined to
+// answer or picked the catch-all option. Dropping them keeps them out of the
+// sidebar filters (where they'd be a dead-end option), out of the revenue chip
+// grading (where "Undisclosed" would otherwise take a color band), and out of
+// the cards (where they'd read as data). The form captures the actual free text
+// behind an "Other" choice in its own CventEvents_NP_*_Other__c field.
+//
+// Matched case-insensitively against the whole trimmed value, so a real answer
+// that merely starts with the word (e.g. "Other Learning Systems") is kept.
+const NON_ANSWERS = new Set(["undisclosed", "not disclosed", "other"]);
+
 /**
- * Splits a semicolon-delimited Salesforce value into individual strings.
+ * True when a value is a non-answer that should be dropped rather than shown or
+ * filtered on.
+ *
+ * @param {string} value - A single trimmed answer value.
+ * @returns {boolean} Whether to discard it.
+ */
+export function isNonAnswer(value: string): boolean {
+    return NON_ANSWERS.has(value.trim().toLowerCase());
+}
+
+/**
+ * Normalizes a single-answer intake value: trims it, and collapses both blanks
+ * and non-answers to null so the UI's `|| "N/A"` fallbacks and the catalog's
+ * filters (which skip null values) treat "Undisclosed" the same as unanswered.
+ *
+ * @param {string | null | undefined} raw - The raw Salesforce value.
+ * @returns {string | null} The answer, or null when absent or uninformative.
+ */
+export function answerOrNull(raw: string | null | undefined): string | null {
+    const trimmed = (raw ?? "").trim();
+    if (!trimmed || isNonAnswer(trimmed)) return null;
+    return trimmed;
+}
+
+/**
+ * Splits a semicolon-delimited Salesforce value into individual answers,
+ * dropping blanks and non-answers.
  *
  * This is how every multi-answer value reaches us: multiselect picklists pack
  * their selections as "A;B", and the intake-form answers on
- * CventEvents__Attendee__c are stored the same way as plain text. Accepts a
- * single string or an array of them (an array element may itself be packed), so
- * it is safe to call on already-split data — which is what makes formatProfile
- * idempotent.
+ * CventEvents__Attendee__c are stored the same way as plain text (delimited by
+ * "; " in practice, hence the trim). Accepts a single string or an array of them
+ * (an array element may itself be packed), so it is safe to call on
+ * already-split data — which is what makes formatProfile idempotent.
  *
  * @param {string | string[] | null | undefined} raw - The packed value(s).
- * @returns {string[]} The individual, trimmed, non-empty values.
+ * @returns {string[]} The individual, trimmed, informative values.
  */
 export function splitPicklist(
     raw: string | string[] | null | undefined,
 ): string[] {
     if (raw === null || raw === undefined) return [];
     const parts = Array.isArray(raw) ? raw : [raw];
-    return parts.flatMap(s => String(s).split(';').map(v => v.trim())).filter(Boolean);
+    return parts
+        .flatMap(s => String(s).split(';').map(v => v.trim()))
+        .filter(v => v && !isNonAnswer(v));
 }
 
 /**
@@ -96,6 +135,13 @@ export function emptyProfile(): AttendeeProfile {
 export function formatProfile(profile: AttendeeProfile): AttendeeProfile {
     return {
         ...profile,
+        // Scalars are re-normalized here as well as in the mappers, so the mock
+        // JSON source gets the same non-answer handling as the Salesforce one.
+        annualRevenue: answerOrNull(profile.annualRevenue),
+        budgetaryResponsibility: answerOrNull(profile.budgetaryResponsibility),
+        companySize: answerOrNull(profile.companySize),
+        transformationStage: answerOrNull(profile.transformationStage),
+        priorityInitiative: answerOrNull(profile.priorityInitiative),
         industrySectors: splitPicklist(profile.industrySectors),
         interestAreas: splitPicklist(profile.interestAreas),
         systemsAndPlatforms: splitPicklist(profile.systemsAndPlatforms),

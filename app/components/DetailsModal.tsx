@@ -97,9 +97,20 @@ export default function DetailsModal({
                                     <div className="card-more-group-label">
                                         {g.label}
                                     </div>
-                                    <div className="card-more-group-val">
-                                        {g.items.join(" · ")}
-                                    </div>
+                                    {/* One value per line rather than a
+                                        dot-separated run: the intake answers are
+                                        long enough that a single joined string
+                                        wraps into an unreadable block. Full text
+                                        here — the cards and columns are where the
+                                        shortened labels belong. */}
+                                    {g.items.map((item) => (
+                                        <div
+                                            key={item}
+                                            className="card-more-group-val"
+                                        >
+                                            {item}
+                                        </div>
+                                    ))}
                                 </div>
                             ))}
                         </div>

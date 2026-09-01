@@ -84,58 +84,85 @@ export interface Location {
 /**
  * Profile attributes used by the browse and filter UI when attendees are submitting meeting requests.
  * These fields are not used by the scheduling engine.
+ *
+ * For DELEGATES, all but `industrySectors` come from the event's intake form,
+ * landing on CventEvents__Attendee__c (see lib/salesforce/client.ts). Salesforce
+ * stores every one of those answers as free text — semicolon-delimited where the
+ * form question allowed multiple choices — so the multi-answer fields are
+ * modeled as string[] and split on ingest by
+ * `splitPicklist` (lib/attendees/formatProfile.ts).
+ *
+ * Because the values are form text rather than a fixed picklist, nothing in the
+ * app hardcodes the possible values: the catalog's filter options and sort
+ * ordering are both derived from the loaded delegates (see
+ * app/components/catalogFormat.ts).
+ *
+ * SPONSORS have no intake form, so only the Account-derived fields
+ * (annualRevenue, companySize, industrySectors) are ever populated for them —
+ * and nothing in the UI reads a sponsor's profile today.
  */
 export interface AttendeeProfile {
     /**
-     * Attendee's company annual revenue range.
-     * Null for sponsors.
-     * Example values: '<10M' | '10M-50M' | '50M-100M' | '100M-500M' | '500M-1B' | '1B-5B' | '>5B'
+     * "What is your company's annual revenue?"
+     * Delegates: CventEvents_NP_Annual_Revenue__c.
+     * Sponsors: bucketed from Account.AnnualRevenue.
      */
-    annualRevenue: number | string | null;
+    annualRevenue: string | null;
 
     /**
-     * Attendee's budgetary responsibility level.
-     * Null for sponsors.
-     * Example values: '<1M' | '1M-10M' | '10M-50M' | '50M-100M' | '100M-500M' | '500M-1B' | '>1B'
+     * "Your personal budgetary responsibility."
+     * Delegates: CventEvents_NP_Budget_Responsibility__c. Null for sponsors.
      */
     budgetaryResponsibility: string | null;
 
     /**
-     * The attendee's areas of professional specialization.
-     * Example values: ['cybersecurity', 'cloud infrastructure', 'AI/ML']
+     * "How many employees does your company have?"
+     * Delegates: CventEvents_NP_Company_Size__c.
+     * Sponsors: bucketed from Account.NumberOfEmployees.
      */
-    areasOfSpecialization: string[];
+    companySize: string | null;
 
     /**
-     * The industry sector the attendee's company operates in.
-     * Example values: ['technology', 'healthcare', 'financial services', 'manufacturing']
+     * The industry sector(s) the attendee's company operates in.
+     * Sourced from Account.Industry_Category__c for both roles.
+     * Example values: ['technology', 'healthcare', 'financial services']
      */
     industrySectors: string[];
 
     /**
-     * Planned company spend on the attendee's selected areas of specialization over the next 12–24 months.
-     * Example values: '<1M' | '1M-5M' | '5M-25M' | '25M-100M' | '>100M'
+     * "Pick the 3–4 topics closest to your current focus."
+     * Delegates: CventEvents_NP_Current_Focus_Topics__c. Surfaced in the UI as
+     * "Planned Interest Areas". Empty for sponsors.
      */
-    plannedSpend: string | null;
+    interestAreas: string[];
 
     /**
-     * Attendee's company size.
-     * Null for sponsors.
-     * Example values: '1-50' | '51-200' | '200-500' | '500-1000' | '1000-5000' | '>5000'
+     * "Where is your organization on its transformation journey in this area?"
+     * Delegates: CventEvents_NP_Transformation_Stage__c. Surfaced in the UI as
+     * "Progress on Interest Areas". Null for sponsors.
      */
-    companySize: number | string | null;
+    transformationStage: string | null;
 
     /**
-     * The geographic regions the attendee oversees or is responsible for.
-     * Example values: ['North America', 'EMEA', 'APAC', 'LATAM']
+     * "What systems and platforms are you using today?"
+     * Delegates: CventEvents_NP_Systems_and_Platforms__c. Empty for sponsors.
      */
-    regionsOverseen: string[];
+    systemsAndPlatforms: string[];
 
     /**
-     * The attendee's top strategic priorities for the coming year.
-     * Example values: ['cost reduction', 'digital transformation', 'talent acquisition']
+     * "For the pre-arranged one-to-one meetings, which of the following areas
+     * are you interested in?"
+     * Delegates: CventEvents_NP_One_to_One_Interests__c. Surfaced in the UI as
+     * "Meeting Interests". Empty for sponsors.
      */
-    strategicPriorities: string[];
+    meetingInterests: string[];
+
+    /**
+     * "If you could fund one initiative over the next 24 months, which would
+     * you prioritize?"
+     * Delegates: CventEvents_NP_Initiative_Priority__c. Null for sponsors.
+     */
+    priorityInitiative: string | null;
 }
 
 /**

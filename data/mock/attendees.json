@@ -12,14 +12,17 @@
         "title": "VP, Strategic Partnerships",
         "sponsorTier": "diamond",
         "profile": {
-            "annualRevenue": 185000000,
+            "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
-            "companySize": 420,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "200-500",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
             "maxSameCompanyMeetings": null
@@ -38,14 +41,17 @@
         "title": "Director, Partnerships",
         "sponsorTier": "standard",
         "profile": {
-            "annualRevenue": 185000000,
+            "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
-            "companySize": 420,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "200-500",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
             "maxSameCompanyMeetings": null
@@ -63,14 +69,17 @@
         "title": "Director, Global Marketing",
         "sponsorTier": "standard",
         "profile": {
-            "annualRevenue": 62000000,
+            "annualRevenue": "50M-100M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
-            "companySize": 99,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "51-200",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
             "maxSameCompanyMeetings": null
@@ -90,12 +99,15 @@
         "profile": {
             "annualRevenue": null,
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
             "companySize": null,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
             "maxSameCompanyMeetings": null
@@ -113,14 +125,17 @@
         "title": "VP Sales & Client Success",
         "sponsorTier": "standard",
         "profile": {
-            "annualRevenue": 310000000,
+            "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Manufacturing"],
-            "plannedSpend": null,
-            "companySize": 850,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "500-1000",
+            "industrySectors": [
+                "Manufacturing"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
             "maxSameCompanyMeetings": null
@@ -138,14 +153,17 @@
         "title": "Chief Revenue Officer",
         "sponsorTier": "diamond",
         "profile": {
-            "annualRevenue": 520000000,
+            "annualRevenue": "500M-1B",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Biotechnology"],
-            "plannedSpend": null,
-            "companySize": 1200,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "1000-5000",
+            "industrySectors": [
+                "Biotechnology"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
             "maxSameCompanyMeetings": null
@@ -164,14 +182,28 @@
         "title": "Chief Quality Officer & SVP, Global Operations",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 54100000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 94300,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$1B\u2013$10B",
+            "budgetaryResponsibility": "$50M\u2013$250M",
+            "companySize": "More than 5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "AI & Machine Learning",
+                "Data Governance",
+                "Clinical Trial Automation"
+            ],
+            "transformationStage": "Scaling up",
+            "systemsAndPlatforms": [
+                "Veeva Vault",
+                "Snowflake",
+                "AWS"
+            ],
+            "meetingInterests": [
+                "Data & Analytics",
+                "Automation"
+            ],
+            "priorityInitiative": "AI-assisted drug discovery"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -189,14 +221,30 @@
         "title": "Executive Vice President & President, Manufacturing Operations",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 34126000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 28000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$1B\u2013$10B",
+            "budgetaryResponsibility": "$10M\u2013$50M",
+            "companySize": "1,001\u20135,000",
+            "industrySectors": [
+                "Biotechnology;Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Cloud Migration",
+                "Cybersecurity",
+                "Data Governance",
+                "Regulatory Compliance"
+            ],
+            "transformationStage": "Piloting",
+            "systemsAndPlatforms": [
+                "Microsoft Azure",
+                "Databricks",
+                "SAP"
+            ],
+            "meetingInterests": [
+                "Cloud Infrastructure",
+                "Cybersecurity",
+                "Regulatory Technology"
+            ],
+            "priorityInitiative": "Unified clinical data platform"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -214,14 +262,27 @@
         "title": "SVP, Head of Global MSAT, Engineering & Sustainability",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 54100000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 94300,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$1B\u2013$10B",
+            "budgetaryResponsibility": "$1M\u2013$10M",
+            "companySize": "More than 5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Supply Chain Resilience",
+                "Regulatory Compliance",
+                "Data Governance"
+            ],
+            "transformationStage": "Fully operational",
+            "systemsAndPlatforms": [
+                "SAP",
+                "Oracle"
+            ],
+            "meetingInterests": [
+                "Automation",
+                "Regulatory Technology"
+            ],
+            "priorityInitiative": "Supply chain visibility overhaul"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -239,14 +300,25 @@
         "title": "Vice President, Quality Assurance",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": null,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
+            "annualRevenue": "$50M\u2013$250M",
+            "budgetaryResponsibility": "Under $1M",
+            "companySize": "51\u2013250",
             "industrySectors": [],
-            "plannedSpend": null,
-            "companySize": null,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "interestAreas": [
+                "AI & Machine Learning",
+                "Patient Engagement",
+                "Cloud Migration"
+            ],
+            "transformationStage": "Exploring options",
+            "systemsAndPlatforms": [
+                "Salesforce",
+                "AWS"
+            ],
+            "meetingInterests": [
+                "Patient Experience",
+                "Data & Analytics"
+            ],
+            "priorityInitiative": "Patient-facing digital front door"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -264,14 +336,29 @@
         "title": "Executive Director, Manufacturing Plant Manager",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 34126000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 28000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$1B\u2013$10B",
+            "budgetaryResponsibility": "More than $250M",
+            "companySize": "1,001\u20135,000",
+            "industrySectors": [
+                "Biotechnology;Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "AI & Machine Learning",
+                "Cybersecurity",
+                "Clinical Trial Automation"
+            ],
+            "transformationStage": "Scaling up",
+            "systemsAndPlatforms": [
+                "Databricks",
+                "Snowflake",
+                "Veeva Vault",
+                "AWS"
+            ],
+            "meetingInterests": [
+                "Data & Analytics",
+                "Cybersecurity"
+            ],
+            "priorityInitiative": "Enterprise AI governance program"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -291,12 +378,13 @@
         "profile": {
             "annualRevenue": null,
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": [],
-            "plannedSpend": null,
             "companySize": null,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "industrySectors": [],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -314,14 +402,26 @@
         "title": "SVP, Product Development & Clinical Supply",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 63616000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 75000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "More than $10B",
+            "budgetaryResponsibility": "$10M\u2013$50M",
+            "companySize": "More than 5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Data Governance",
+                "Regulatory Compliance"
+            ],
+            "transformationStage": "Piloting",
+            "systemsAndPlatforms": [
+                "Oracle",
+                "Microsoft Azure"
+            ],
+            "meetingInterests": [
+                "Regulatory Technology",
+                "Automation"
+            ],
+            "priorityInitiative": "Automated regulatory submissions"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2
@@ -339,14 +439,29 @@
         "title": "Vice President, Manufacturing Sciences",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 63616000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 75000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "More than $10B",
+            "budgetaryResponsibility": "$50M\u2013$250M",
+            "companySize": "More than 5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Cloud Migration",
+                "Supply Chain Resilience",
+                "Patient Engagement",
+                "Automation"
+            ],
+            "transformationStage": "Fully operational",
+            "systemsAndPlatforms": [
+                "SAP",
+                "AWS",
+                "Salesforce"
+            ],
+            "meetingInterests": [
+                "Cloud Infrastructure",
+                "Patient Experience"
+            ],
+            "priorityInitiative": "Global ERP consolidation"
         },
         "scheduling": {
             "maxSameCompanyMeetings": 2

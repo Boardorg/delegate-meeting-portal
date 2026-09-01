@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import type { ResolvedIdentity } from '@/types';
+import { emptyProfile } from '@/lib/attendees/formatProfile';
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -54,16 +55,7 @@ function sponsorAttendee(
         company: 'Acme',
         title: '',
         sponsorTier: 'standard',
-        profile: {
-            annualRevenue: null,
-            budgetaryResponsibility: null,
-            areasOfSpecialization: [],
-            industrySectors: [],
-            plannedSpend: null,
-            companySize: null,
-            regionsOverseen: [],
-            strategicPriorities: [],
-        },
+        profile: emptyProfile(),
         scheduling: { maxSameCompanyMeetings: null },
     };
 }

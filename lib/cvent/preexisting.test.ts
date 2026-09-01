@@ -2,6 +2,7 @@ import { describe, test, expect } from "vitest";
 import { preexistingFromAppointments } from "./preexisting";
 import { pairKey } from "@/lib/scheduling/helpers";
 import type { Attendee } from "@/types";
+import { emptyProfile } from "@/lib/attendees/formatProfile";
 
 // ---------------------------------------------------------------------------
 // Reconciliation: Cvent participants → party-keyed pre-existing schedule.
@@ -23,16 +24,7 @@ function att(
         company: partial.company ?? "",
         title: "",
         sponsorTier: partial.role === "sponsor" ? "standard" : null,
-        profile: {
-            annualRevenue: null,
-            budgetaryResponsibility: null,
-            areasOfSpecialization: [],
-            industrySectors: [],
-            plannedSpend: null,
-            companySize: null,
-            regionsOverseen: [],
-            strategicPriorities: [],
-        },
+        profile: emptyProfile(),
         scheduling: { maxSameCompanyMeetings: partial.role === "sponsor" ? null : 2 },
     };
 }

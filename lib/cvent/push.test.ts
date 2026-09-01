@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import type { Attendee } from "@/types";
+import { emptyProfile } from "@/lib/attendees/formatProfile";
 import type { ScheduledMeetingRow } from "@/lib/db/schema";
 
 // ---------------------------------------------------------------------------
@@ -46,16 +47,7 @@ function att(
         company: partial.company ?? "",
         title: "",
         sponsorTier: partial.role === "sponsor" ? "standard" : null,
-        profile: {
-            annualRevenue: null,
-            budgetaryResponsibility: null,
-            areasOfSpecialization: [],
-            industrySectors: [],
-            plannedSpend: null,
-            companySize: null,
-            regionsOverseen: [],
-            strategicPriorities: [],
-        },
+        profile: emptyProfile(),
         scheduling: { maxSameCompanyMeetings: partial.role === "sponsor" ? null : 2 },
     };
 }

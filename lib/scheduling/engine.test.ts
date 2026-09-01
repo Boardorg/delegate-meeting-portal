@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { runScheduler } from './engine';
 import { pairKey } from './helpers';
 import type { Attendee, Location, MeetingRequest, Timeslot } from '@/types';
+import { emptyProfile } from '@/lib/attendees/formatProfile';
 
 // ---------------------------------------------------------------------------
 // Helpers for generating test data
@@ -26,7 +27,7 @@ function makeAttendee(id: string, company: string, role: 'sponsor' | 'delegate',
         id, company, role, accountId,
         cventContactId: '', salesforceId: id, name: id, email: '', phone: '',
         title: '', sponsorTier: role === 'sponsor' ? 'standard' : null,
-        profile: { annualRevenue: null, budgetaryResponsibility: null, areasOfSpecialization: [], industrySectors: [], plannedSpend: null, companySize: null, regionsOverseen: [], strategicPriorities: [] },
+        profile: emptyProfile(),
         scheduling: { maxSameCompanyMeetings: 2 },
     };
 }

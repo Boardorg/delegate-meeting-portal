@@ -8,7 +8,7 @@ import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
 import TopBar, { type TopBarEventLogo } from "@/app/components/TopBar";
 import DetailsModal from "@/app/components/DetailsModal";
 import {
-    REV_TIERS,
+    orderValues,
     revClass,
     dotTags,
     str,
@@ -17,41 +17,34 @@ import {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const SORT_ORDER: Record<string, string[]> = {
-    annualRevenue: REV_TIERS,
-    budgetaryResponsibility: [
-        "<1M",
-        "1M-10M",
-        "10M-50M",
-        "50M-100M",
-        "100M-500M",
-        "500M-1B",
-        ">1B",
-    ],
-    plannedSpend: ["<1M", "1M-5M", "5M-25M", "25M-100M", ">100M"],
-    companySize: [
-        "1-50",
-        "51-200",
-        "200-500",
-        "500-1000",
-        "1000-5000",
-        ">5000",
-    ],
-};
+// Profile fields holding a single free-text answer. Their filter options and
+// sort order are derived from the loaded delegates and put in natural
+// smallest → largest order by orderValues; the array-valued fields sort
+// alphabetically instead. See buildValueOrder below.
+const SCALAR_PROFILE_FIELDS = [
+    "annualRevenue",
+    "budgetaryResponsibility",
+    "companySize",
+    "transformationStage",
+    "priorityInitiative",
+] as const satisfies readonly (keyof AttendeeProfile)[];
+
+type ScalarProfileField = (typeof SCALAR_PROFILE_FIELDS)[number];
 
 const LIST_BREAK = 860;
-// Trailing 96px column is the (header-less) "More details" button.
-const LIST_COLS = "140px 110px 72px 82px 72px 68px 1fr 1fr 1fr 96px";
+// Trailing 96px column is the (header-less) "More details" button. Fixed tracks
+// total 568px, leaving the three 1fr tag columns to share the rest of the
+// .list-view min-width (900px).
+const LIST_COLS = "140px 110px 72px 82px 1fr 68px 1fr 1fr 96px";
 const LIST_HEADERS = [
     "Name / Title",
     "Company",
     "Revenue",
     "Budget Resp.",
-    "Planned Spend",
+    "Interest Areas",
     "Co. Size",
-    "Specialization",
     "Industries",
-    "Priorities",
+    "Priority Initiative",
     "",
 ];
 
@@ -67,6 +60,9 @@ interface FilterConfig {
     options: string[];
 }
 
+/** Ordered distinct values per scalar profile field, derived from the delegates. */
+type ValueOrder = Record<ScalarProfileField, string[]>;
+
 interface Props {
     delegates: Attendee[];
     currentSponsor: Attendee;
@@ -78,13 +74,47 @@ interface Props {
 // Presentational helpers (revClass, dotTags, str, hasValue) live in
 // ./catalogFormat and are imported above so DetailsModal can share them.
 
-function getSortVal(d: Attendee, field: string): string | number {
+/**
+ * Collects each scalar profile field's distinct values across the delegates and
+ * puts them in natural smallest → largest order.
+ *
+ * This one derived map drives three things that must agree: the sidebar filter
+ * option order, the sort-by-field order, and the revenue chip's color grade.
+ * Deriving it means the catalog needs no knowledge of how the intake form words
+ * its answers.
+ *
+ * @param {Attendee[]} delegates - The loaded delegate pool.
+ * @returns {ValueOrder} Ordered distinct values, keyed by profile field.
+ */
+function buildValueOrder(delegates: Attendee[]): ValueOrder {
+    return SCALAR_PROFILE_FIELDS.reduce((acc, key) => {
+        const distinct = new Set<string>();
+        for (const d of delegates) {
+            const v = d.profile[key];
+            if (typeof v === "string" && v) distinct.add(v);
+        }
+        acc[key] = orderValues([...distinct]);
+        return acc;
+    }, {} as ValueOrder);
+}
+
+/**
+ * Resolves a delegate's sort key for the given field. Identity fields sort
+ * alphabetically; scalar profile fields sort by their position in the derived
+ * value order, so revenue and company-size bands sort by magnitude rather than
+ * by their text. Missing values sort to the front (-1), as before.
+ */
+function getSortVal(
+    d: Attendee,
+    field: string,
+    valueOrder: ValueOrder,
+): string | number {
     if (field === "name") return d.name.toLowerCase();
     if (field === "title") return d.title.toLowerCase();
     if (field === "company") return d.company.toLowerCase();
     const v = (d.profile as unknown as Record<string, unknown>)[field];
     if (v == null) return -1;
-    const ord = SORT_ORDER[field];
+    const ord = valueOrder[field as ScalarProfileField];
     return ord ? ord.indexOf(String(v)) : -1;
 }
 
@@ -171,18 +201,21 @@ function RequestActions({
 
 function DrawerItem({
     d,
+    revenueClass,
     rank,
     onRank,
     onRemove,
 }: {
     d: Attendee;
+    /** The `rev-N` class for this delegate's revenue chip, from the catalog. */
+    revenueClass: string;
     rank: number;
     onRank: (delegate: Attendee, r: number) => void;
     onRemove: (delegate: Attendee) => void;
 }) {
     const [detailOpen, setDetailOpen] = useState(false);
     const p = d.profile;
-    const rc = revClass(p.annualRevenue) || "rev-na";
+    const rc = revenueClass || "rev-na";
 
     return (
         <div className="d-item">
@@ -253,10 +286,10 @@ function DrawerItem({
                     }}
                 >
                     <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Planned spend
+                        Interest areas
                     </span>
                     <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {p.plannedSpend || "N/A"}
+                        {dotTags(p.interestAreas) || "N/A"}
                     </span>
                 </div>
                 <div
@@ -272,22 +305,6 @@ function DrawerItem({
                     </span>
                     <span style={{ color: "var(--t2)", textAlign: "right" }}>
                         {str(p.companySize)}
-                    </span>
-                </div>
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                        fontSize: "11px",
-                        marginTop: "2px",
-                    }}
-                >
-                    <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Specialization
-                    </span>
-                    <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {dotTags(p.areasOfSpecialization) || "N/A"}
                     </span>
                 </div>
                 <div
@@ -452,8 +469,14 @@ export default function SponsorCatalog({
 
     // ── Filter config ──
 
+    // Ordered distinct values for the scalar profile fields. Drives the filter
+    // options, the sort order, and the revenue chip grading — see
+    // buildValueOrder.
+    const valueOrder = useMemo(() => buildValueOrder(delegates), [delegates]);
+
     const filterConfig = useMemo((): FilterConfig[] => {
-        const collect = (key: keyof AttendeeProfile): string[] =>
+        // Multi-value fields: flatten every delegate's tags, dedupe, alphabetize.
+        const collectTags = (key: keyof AttendeeProfile): string[] =>
             [
                 ...new Set(
                     delegates.flatMap((d) => {
@@ -463,65 +486,67 @@ export default function SponsorCatalog({
                 ),
             ].sort();
 
+        // Every option list below comes from the loaded delegates, never from a
+        // hardcoded list — the values are intake-form text, so the form can
+        // change its wording or its bands without a code change. The trailing
+        // filter drops any field nobody answered.
         return [
             {
-                id: "annualRevenue",
-                label: "Annual company revenue",
-                type: "single" as const,
-                options: REV_TIERS,
-            },
-            {
-                id: "budgetaryResponsibility",
-                label: "Personal budgetary responsibility",
-                type: "single" as const,
-                options: [
-                    "<1M",
-                    "1M-10M",
-                    "10M-50M",
-                    "50M-100M",
-                    "100M-500M",
-                    "500M-1B",
-                    ">1B",
-                ],
-            },
-            {
-                id: "areasOfSpecialization",
-                label: "Areas of specialization",
+                id: "interestAreas",
+                label: "Planned Interest Areas",
                 type: "multi" as const,
-                options: collect("areasOfSpecialization"),
-            },
-            {
-                id: "plannedSpend",
-                label: "Planned spend (next 12–24 months)",
-                type: "single" as const,
-                options: ["<1M", "1M-5M", "5M-25M", "25M-100M", ">100M"],
+                options: collectTags("interestAreas"),
             },
             {
                 id: "industrySectors",
-                label: "Industry sectors",
+                label: "Industry Sectors",
                 type: "multi" as const,
-                options: collect("industrySectors"),
+                options: collectTags("industrySectors"),
+            },
+            {
+                id: "annualRevenue",
+                label: "Annual Revenue",
+                type: "single" as const,
+                options: valueOrder.annualRevenue,
+            },
+            {
+                id: "budgetaryResponsibility",
+                label: "Budget Responsibility",
+                type: "single" as const,
+                options: valueOrder.budgetaryResponsibility,
             },
             {
                 id: "companySize",
-                label: "Company size (employees)",
+                label: "Company Size",
                 type: "single" as const,
-                options: SORT_ORDER.companySize,
+                options: valueOrder.companySize,
             },
             {
-                id: "regionsOverseen",
-                label: "Regions overseen",
-                type: "multi" as const,
-                options: collect("regionsOverseen"),
+                id: "transformationStage",
+                label: "Progress on Interest Areas",
+                type: "single" as const,
+                options: valueOrder.transformationStage,
             },
             {
-                id: "strategicPriorities",
-                label: "Strategic priorities",
+                id: "systemsAndPlatforms",
+                label: "Systems and Platforms",
                 type: "multi" as const,
-                options: collect("strategicPriorities"),
+                options: collectTags("systemsAndPlatforms"),
+            },
+            {
+                id: "priorityInitiative",
+                label: "Priority Initiative",
+                type: "single" as const,
+                options: valueOrder.priorityInitiative,
+            },
+            {
+                id: "meetingInterests",
+                label: "Meeting Interests",
+                type: "multi" as const,
+                options: collectTags("meetingInterests"),
             },
         ].filter((f) => f.options.length > 0);
-    }, [delegates]);
+    }, [delegates, valueOrder]);
 
     useEffect(() => {
         setOpenAccordions(new Set(filterConfig.slice(0, 2).map((f) => f.id)));
@@ -568,8 +593,8 @@ export default function SponsorCatalog({
         }
 
         result.sort((a, b) => {
-            const av = getSortVal(a, sortField);
-            const bv = getSortVal(b, sortField);
+            const av = getSortVal(a, sortField, valueOrder);
+            const bv = getSortVal(b, sortField, valueOrder);
             if (typeof av === "string") {
                 return sortDir === "asc"
                     ? av.localeCompare(bv as string)
@@ -581,7 +606,14 @@ export default function SponsorCatalog({
         });
 
         return result;
-    }, [delegates, searchQuery, activeFilters, sortField, sortDir]);
+    }, [delegates, searchQuery, activeFilters, sortField, sortDir, valueOrder]);
+
+    // Grades a delegate's revenue chip against the event's own revenue bands.
+    // Wrapped so every view (and the details modal) reads one implementation.
+    const revenueClass = useCallback(
+        (d: Attendee) => revClass(d.profile.annualRevenue, valueOrder.annualRevenue),
+        [valueOrder],
+    );
 
     // ── Request lookups ──
 
@@ -865,7 +897,7 @@ export default function SponsorCatalog({
                 {pool.map((d) => {
                     const req = requestByTarget.get(d.salesforceId);
                     const p = d.profile;
-                    const rc = revClass(p.annualRevenue) || "rev-na";
+                    const rc = revenueClass(d) || "rev-na";
                     return (
                         <div
                             key={d.id}
@@ -893,13 +925,13 @@ export default function SponsorCatalog({
                                         </span>
                                     </div>
                                 )}
-                                {hasValue(p.plannedSpend) && (
+                                {hasValue(p.interestAreas) && (
                                     <div className="card-attr">
                                         <span className="ca-label">
-                                            Planned spend
+                                            Interest areas
                                         </span>
                                         <span className="ca-value">
-                                            {p.plannedSpend}
+                                            {dotTags(p.interestAreas)}
                                         </span>
                                     </div>
                                 )}
@@ -959,7 +991,7 @@ export default function SponsorCatalog({
                         const req = requestByTarget.get(d.salesforceId);
                         const isPicking = pickingId === d.id;
                         const p = d.profile;
-                        const rc = revClass(p.annualRevenue) || "rev-na";
+                        const rc = revenueClass(d) || "rev-na";
 
                         let action: React.ReactNode;
                         if (isPicking) {
@@ -1053,8 +1085,8 @@ export default function SponsorCatalog({
                                     </span>
                                 </div>
                                 <div className="list-cell">
-                                    <span className="lc-val">
-                                        {p.plannedSpend || "N/A"}
+                                    <span className="lc-tags">
+                                        {dotTags(p.interestAreas)}
                                     </span>
                                 </div>
                                 <div className="list-cell">
@@ -1064,17 +1096,12 @@ export default function SponsorCatalog({
                                 </div>
                                 <div className="list-cell">
                                     <span className="lc-tags">
-                                        {dotTags(p.areasOfSpecialization)}
-                                    </span>
-                                </div>
-                                <div className="list-cell">
-                                    <span className="lc-tags">
                                         {dotTags(p.industrySectors)}
                                     </span>
                                 </div>
                                 <div className="list-cell">
                                     <span className="lc-tags">
-                                        {dotTags(p.strategicPriorities)}
+                                        {p.priorityInitiative || ""}
                                     </span>
                                 </div>
                                 <div className="list-cell list-details-cell">
@@ -1108,7 +1135,7 @@ export default function SponsorCatalog({
                     const req = requestByTarget.get(d.salesforceId);
                     const isPicking = pickingId === d.id;
                     const p = d.profile;
-                    const rc = revClass(p.annualRevenue) || "rev-na";
+                    const rc = revenueClass(d) || "rev-na";
 
                     let action: React.ReactNode;
                     if (isPicking) {
@@ -1192,13 +1219,13 @@ export default function SponsorCatalog({
                                             </span>
                                         </div>
                                     )}
-                                    {hasValue(p.plannedSpend) && (
+                                    {hasValue(p.interestAreas) && (
                                         <div className="hcard-attr">
                                             <span className="hca-label">
-                                                Planned spend
+                                                Interest areas
                                             </span>
                                             <span className="hca-value">
-                                                {p.plannedSpend}
+                                                {dotTags(p.interestAreas)}
                                             </span>
                                         </div>
                                     )}
@@ -1214,15 +1241,6 @@ export default function SponsorCatalog({
                                 <div className="hcard-right">
                                     <div className="hcard-tag-attr">
                                         <span className="hca-label">
-                                            Specialization
-                                        </span>
-                                        <span className="hca-value">
-                                            {dotTags(p.areasOfSpecialization) ||
-                                                "N/A"}
-                                        </span>
-                                    </div>
-                                    <div className="hcard-tag-attr">
-                                        <span className="hca-label">
                                             Industries
                                         </span>
                                         <span className="hca-value">
@@ -1232,20 +1250,10 @@ export default function SponsorCatalog({
                                     </div>
                                     <div className="hcard-tag-attr">
                                         <span className="hca-label">
-                                            Regions
+                                            Priority initiative
                                         </span>
                                         <span className="hca-value">
-                                            {dotTags(p.regionsOverseen) ||
-                                                "N/A"}
-                                        </span>
-                                    </div>
-                                    <div className="hcard-tag-attr">
-                                        <span className="hca-label">
-                                            Priorities
-                                        </span>
-                                        <span className="hca-value">
-                                            {dotTags(p.strategicPriorities) ||
-                                                "N/A"}
+                                            {p.priorityInitiative || "N/A"}
                                         </span>
                                     </div>
                                 </div>
@@ -1359,9 +1367,6 @@ export default function SponsorCatalog({
                                 </option>
                                 <option value="budgetaryResponsibility">
                                     Budgetary Resp.
-                                </option>
-                                <option value="plannedSpend">
-                                    Planned Spend
                                 </option>
                                 <option value="companySize">
                                     Company Size
@@ -1508,6 +1513,7 @@ export default function SponsorCatalog({
                             <DrawerItem
                                 key={d.id}
                                 d={d}
+                                revenueClass={revenueClass(d)}
                                 rank={rank}
                                 onRank={saveRequest}
                                 onRemove={deleteRequest}
@@ -1517,10 +1523,11 @@ export default function SponsorCatalog({
                 </div>
             </div>
 
-            {/* Delegate "More details" modal (list view) */}
+            {/* Delegate "More details" modal (grid card + list row) */}
             {detailsDelegate && (
                 <DetailsModal
                     d={detailsDelegate}
+                    revClass={revenueClass(detailsDelegate)}
                     onClose={() => setDetailsDelegate(null)}
                 >
                     <RequestActions

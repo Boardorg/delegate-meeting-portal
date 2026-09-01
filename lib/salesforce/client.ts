@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import jsforce, { Connection, type Record as SfRecord } from "jsforce";
+import { getEventSettings } from "@/lib/events/settings";
 import type { AttendeeRecordSF, CachedAuth } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -185,7 +186,11 @@ export async function query<T extends SfRecord = SfRecord>(
 }
 
 // ---------------------------------------------------------------------------
-// Meeting-data query (reverse-engineered Salesforce report)
+// Sponsors (Attendee__c, reverse-engineered Salesforce report)
+//
+// This is the sponsor side only. Delegates used to be queried from the same
+// object with a different RecordType/StageName filter; they now come from
+// CventEvents__Attendee__c further down this file.
 // ---------------------------------------------------------------------------
 
 // Reverse-engineered from report 00OPZ00000DSuhJ2AT ("Contacts with Attendees
@@ -231,17 +236,6 @@ const MEETING_DATA_FIELDS = [
 // excluded from the attendee list regardless of stage.
 const EXCLUDED_DISCOUNT_CODES = ["JUSTTESTING", "DOLLARTEST", "ONEDOLLARTEST"];
 
-// Discount codes that let a non–Closed-Won delegate Opportunity still count
-// (e.g. comp passes, speaker passes, board-member replacements).
-const SPECIAL_DELEGATE_DISCOUNT_CODES = [
-    "SPEAKERPASS",
-    "BOARDMEMBERBUNDLE",
-    "BOARDMEMBERPO",
-    "REPLACEMENT",
-    "BOARDMEMBERCOMP",
-    "BOARDMEMBERSWAP",
-];
-
 // Account-name substrings used to filter out internal/test accounts in the
 // source report. Matching is case-insensitive (SOQL LIKE).
 const EXCLUDED_ACCOUNT_NAME_FRAGMENTS = [
@@ -263,9 +257,11 @@ function soqlStringList(values: readonly string[]): string {
 }
 
 /**
- * Builds the WHERE-clause fragment that applies to BOTH the sponsors and the
- * delegates queries. The role-specific RecordType / StageName conditions are
- * appended by the per-role helpers below.
+ * Builds the WHERE-clause fragment for the sponsors query.
+ *
+ * Delegates no longer share this filter set — they come from
+ * CventEvents__Attendee__c instead (see getMeetingDataDelegates), so every
+ * condition here is Opportunity/Contact-based and sponsor-specific.
  *
  * @param {string} eventCode - The conference code being queried (e.g. `"NAMLS"`).
  * @returns {string} A `cond1 AND cond2 AND …` SOQL fragment.
@@ -310,35 +306,130 @@ export async function getMeetingDataSponsors(eventCode: string) {
     return query(soql);
 }
 
+// ---------------------------------------------------------------------------
+// Delegates (CventEvents__Attendee__c)
+//
+// Delegates come from the Cvent-for-Salesforce managed package's attendee
+// object rather than from Attendee__c + Opportunity. That object is the landing
+// place for the event's intake-form answers, which supply nearly the whole
+// delegate profile shown in the browse UI.
+//
+// Two naming conventions live side by side on this object and the difference
+// matters when adding fields:
+//   - `CventEvents__*__c`   — namespaced, shipped by the managed package.
+//   - `CventEvents_NP_*__c` — NOT namespaced (single underscore); custom fields
+//                             added to the packaged object to hold the intake
+//                             answers.
+//
+// The Contact lookup is `CventEvents__Contact__c` (relationship
+// `CventEvents__Contact__r`). Company name, job title and industry sectors keep
+// their existing sources and are dot-walked through it, so they still come from
+// Contact / Account rather than from the Cvent registration.
+// ---------------------------------------------------------------------------
+
+const CVENT_ATTENDEE_FIELDS = [
+    "Id",
+    "Name",
+    // Registration metadata, useful when debugging who did/didn't come back.
+    "CventEvents__Status__c",
+    "CventEvents__Email__c",
+    // Identity + the three fields that keep their pre-existing sources.
+    "CventEvents__Contact__r.FirstName",
+    "CventEvents__Contact__r.LastName",
+    "CventEvents__Contact__r.Title",
+    "CventEvents__Contact__r.Email",
+    "CventEvents__Contact__r.Phone",
+    "CventEvents__Contact__r.AccountId",
+    "CventEvents__Contact__r.Account.Name",
+    "CventEvents__Contact__r.Account.Industry_Category__c",
+    // Intake-form answers. Each maps to one AttendeeProfile field; see
+    // lib/salesforce/attendeeMapper.ts.
+    "CventEvents_NP_Company_Size__c",
+    "CventEvents_NP_Annual_Revenue__c",
+    "CventEvents_NP_Budget_Responsibility__c",
+    "CventEvents_NP_Current_Focus_Topics__c",
+    "CventEvents_NP_Transformation_Stage__c",
+    "CventEvents_NP_Systems_and_Platforms__c",
+    "CventEvents_NP_One_to_One_Interests__c",
+    "CventEvents_NP_Initiative_Priority__c",
+] as const;
+
 /**
- * Queries Attendee__c records that count as delegates for the given event:
- * Opportunity RecordType in (Board Event, Delegate), AND either Closed-Won OR
- * carrying one of SPECIAL_DELEGATE_DISCOUNT_CODES (which permit Registered /
- * other stages).
+ * Resolves the Cvent Event id for an event from its settings row — the same
+ * value lib/cvent/client.ts uses to list attendees from the Cvent API, so the
+ * Salesforce and Cvent sides are always scoped to the same event.
  *
- * @param {string} eventCode - The conference code (e.g. `"NAMLS"`).
- * @returns {Promise<SfRecord[]>} The matched Attendee__c records with joined Contact + Opportunity fields.
+ * @param {string} eventCode - The internal event code (e.g. "BMWS").
+ * @returns {Promise<string>} The Cvent Event id (a UUID).
+ * @throws {Error} When the event has no settings row or no Cvent Event id.
+ */
+async function requireCventEventId(eventCode: string): Promise<string> {
+    const settings = await getEventSettings(eventCode);
+    if (!settings) {
+        throw new Error(
+            `No Cvent settings configured for event "${eventCode}". ` +
+                "Add them in Admin → Event settings.",
+        );
+    }
+    if (!settings.cventEventId) {
+        throw new Error(
+            `Event "${eventCode}" has no Cvent Event ID set ` +
+                "(Admin → Event settings).",
+        );
+    }
+    return settings.cventEventId;
+}
+
+/**
+ * Queries the CventEvents__Attendee__c records that count as delegates for the
+ * given event.
+ *
+ * Scoping goes through the Event lookup's `CventEvents__pkg_EventStub__c`, which
+ * is where the package stores the Cvent Event UUID — the exact value held in
+ * event_settings.cvent_event_id. (The attendee's own
+ * `CventEvents__EventTitle__c` is a display formula that renders an HTML anchor,
+ * not an identifier, so it can't be used here.)
+ *
+ * Rows with no Contact are dropped: without one there is no name, company,
+ * title, industry or Account id to show, and no email to match against Cvent.
+ *
+ * @param {string} eventCode - The internal event code (e.g. `"BMWS"`).
+ * @returns {Promise<SfRecord[]>} The matched records with joined Contact + Account fields.
  */
 export async function getMeetingDataDelegates(eventCode: string) {
-    // Append the delegate-specific clauses to the shared filter.
+    const cventEventId = await requireCventEventId(eventCode);
+
+    // Defensively escape apostrophes; the id is admin-entered free text.
+    const safeEventId = cventEventId.replace(/'/g, "\\'");
+
     const where = [
-        commonMeetingDataWhere(eventCode),
-        `Registration__r.RecordType.Name IN ('Board Event', 'Delegate')`,
-        `(Registration__r.StageName = 'Closed-Won' OR Registration__r.Discount_Code__c IN (${soqlStringList(SPECIAL_DELEGATE_DISCOUNT_CODES)}))`,
+        `CventEvents__Event__r.CventEvents__pkg_EventStub__c = '${safeEventId}'`,
+        `CventEvents__Contact__c != NULL`,
+        // The package's own test-record flag. Preferred over the account-name
+        // matching the sponsor query uses, which would also drop a legitimate
+        // company that happens to have "Test" in its name.
+        `CventEvents__Test_Record__c = FALSE`,
     ].join(" AND ");
-    const soql = `SELECT ${MEETING_DATA_FIELDS.join(", ")} FROM Attendee__c WHERE ${where}`;
+
+    // Deliberately NOT filtered on CventEvents__Status__c: who is actually
+    // attending is already settled by the Cvent-API cross-check in
+    // lib/attendees/loader.ts, and guessing at the status vocabulary here would
+    // risk silently hiding real delegates.
+    const soql = `SELECT ${CVENT_ATTENDEE_FIELDS.join(", ")} FROM CventEvents__Attendee__c WHERE ${where}`;
     return query(soql);
 }
 
 /**
  * Convenience aggregator: runs the sponsor and delegate queries in parallel
- * and returns both lists keyed by role.
+ * and returns both lists keyed by role. The two hit different objects — sponsors
+ * Attendee__c, delegates CventEvents__Attendee__c — so each list carries its own
+ * record shape (see MeetingDataRecord / CventAttendeeRecord in the mapper).
  *
- * @param {string} eventCode - The conference code (e.g. `"NAMLS"`).
+ * @param {string} eventCode - The internal event code (e.g. `"BMWS"`).
  * @returns {Promise<{ delegates: SfRecord[]; sponsors: SfRecord[] }>} The two record lists.
  */
 export async function getMeetingDataByEvent(eventCode: string) {
-    // Parallel because the two queries are independent and similarly sized.
+    // Parallel because the two queries are independent.
     const [delegates, sponsors] = await Promise.all([
         getMeetingDataDelegates(eventCode),
         getMeetingDataSponsors(eventCode),

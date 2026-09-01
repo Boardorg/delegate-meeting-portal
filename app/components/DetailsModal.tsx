@@ -1,32 +1,55 @@
 import type { ReactNode } from "react";
 import type { Attendee } from "@/types";
-import { revClass, str } from "@/app/components/catalogFormat";
+import { str } from "@/app/components/catalogFormat";
 
 // ---------------------------------------------------------------------------
-// DetailsModal — every company detail we have for a delegate (mirrors the grid
-// card with its "more details" expanded), plus a slot for the request/edit/
-// remove action group. Opened from the list view's trailing "More details"
-// button; the caller owns the open/close state and passes the action group as
-// children so it stays wired to the catalog's request state.
+// DetailsModal — every profile detail we have for a delegate, plus a slot for
+// the request/edit/remove action group. Opened from both the grid card's and the
+// list row's "More details" button; the caller owns the open/close state and
+// passes the action group as children so it stays wired to the catalog's request
+// state.
+//
+// This is the only place the delegate's full intake-form profile is shown, so it
+// carries the fields the cards and columns have no room for: progress on
+// interest areas, systems and platforms, and meeting interests.
 // ---------------------------------------------------------------------------
 
 export default function DetailsModal({
     d,
+    revClass,
     onClose,
     children,
 }: {
     d: Attendee;
+    /**
+     * The `rev-N` class for this delegate's revenue chip. Computed by the caller
+     * because the grading depends on the whole delegate pool's revenue values,
+     * which only the catalog knows.
+     */
+    revClass: string;
     onClose: () => void;
     /** The RequestActions group, wired to the parent's request state. */
     children: ReactNode;
 }) {
     const p = d.profile;
-    const rc = revClass(p.annualRevenue) || "rev-na";
+    const rc = revClass || "rev-na";
+
+    // Scalar attributes rendered as label/value rows. Filtered so a delegate who
+    // skipped a question doesn't get a row of "N/A"s — revenue always shows,
+    // since its chip doubles as the card's visual anchor.
+    const attrs = [
+        { label: "Budget resp.", value: p.budgetaryResponsibility },
+        { label: "Co. size", value: p.companySize },
+        { label: "Progress on interest areas", value: p.transformationStage },
+        { label: "Priority initiative", value: p.priorityInitiative },
+    ].filter((a) => a.value);
+
+    // Multi-value attributes rendered as label + dot-separated list.
     const groups = [
-        { label: "Specialization", items: p.areasOfSpecialization },
+        { label: "Planned Interest Areas", items: p.interestAreas },
         { label: "Industries", items: p.industrySectors },
-        { label: "Regions", items: p.regionsOverseen },
-        { label: "Priorities", items: p.strategicPriorities },
+        { label: "Systems and Platforms", items: p.systemsAndPlatforms },
+        { label: "Meeting Interests", items: p.meetingInterests },
     ].filter((g) => g.items?.length);
 
     return (
@@ -60,24 +83,12 @@ export default function DetailsModal({
                                 {str(p.annualRevenue)}
                             </span>
                         </div>
-                        <div className="card-attr">
-                            <span className="ca-label">Budget resp.</span>
-                            <span className="ca-value">
-                                {p.budgetaryResponsibility || "N/A"}
-                            </span>
-                        </div>
-                        <div className="card-attr">
-                            <span className="ca-label">Planned spend</span>
-                            <span className="ca-value">
-                                {p.plannedSpend || "N/A"}
-                            </span>
-                        </div>
-                        <div className="card-attr">
-                            <span className="ca-label">Co. size</span>
-                            <span className="ca-value">
-                                {str(p.companySize)}
-                            </span>
-                        </div>
+                        {attrs.map((a) => (
+                            <div key={a.label} className="card-attr">
+                                <span className="ca-label">{a.label}</span>
+                                <span className="ca-value">{a.value}</span>
+                            </div>
+                        ))}
                     </div>
                     {groups.length > 0 && (
                         <div className="details-groups">

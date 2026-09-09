@@ -35,10 +35,10 @@ const SCALAR_PROFILE_FIELDS = [
 type ScalarProfileField = (typeof SCALAR_PROFILE_FIELDS)[number];
 
 const LIST_BREAK = 860;
-// Trailing 96px column is the (header-less) "More details" button. Fixed tracks
-// total 568px, leaving the three 1fr tag columns to share the rest of the
-// .list-view min-width (900px).
-const LIST_COLS = "140px 110px 72px 82px 1fr 68px 1fr 1fr 96px";
+// The list view's column WIDTHS live with the rest of its layout, as
+// `--list-cols` on .list-view in frontend.css. Only the header labels are here,
+// because they're content. The grid is positional, so this array has to stay the
+// same length as those tracks and as the .list-cell divs each row renders.
 const LIST_HEADERS = [
     "Name / Title",
     "Company",
@@ -1041,16 +1041,10 @@ export default function SponsorCatalog({
             );
         return (
             <div className="list-wrap">
-                <div
-                    className="list-view"
-                    style={{ "--list-cols": LIST_COLS } as React.CSSProperties}
-                >
-                    <div
-                        className="list-header"
-                        style={
-                            { "--list-cols": LIST_COLS } as React.CSSProperties
-                        }
-                    >
+                {/* .list-view declares --list-cols; the header and rows inherit
+                    it, so neither needs the tracks passed in. */}
+                <div className="list-view">
+                    <div className="list-header">
                         {LIST_HEADERS.map((h) => (
                             <div key={h} className="list-header-cell">
                                 {h}

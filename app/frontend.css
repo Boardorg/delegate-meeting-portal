@@ -871,6 +871,15 @@ button.tag-pill-more:hover {
     overflow-x: auto;
 }
 .list-view {
+    /* Column widths for the pseudo-table. The header row and every body row
+       read this one variable, so the tracks only need changing here — but the
+       count must stay in step with LIST_HEADERS in SponsorCatalog.tsx and the
+       .list-cell divs it renders, since the grid is positional.
+
+       The trailing 96px column is the (header-less) "More details" button. The
+       six fixed tracks total 568px, leaving the three 1fr tag columns to share
+       whatever min-width below gives them. */
+    --list-cols: 140px 110px 72px 82px 1fr 68px 1fr 1fr 110px;
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border);
@@ -1080,6 +1089,7 @@ button.tag-pill-more:hover {
     display: flex;
     align-items: center;
     justify-content: center;
+    align-self: center;
 }
 .list-details-btn {
     background: none;

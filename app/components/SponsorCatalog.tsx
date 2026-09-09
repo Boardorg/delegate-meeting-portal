@@ -48,6 +48,7 @@ const LIST_HEADERS = [
     "Co. Size",
     "Industries",
     "Priority Initiative",
+    // Trailing control column — deliberately unlabelled.
     "",
 ];
 
@@ -1137,9 +1138,6 @@ export default function SponsorCatalog({
                                 <div className="list-cell">
                                     <div className="lc-name">{d.name}</div>
                                     <div className="lc-title">{d.title}</div>
-                                    <div className="list-action-cell">
-                                        {action}
-                                    </div>
                                 </div>
                                 <div className="list-cell">
                                     <div className="lc-company">
@@ -1181,13 +1179,21 @@ export default function SponsorCatalog({
                                         {p.priorityInitiative || ""}
                                     </span>
                                 </div>
-                                <div className="list-cell list-details-cell">
-                                    <button
-                                        className="list-details-btn"
-                                        onClick={() => setDetailsDelegate(d)}
-                                    >
-                                        More details
-                                    </button>
+                                {/* Every control for the row, in a trailing
+                                    (header-less) column: the request action
+                                    group on top, "More details" beneath it. */}
+                                <div className="list-cell">
+                                    <div className="list-action-cell">
+                                        {action}
+                                        <button
+                                            className="list-details-btn"
+                                            onClick={() =>
+                                                setDetailsDelegate(d)
+                                            }
+                                        >
+                                            More details
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         );

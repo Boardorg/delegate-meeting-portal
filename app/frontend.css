@@ -887,16 +887,22 @@ button.tag-pill-more:hover {
        count must stay in step with LIST_HEADERS in SponsorCatalog.tsx and the
        .list-cell divs it renders, since the grid is positional.
 
-       The trailing 96px column is the (header-less) "More details" button. The
-       six fixed tracks total 568px, leaving the three 1fr tag columns to share
-       whatever min-width below gives them. */
-    --list-cols: 140px 110px 72px 82px 1fr 68px 1fr 1fr 110px;
+       The trailing track is the header-less control column. Its width is set by
+       the widest thing the stack can contain, which is NOT a button row but the
+       interest-level picker: five 24px pips with 3px gaps = 132px, plus the
+       cell's 20px of horizontal padding. ("Edit" + "Remove" needs ~113px and
+       "More details" sits on its own line, so neither binds.) .list-cell is
+       overflow:hidden, so a narrower track would silently clip the pips.
+
+       min-width is raised in step with it so the three 1fr tag columns keep
+       roughly the share they had before the control column was added. */
+    --list-cols: 140px 110px 72px 82px 1fr 68px 1fr 1fr 160px;
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border);
     border-radius: var(--r-lg);
     overflow: hidden;
-    min-width: 900px;
+    min-width: 940px;
 }
 .list-header {
     display: grid;
@@ -973,10 +979,14 @@ button.tag-pill-more:hover {
     color: var(--t2);
     line-height: 1.5;
 }
+/* The row's controls, stacked in the trailing column: the request action group
+   on top, "More details" underneath. Stretched so both rows span the column and
+   read as one two-row block rather than two ragged-width buttons. */
 .list-action-cell {
-    padding: 4px 0 0 0;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
 }
 .list-req-btn {
     background: var(--accent);
@@ -1002,7 +1012,7 @@ button.tag-pill-more:hover {
     opacity: 0.5;
     cursor: not-allowed;
 }
-/* Stacked so the label sits above the number pips in the narrow name column. */
+/* Stacked so the label sits above the number pips in the narrow control column. */
 .list-rank-picker {
     display: flex;
     flex-direction: column;
@@ -1074,9 +1084,16 @@ button.tag-pill-more:hover {
     align-items: center;
     gap: 5px;
 }
+/* Edit takes the slack so the pair fills the control column, lining its right
+   edge up with the stretched "More details" below it. Remove keeps its natural
+   width — same split as .req-edit-actions in the roomy variant. */
+.list-edit-actions .list-req-btn {
+    flex: 1;
+}
 .list-remove-btn {
+    flex-shrink: 0;
     background: none;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-up);
     border-radius: var(--r-pill);
     padding: 5px 10px;
     font-family: var(--body);
@@ -1095,13 +1112,8 @@ button.tag-pill-more:hover {
     color: var(--red);
     background: var(--red-s);
 }
-/* Trailing (header-less) column: opens the delegate details modal. */
-.list-details-cell {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    align-self: center;
-}
+/* Opens the delegate details modal. The lower row of the control stack in
+   .list-action-cell. */
 .list-details-btn {
     background: none;
     border: 1px solid var(--border-up);

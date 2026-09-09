@@ -293,14 +293,25 @@
 .filter-opt input[type="checkbox"] {
     accent-color: var(--blue);
 }
+/* Takes the row's remaining width so a long option wraps inside it, keeping the
+   trailing swatch part of the text's own inline flow. */
+.filter-opt-label {
+    flex: 1;
+    min-width: 0;
+}
 /* Color key tying an interest-area option to its pill color in the card / list
    views. A swatch rather than a pill because the full option text is far too
-   long to sit inside one. */
+   long to sit inside one.
+
+   inline-block so it flows as the last thing on the label's final line instead
+   of sitting alongside the whole wrapped block as its own flex item. */
 .filter-swatch {
+    display: inline-block;
     width: 9px;
     height: 9px;
+    margin-right: 6px;
+    vertical-align: middle;
     border-radius: 50%;
-    flex-shrink: 0;
     background: var(--tag-c);
     border: 1px solid color-mix(in srgb, var(--tag-c) 60%, #000);
 }

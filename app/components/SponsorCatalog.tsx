@@ -425,12 +425,19 @@ function FiltersPanel({
                                                 )
                                             }
                                         />
-                                        {f.colorize && (
-                                            <span
-                                                className={`filter-swatch ${tagColorClass(opt, f.options)}`}
-                                            />
-                                        )}
-                                        {opt}
+                                        {/* The swatch sits inside the label's
+                                            own inline flow, after the text, so
+                                            on a wrapping option it trails the
+                                            last line rather than floating
+                                            beside the whole block. */}
+                                        <span className="filter-opt-label">
+                                            {f.colorize && (
+                                                <span
+                                                    className={`filter-swatch ${tagColorClass(opt, f.options)}`}
+                                                />
+                                            )}
+                                            {opt}
+                                        </span>
                                     </label>
                                 );
                             })}
@@ -654,7 +661,8 @@ export default function SponsorCatalog({
     // Grades a delegate's revenue chip against the event's own revenue bands.
     // Wrapped so every view (and the details modal) reads one implementation.
     const revenueClass = useCallback(
-        (d: Attendee) => revClass(d.profile.annualRevenue, valueOrder.annualRevenue),
+        (d: Attendee) =>
+            revClass(d.profile.annualRevenue, valueOrder.annualRevenue),
         [valueOrder],
     );
 

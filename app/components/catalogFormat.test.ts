@@ -5,6 +5,10 @@ import {
     dotTags,
     shortTags,
     shortenValue,
+    tagColorClass,
+    DETAILS_TAG_MAX,
+    SHORT_TAG_MAX,
+    TAG_COLOR_COUNT,
     str,
     hasValue,
 } from "./catalogFormat";
@@ -168,45 +172,75 @@ describe("revClass", () => {
 // shortenValue / shortTags — keeping the long intake topics inside a column.
 // ---------------------------------------------------------------------------
 
-describe("shortenValue", () => {
-    test("drops the elaboration after the colon", () => {
-        expect(
-            shortenValue(
-                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
-                40,
-            ),
-        ).toBe("Leadership Development");
-    });
+// The real BMWS focus-topic answers, used by several cases below.
+const LIVE_TOPICS = [
+    "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes",
+    "Data & Insights: Proving L&D's ROI and Business Impact",
+    "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It",
+    "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite",
+    "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+    "Professional Development & Skills: Moving to Skills-Based Career Frameworks",
+    "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+    "Learning Design & Delivery: Engaging Time-Constrained, Distracted Learners at Scale",
+];
 
-    test("caps the label at the maximum, ellipsis included", () => {
+describe("shortenValue", () => {
+    test("truncates to the maximum, ellipsis included", () => {
         const out = shortenValue(
             "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It",
         );
         expect(out).toBe("Talent Mobility & S…");
-        expect(out.length).toBeLessThanOrEqual(20);
+        expect(out.length).toBe(SHORT_TAG_MAX);
     });
 
-    test("leaves a short label untouched", () => {
+    test("leaves a value shorter than the maximum untouched", () => {
+        expect(shortenValue("Data & Insights")).toBe("Data & Insights");
+        expect(shortenValue("Go1")).toBe("Go1");
+    });
+
+    test("keeps a colon like any other character", () => {
         expect(shortenValue("Data & Insights: Proving L&D's ROI")).toBe(
-            "Data & Insights",
+            "Data & Insights: Pr…",
         );
     });
 
-    test("never ends on dangling punctuation before the ellipsis", () => {
-        // Cutting "Coaching & Mentorship Programs" at 19 chars would land on
-        // "Coaching & Mentorsh" — fine — but a cut landing on "&" or "," must
-        // not produce "Coaching &…" style trailing junk beyond the conjunction.
-        expect(shortenValue("A, B, C, D, E, F, G, H, I, J")).not.toMatch(/[\s,;&/-]…$/);
-    });
-
-    test("handles a value with no colon at all", () => {
+    test("does not leave a gap before the ellipsis when the cut lands on a space", () => {
+        expect(shortenValue("Leadership Development", 12)).toBe("Leadership…");
         expect(shortenValue("Organizational Development")).toBe(
             "Organizational Deve…",
         );
     });
 
     test("respects a caller-supplied maximum", () => {
-        expect(shortenValue("Leadership Development", 12)).toBe("Leadership…");
+        const out = shortenValue("Learning Governance & Team Structure", 15);
+        expect(out).toBe("Learning Gover…");
+        expect(out.length).toBeLessThanOrEqual(15);
+    });
+
+    test("the details modal gets a bigger budget than the compact views", () => {
+        // The exact multiple is a tuning knob; what the modal relies on is only
+        // that it has strictly more room than a list column.
+        expect(DETAILS_TAG_MAX).toBeGreaterThan(SHORT_TAG_MAX);
+    });
+
+    test("never exceeds the budget for any live answer, at either length", () => {
+        for (const v of LIVE_TOPICS) {
+            expect(shortenValue(v).length).toBeLessThanOrEqual(SHORT_TAG_MAX);
+            expect(shortenValue(v, DETAILS_TAG_MAX).length).toBeLessThanOrEqual(
+                DETAILS_TAG_MAX,
+            );
+        }
+    });
+
+    test("the details budget tells apart answers sharing a long opening", () => {
+        // These two collide at 20 chars but not at 40 — the reason the modal
+        // gets the longer budget.
+        const a = "Onboarding & New-to-Role Learning: Getting New Hires";
+        const b = "Onboarding & New-to-Career Learning: Getting Started";
+        expect(shortenValue(a)).toBe(shortenValue(b));
+        expect(shortenValue(a, DETAILS_TAG_MAX)).not.toBe(
+            shortenValue(b, DETAILS_TAG_MAX),
+        );
     });
 });
 
@@ -217,12 +251,52 @@ describe("shortTags", () => {
                 "Data & Insights: Proving L&D's ROI and Business Impact",
                 "Leadership Development: Building the Pipeline",
             ]),
-        ).toBe("Data & Insights · Leadership Developm…");
+        ).toBe("Data & Insights: Pr… · Leadership Developm…");
     });
 
     test("tolerates empty input like dotTags", () => {
         expect(shortTags([])).toBe("");
         expect(shortTags(null)).toBe("");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// tagColorClass — a stable categorical color per interest area.
+// ---------------------------------------------------------------------------
+
+describe("tagColorClass", () => {
+    const order = ["Coaching", "Data & Insights", "Leadership", "Onboarding"];
+
+    test("gives adjacent options different colors", () => {
+        const classes = order.map((v) => tagColorClass(v, order));
+        expect(new Set(classes).size).toBe(order.length);
+    });
+
+    test("gives a value the same color every time (pill ↔ sidebar swatch)", () => {
+        expect(tagColorClass("Leadership", order)).toBe(
+            tagColorClass("Leadership", order),
+        );
+        expect(tagColorClass("Leadership", order)).toBe("tag-c3");
+    });
+
+    test("wraps around once the options outnumber the palette", () => {
+        const many = Array.from({ length: 20 }, (_, i) => `v${i}`);
+        expect(tagColorClass("v0", many)).toBe("tag-c1");
+        expect(tagColorClass(`v${TAG_COLOR_COUNT}`, many)).toBe("tag-c1");
+    });
+
+    test("falls back to a stable hash for a value outside the list", () => {
+        const a = tagColorClass("Not listed", order);
+        expect(a).toMatch(/^tag-c[1-8]$/);
+        expect(tagColorClass("Not listed", order)).toBe(a);
+    });
+
+    test("always returns a class within the defined palette", () => {
+        for (const v of [...order, "x", "", "a very long value indeed"]) {
+            const n = Number(tagColorClass(v, order).replace("tag-c", ""));
+            expect(n).toBeGreaterThanOrEqual(1);
+            expect(n).toBeLessThanOrEqual(TAG_COLOR_COUNT);
+        }
     });
 });
 

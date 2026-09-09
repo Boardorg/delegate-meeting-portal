@@ -48,7 +48,10 @@ function att(
         title: "",
         sponsorTier: partial.role === "sponsor" ? "standard" : null,
         profile: emptyProfile(),
-        scheduling: { maxSameCompanyMeetings: partial.role === "sponsor" ? null : 2 },
+        scheduling: {
+            maxSameCompanyMeetings: partial.role === "sponsor" ? null : 2,
+            requestedSponsorAccountIds: [],
+        },
     };
 }
 

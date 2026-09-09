@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Attendee } from "@/types";
-import { str } from "@/app/components/catalogFormat";
+import { DETAILS_TAG_MAX, str } from "@/app/components/catalogFormat";
+import TagPills from "@/app/components/TagPills";
 
 // ---------------------------------------------------------------------------
 // DetailsModal — every profile detail we have for a delegate, plus a slot for
@@ -17,6 +18,8 @@ import { str } from "@/app/components/catalogFormat";
 export default function DetailsModal({
     d,
     revClass,
+    interestAreaOrder,
+    activeInterestAreas,
     onClose,
     children,
 }: {
@@ -27,6 +30,10 @@ export default function DetailsModal({
      * which only the catalog knows.
      */
     revClass: string;
+    /** The event's interest-area option list, which fixes each pill's color. */
+    interestAreaOrder: string[];
+    /** Interest areas selected in the sidebar, shown here as active pills. */
+    activeInterestAreas: string[];
     onClose: () => void;
     /** The RequestActions group, wired to the parent's request state. */
     children: ReactNode;
@@ -44,9 +51,8 @@ export default function DetailsModal({
         { label: "Priority initiative", value: p.priorityInitiative },
     ].filter((a) => a.value);
 
-    // Multi-value attributes rendered as label + dot-separated list.
+    // Multi-value attributes rendered as label + one value per line.
     const groups = [
-        { label: "Planned Interest Areas", items: p.interestAreas },
         { label: "Industries", items: p.industrySectors },
         { label: "Systems and Platforms", items: p.systemsAndPlatforms },
         { label: "Meeting Interests", items: p.meetingInterests },
@@ -90,6 +96,28 @@ export default function DetailsModal({
                             </div>
                         ))}
                     </div>
+                    {/* Interest areas keep the same colorized pills and per-value
+                        colors the cards and columns use, but show every value and
+                        get a larger label budget — this panel is far wider than a
+                        list column. Full text stays on each pill's tooltip.
+                        Read-only here: the sidebar filter is behind the modal, so
+                        toggling from in here would change a list the requester
+                        can't see. */}
+                    {p.interestAreas.length > 0 && (
+                        <div className="details-groups">
+                            <div className="details-group">
+                                <div className="card-more-group-label">
+                                    Planned Interest Areas
+                                </div>
+                                <TagPills
+                                    values={p.interestAreas}
+                                    order={interestAreaOrder}
+                                    activeValues={activeInterestAreas}
+                                    max={DETAILS_TAG_MAX}
+                                />
+                            </div>
+                        </div>
+                    )}
                     {groups.length > 0 && (
                         <div className="details-groups">
                             {groups.map((g) => (

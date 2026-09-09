@@ -22,13 +22,20 @@ import { emptyProfile } from '@/lib/attendees/formatProfile';
  * @param {string} [accountId=id] - Salesforce Account id (the sponsor party id).
  * @returns {Attendee} A minimal attendee object ready for use with runScheduler.
  */
-function makeAttendee(id: string, company: string, role: 'sponsor' | 'delegate', accountId: string = id): Attendee {
+function makeAttendee(
+    id: string,
+    company: string,
+    role: 'sponsor' | 'delegate',
+    accountId: string = id,
+    /** Sponsor account ids this delegate asked to meet on the intake form. */
+    requestedSponsorAccountIds: string[] = [],
+): Attendee {
     return {
         id, company, role, accountId,
         cventContactId: '', salesforceId: id, name: id, email: '', phone: '',
         title: '', sponsorTier: role === 'sponsor' ? 'standard' : null,
         profile: emptyProfile(),
-        scheduling: { maxSameCompanyMeetings: 2 },
+        scheduling: { maxSameCompanyMeetings: 2, requestedSponsorAccountIds },
     };
 }
 
@@ -381,5 +388,318 @@ describe('runScheduler — pre-existing Cvent schedule', () => {
 
         expect(schedule).toHaveLength(1);
         expect(schedule[0].timeslotId).toBe("ts-2");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Delegate intake-form preferences
+//
+// Delegates say who they want to meet on the event's intake form rather than in
+// the portal. The engine folds those answers in as delegate→sponsor requests, so
+// they feed the same mutual / delegate-choice priority logic as a portal
+// request. These tests drive the engine end to end to prove that wiring.
+// ---------------------------------------------------------------------------
+
+describe('runScheduler — delegate intake preferences', () => {
+    test('schedules a delegate preference with no portal request at all', async () => {
+        // Sponsor filed nothing; the delegate's intake answer alone is enough.
+        const attendees = [
+            makeAttendee('s1', 'SponsorCo', 'sponsor', 'acct-s1'),
+            makeAttendee('d1', 'DelegateCo', 'delegate', 'acct-d1', ['acct-s1']),
+        ];
+        const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
+
+        const { schedule } = await runScheduler(attendees, [], timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(1);
+        expect(schedule[0].matchKind).toBe('delegate_choice');
+        expect(schedule[0].mutual).toBe(false);
+        // Pass 3 is the delegate-choice pass.
+        expect(schedule[0].passNumber).toBe(3);
+    });
+
+    test('a preference the sponsor reciprocated is scheduled as mutual, in pass 1', async () => {
+        const attendees = [
+            makeAttendee('s1', 'SponsorCo', 'sponsor', 'acct-s1'),
+            makeAttendee('d1', 'DelegateCo', 'delegate', 'acct-d1', ['acct-s1']),
+        ];
+        // Sponsor requests by company party id, as the portal stores it.
+        const requests = [makeRequest('acct-s1', 'd1', 3)];
+        const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
+
+        const { schedule } = await runScheduler(attendees, requests, timeslots, NO_LOCATIONS);
+        expect(schedule).toHaveLength(1);
+        expect(schedule[0].mutual).toBe(true);
+        expect(schedule[0].matchKind).toBe('mutual');
+        // Mutual pairs are claimed by pass 1, ahead of every one-sided pass —
+        // note the sponsor's rank of 3 would not have qualified for pass 2.
+        expect(schedule[0].passNumber).toBe(1);
+    });
+
+    test('mutual preferences are scheduled ahead of one-sided ones under scarcity', async () => {
+        // One slot, two delegates want the same sponsor; only d1 is reciprocated.
+        const attendees = [
+            makeAttendee('s1', 'SponsorCo', 'sponsor', 'acct-s1'),
+            makeAttendee('d1', 'AlphaCo', 'delegate', 'acct-d1', ['acct-s1']),
+            makeAttendee('d2', 'BetaCo', 'delegate', 'acct-d2', ['acct-s1']),
+        ];
+        const requests = [makeRequest('acct-s1', 'd1', 3)];
+        const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
+
+        const { schedule } = await runScheduler(attendees, requests, timeslots, NO_LOCATIONS);
+        expect(schedule).toHaveLength(1);
+        expect(schedule[0].mutual).toBe(true);
+        expect([schedule[0].attendeeA, schedule[0].attendeeB]).toContain('d1');
+    });
+
+    test('reports the derived requests as part of what the run considered', async () => {
+        const attendees = [
+            makeAttendee('s1', 'SponsorCo', 'sponsor', 'acct-s1'),
+            makeAttendee('d1', 'DelegateCo', 'delegate', 'acct-d1', ['acct-s1']),
+        ];
+        const { effectiveRequests } = await runScheduler(
+            attendees,
+            [],
+            [makeTimeslot('ts-1', 1, '09:00')],
+            NO_LOCATIONS,
+        );
+        expect(effectiveRequests).toHaveLength(1);
+        expect(effectiveRequests[0]).toMatchObject({
+            requesterId: 'd1',
+            targetId: 'acct-s1',
+        });
+    });
+
+    test('a preference for a non-attending sponsor is dropped, not scheduled', async () => {
+        const attendees = [
+            makeAttendee('s1', 'SponsorCo', 'sponsor', 'acct-s1'),
+            makeAttendee('d1', 'DelegateCo', 'delegate', 'acct-d1', ['acct-nope']),
+        ];
+        const { schedule, effectiveRequests } = await runScheduler(
+            attendees,
+            [],
+            [makeTimeslot('ts-1', 1, '09:00')],
+            NO_LOCATIONS,
+        );
+        expect(schedule).toHaveLength(0);
+        expect(effectiveRequests).toHaveLength(0);
+    });
+
+    test('preferences still respect the delegate day-1 cap', async () => {
+        // Five sponsors wanted, but pass 3 caps a delegate at 4 day-1 meetings.
+        const sponsorIds = ['a', 'b', 'c', 'd', 'e'].map((x) => `acct-${x}`);
+        const attendees = [
+            ...sponsorIds.map((acct, i) =>
+                makeAttendee(`s${i}`, `Sponsor${i}`, 'sponsor', acct),
+            ),
+            makeAttendee('d1', 'DelegateCo', 'delegate', 'acct-d1', sponsorIds),
+        ];
+        const timeslots = day1Grid(['09:00', '10:00', '11:00', '12:00', '13:00']);
+
+        const { schedule } = await runScheduler(attendees, [], timeslots, NO_LOCATIONS);
+        expect(schedule).toHaveLength(4);
+        expect(schedule.every((m) => m.passNumber === 3)).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Skip-reason attribution
+//
+// The run report is the only place an admin sees WHY requests went unscheduled,
+// and "we ran out of appointment slots" needs a different response from "this
+// sponsor is at its contracted limit". These pin the two apart.
+// ---------------------------------------------------------------------------
+
+describe('runScheduler — skip reasons distinguish policy caps from supply', () => {
+    test('an event out of appointment capacity reports no_availability', async () => {
+        // Mirrors the real BMWS grid: 2 start times x 3 parallel slots, capacity
+        // 1 each, so the whole event can host 6 meetings and no more.
+        const sponsors = Array.from({ length: 8 }, (_, i) =>
+            makeAttendee(`s${i}`, `Sponsor${i}`, 'sponsor', `acct-s${i}`),
+        );
+        const delegates = Array.from({ length: 8 }, (_, i) =>
+            makeAttendee(`d${i}`, `Delegate${i}`, 'delegate', `acct-d${i}`),
+        );
+        // Every sponsor wants its matching delegate at top interest.
+        const requests = sponsors.map((_, i) => makeRequest(`acct-s${i}`, `d${i}`, 5));
+        const timeslots = [
+            ...['09:00', '09:00', '09:00'].map((t, i) => makeTimeslot(`a${i}`, 1, t)),
+            ...['10:00', '10:00', '10:00'].map((t, i) => makeTimeslot(`b${i}`, 1, t)),
+        ];
+
+        const { schedule, skipReasons } = await runScheduler(
+            [...sponsors, ...delegates],
+            requests,
+            timeslots,
+            NO_LOCATIONS,
+        );
+
+        // Capacity, not policy, is the binding constraint: 6 slots -> 6 meetings.
+        expect(schedule).toHaveLength(6);
+        const reasons = [...skipReasons.values()];
+        expect(reasons).toHaveLength(2);
+        expect(reasons.every((r) => r === 'no_availability')).toBe(true);
+        // The old combined check reported these as cap_reached even though every
+        // party involved was well under its cap.
+        expect(reasons).not.toContain('cap_reached');
+    });
+
+    test('a party with zero meetings is never blamed for a cap', async () => {
+        // One slot, two sponsors after the same delegate. The loser has no
+        // meetings at all, so "cap reached" would be nonsense.
+        const attendees = [
+            makeAttendee('s1', 'Alpha', 'sponsor', 'acct-s1'),
+            makeAttendee('s2', 'Beta', 'sponsor', 'acct-s2'),
+            makeAttendee('d1', 'Delta', 'delegate', 'acct-d1'),
+        ];
+        const requests = [
+            makeRequest('acct-s1', 'd1', 5),
+            makeRequest('acct-s2', 'd1', 5),
+        ];
+
+        const { schedule, skipReasons } = await runScheduler(
+            attendees,
+            requests,
+            [makeTimeslot('ts-1', 1, '09:00')],
+            NO_LOCATIONS,
+        );
+
+        expect(schedule).toHaveLength(1);
+        expect([...skipReasons.values()]).toEqual(['no_availability']);
+    });
+
+    test('a genuine pass cap still reports cap_reached', async () => {
+        // Capacity is deliberately ample — 8 start times, 10 slots each — so the
+        // only thing that can stop a pairing is the rules. A standard sponsor is
+        // capped at 5 by the final pass, so 2 of its 7 requests must be refused.
+        const delegates = Array.from({ length: 7 }, (_, i) =>
+            makeAttendee(`d${i}`, `Delegate${i}`, 'delegate', `acct-d${i}`),
+        );
+        const attendees = [
+            makeAttendee('s1', 'Alpha', 'sponsor', 'acct-s1'),
+            ...delegates,
+        ];
+        const requests = delegates.map((_, i) => makeRequest('acct-s1', `d${i}`, 5));
+        const timeslots = day1Grid(
+            ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
+            10,
+        );
+
+        const { schedule, skipReasons } = await runScheduler(
+            attendees,
+            requests,
+            timeslots,
+            NO_LOCATIONS,
+        );
+
+        expect(schedule).toHaveLength(5);
+
+        // Only the 2 refused pairs matter; a pair that was capped in an early
+        // pass but scheduled by a later one leaves a stale entry behind.
+        const scheduledPairs = new Set(
+            schedule.map((m) => pairKey(m.attendeeA, m.attendeeB)),
+        );
+        const refused = [...skipReasons.entries()].filter(
+            ([pair]) => !scheduledPairs.has(pair),
+        );
+        expect(refused).toHaveLength(2);
+        expect(refused.every(([, reason]) => reason === 'cap_reached')).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Storage orientation
+//
+// attendeeA must be the sponsor company on every sponsor↔delegate meeting,
+// whichever side asked. The per-sponsor admin page queries `attendeeA = <account
+// id>` and lib/cvent/push.ts resolves appointment hosts from it, so a meeting
+// stored the other way round silently vanishes from both.
+// ---------------------------------------------------------------------------
+
+describe('runScheduler — sponsor is always attendeeA', () => {
+    test('holds when the delegate is the one who asked', async () => {
+        // Only the delegate's intake preference exists, so the delegate is the
+        // requester — the case that used to store them in attendeeA.
+        const attendees = [
+            makeAttendee('s1', 'SponsorCo', 'sponsor', 'acct-s1'),
+            makeAttendee('d1', 'DelegateCo', 'delegate', 'acct-d1', ['acct-s1']),
+        ];
+
+        const { schedule } = await runScheduler(
+            attendees,
+            [],
+            [makeTimeslot('ts-1', 1, '09:00')],
+            NO_LOCATIONS,
+        );
+
+        expect(schedule).toHaveLength(1);
+        expect(schedule[0].attendeeA).toBe('acct-s1');
+        expect(schedule[0].attendeeB).toBe('d1');
+        // Orientation is storage-only: matchKind still records who asked.
+        expect(schedule[0].matchKind).toBe('delegate_choice');
+    });
+
+    test('holds on a mutual pairing whose delegate-side request sorts first', async () => {
+        // The delegate preference ranks 4 and the sponsor only 3, so the
+        // delegate-side candidate wins the sort and becomes the requester.
+        const attendees = [
+            makeAttendee('s1', 'SponsorCo', 'sponsor', 'acct-s1'),
+            makeAttendee('d1', 'DelegateCo', 'delegate', 'acct-d1', ['acct-s1']),
+        ];
+
+        const { schedule } = await runScheduler(
+            attendees,
+            [makeRequest('acct-s1', 'd1', 3)],
+            [makeTimeslot('ts-1', 1, '09:00')],
+            NO_LOCATIONS,
+        );
+
+        expect(schedule).toHaveLength(1);
+        expect(schedule[0].mutual).toBe(true);
+        expect(schedule[0].attendeeA).toBe('acct-s1');
+        expect(schedule[0].attendeeB).toBe('d1');
+    });
+
+    test('is unchanged when the sponsor asked', async () => {
+        const attendees = [
+            makeAttendee('s1', 'SponsorCo', 'sponsor', 'acct-s1'),
+            makeAttendee('d1', 'DelegateCo', 'delegate', 'acct-d1'),
+        ];
+
+        const { schedule } = await runScheduler(
+            attendees,
+            [makeRequest('acct-s1', 'd1', 5)],
+            [makeTimeslot('ts-1', 1, '09:00')],
+            NO_LOCATIONS,
+        );
+
+        expect(schedule[0].attendeeA).toBe('acct-s1');
+        expect(schedule[0].attendeeB).toBe('d1');
+    });
+
+    test('every sponsor↔delegate meeting in a mixed run puts the company first', async () => {
+        // Sponsors and delegates both expressing interest, several pairings.
+        const attendees = [
+            makeAttendee('s1', 'Alpha', 'sponsor', 'acct-s1'),
+            makeAttendee('s2', 'Beta', 'sponsor', 'acct-s2'),
+            makeAttendee('d1', 'Delta', 'delegate', 'acct-d1', ['acct-s1', 'acct-s2']),
+            makeAttendee('d2', 'Echo', 'delegate', 'acct-d2', ['acct-s2']),
+        ];
+        const requests = [makeRequest('acct-s1', 'd2', 5)];
+        const timeslots = day1Grid(['09:00', '10:00', '11:00', '12:00'], 5);
+
+        const { schedule } = await runScheduler(
+            attendees,
+            requests,
+            timeslots,
+            NO_LOCATIONS,
+        );
+
+        expect(schedule.length).toBeGreaterThan(0);
+        const accountIds = new Set(['acct-s1', 'acct-s2']);
+        for (const m of schedule) {
+            expect(accountIds.has(m.attendeeA)).toBe(true);
+            expect(accountIds.has(m.attendeeB)).toBe(false);
+        }
     });
 });

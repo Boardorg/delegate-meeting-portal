@@ -45,7 +45,10 @@ function userToAttendee(user: User): Attendee {
         title: "",
         sponsorTier: null,
         profile: emptyProfile(),
-        scheduling: { maxSameCompanyMeetings: null },
+        scheduling: {
+            maxSameCompanyMeetings: null,
+            requestedSponsorAccountIds: [],
+        },
     };
 }
 

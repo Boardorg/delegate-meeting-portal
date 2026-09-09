@@ -81,7 +81,9 @@ export function orderValues(values: string[]): string[] {
         // "$10M+" after "$10M–$50M". Word boundaries on both sides so a value
         // like "Discovery" isn't read as "over".
         let bias = 0;
-        if (/^(<|under\b|less than\b|up to\b|fewer than\b)/.test(lower.trim())) {
+        if (
+            /^(<|under\b|less than\b|up to\b|fewer than\b)/.test(lower.trim())
+        ) {
             bias = -1;
         } else if (/(\+|>|\bover\b|\bmore than\b|\bor more\b)/.test(lower)) {
             bias = 1;
@@ -93,7 +95,8 @@ export function orderValues(values: string[]): string[] {
         .sort((a, b) => {
             // Numeric values first, ordered by magnitude then by bias.
             if (a.magnitude !== null && b.magnitude !== null) {
-                if (a.magnitude !== b.magnitude) return a.magnitude - b.magnitude;
+                if (a.magnitude !== b.magnitude)
+                    return a.magnitude - b.magnitude;
                 if (a.bias !== b.bias) return a.bias - b.bias;
                 return a.value.localeCompare(b.value);
             }
@@ -135,37 +138,41 @@ export function revClass(
     // implying "lowest".
     if (ordered.length === 1) return `rev-${Math.ceil(REV_CLASS_COUNT / 2)}`;
 
-    const scaled = Math.round((i / (ordered.length - 1)) * (REV_CLASS_COUNT - 1));
+    const scaled = Math.round(
+        (i / (ordered.length - 1)) * (REV_CLASS_COUNT - 1),
+    );
     return `rev-${scaled + 1}`;
 }
 
 // Longest a single tag may render as in the compact views (grid card, list
 // column, horizontal card). The intake form's topic answers run to 130+
 // characters, which no column can carry; the full text stays in the sidebar
-// filter and the details modal.
-const SHORT_TAG_MAX = 20;
+// filter and on each pill's tooltip.
+export const SHORT_TAG_MAX = 20;
+
+// The details modal gets a larger budget — it's a 440px panel rather than a
+// ~110px column — which is also enough to tell apart answers that share a long
+// opening phrase.
+export const DETAILS_TAG_MAX = SHORT_TAG_MAX * 3;
 
 /**
- * Shortens one long answer for display in a compact view.
- *
- * The form's topic answers are written as "Label: elaboration" — e.g.
- * "Leadership Development: Building the Pipeline from Emerging Leader to
- * Executive" — so the elaboration is dropped at the colon first, which is both
- * lossless as a label and usually enough. Anything still over the limit is cut
- * and ellipsized.
+ * Shortens one long answer for display in a compact view: a straight character
+ * cap, ellipsized when it doesn't fit. The full text stays available on the
+ * pill's tooltip and in the sidebar filter's option list.
  *
  * @param {string} value - The full answer text.
  * @param {number} [max] - Maximum characters, ellipsis included.
  * @returns {string} The shortened label.
  */
-export function shortenValue(value: string, max: number = SHORT_TAG_MAX): string {
-    // Keep only the part before the first colon — the topic name itself.
-    const label = value.split(":")[0].trim();
-    if (label.length <= max) return label;
+export function shortenValue(
+    value: string,
+    max: number = SHORT_TAG_MAX,
+): string {
+    const text = value.trim();
+    if (text.length <= max) return text;
 
-    // Trim trailing spaces and dangling punctuation so we don't end on "&" or ",".
-    const cut = label.slice(0, max - 1).replace(/[\s,;&/-]+$/, "");
-    return `${cut}…`;
+    // trimEnd so a cut landing on a space doesn't leave a gap before the ellipsis.
+    return `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
 /**
@@ -181,6 +188,36 @@ export function shortTags(
     max: number = SHORT_TAG_MAX,
 ): string {
     return (arr || []).map((v) => shortenValue(v, max)).join(" · ");
+}
+
+/** How many categorical tag colors globals.css defines (--tag-1 … --tag-8). */
+export const TAG_COLOR_COUNT = 8;
+
+/**
+ * Returns the `tag-cN` class that colors one tag value.
+ *
+ * Color comes from the value's position in the event's own ordered option list,
+ * so a given interest area keeps the same color in every view and matches its
+ * swatch in the sidebar filter, and adjacent options in that list never collide.
+ * A value missing from the list (possible only if the two are computed from
+ * different pools) falls back to a stable hash of its text rather than
+ * defaulting everything to one color.
+ *
+ * @param {string} value - The tag value.
+ * @param {string[]} order - The event's option list for this field.
+ * @returns {string} A `tag-cN` class name.
+ */
+export function tagColorClass(value: string, order: string[]): string {
+    let i = order.indexOf(value);
+    if (i < 0) {
+        // Cheap deterministic hash — only a fallback, so spread matters more
+        // than distribution quality.
+        i = 0;
+        for (let c = 0; c < value.length; c++)
+            i = (i * 31 + value.charCodeAt(c)) | 0;
+        i = Math.abs(i);
+    }
+    return `tag-c${(i % TAG_COLOR_COUNT) + 1}`;
 }
 
 /**

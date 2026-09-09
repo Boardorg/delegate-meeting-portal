@@ -56,7 +56,7 @@ function sponsorAttendee(
         title: '',
         sponsorTier: 'standard',
         profile: emptyProfile(),
-        scheduling: { maxSameCompanyMeetings: null },
+        scheduling: { maxSameCompanyMeetings: null, requestedSponsorAccountIds: [] },
     };
 }
 

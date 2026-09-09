@@ -96,6 +96,7 @@ export type CventAttendeeRecord = {
     CventEvents_NP_Systems_and_Platforms__c?: string | null;
     CventEvents_NP_One_to_One_Interests__c?: string | null;
     CventEvents_NP_Initiative_Priority__c?: string | null;
+    CventEvents_NP_People_to_Meet__c?: string | null;
     [key: string]: unknown;
 };
 
@@ -304,11 +305,13 @@ export const attendeeFieldMappers: AttendeeFieldMappers<MeetingDataRecord> = {
     profile: sponsorProfileMapper,
 
     // Availability is no longer per-attendee — it comes from the event-global
-    // Timeslot[] sourced from Cvent (see lib/cvent/mapper.ts). The only
-    // per-attendee scheduling constraint left is the company-diversity cap:
-    // null for sponsors (rule doesn't apply), 2 for delegates.
+    // Timeslot[] sourced from Cvent (see lib/cvent/mapper.ts). The company-
+    // diversity cap is null for sponsors (rule doesn't apply), and sponsors
+    // submit their meeting requests through the portal rather than an intake
+    // form, so they carry no requested-sponsor list.
     scheduling: (_record, ctx) => ({
         maxSameCompanyMeetings: ctx.role === "sponsor" ? null : 2,
+        requestedSponsorAccountIds: [],
     }),
 };
 
@@ -378,9 +381,14 @@ export const delegateFieldMappers: AttendeeFieldMappers<CventAttendeeRecord> = {
     profile: delegateProfileMapper,
 
     // Same event-global availability model as sponsors; delegates carry the
-    // company-diversity cap.
-    scheduling: (_record, ctx) => ({
+    // company-diversity cap plus their intake-form request list. The "people to
+    // meet" answer is a semicolon-separated list of sponsor Account ids, so it
+    // splits the same way every other multi-answer field does.
+    scheduling: (record, ctx) => ({
         maxSameCompanyMeetings: ctx.role === "sponsor" ? null : 2,
+        requestedSponsorAccountIds: splitPicklist(
+            record.CventEvents_NP_People_to_Meet__c,
+        ),
     }),
 };
 

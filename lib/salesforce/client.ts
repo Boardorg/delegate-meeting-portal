@@ -352,6 +352,10 @@ const CVENT_ATTENDEE_FIELDS = [
     "CventEvents_NP_Systems_and_Platforms__c",
     "CventEvents_NP_One_to_One_Interests__c",
     "CventEvents_NP_Initiative_Priority__c",
+    // Not a browse/filter attribute: a semicolon-separated list of sponsor
+    // Account ids this delegate asked to meet, which becomes the delegate side
+    // of the scheduling engine's request graph.
+    "CventEvents_NP_People_to_Meet__c",
 ] as const;
 
 /**

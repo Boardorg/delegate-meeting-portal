@@ -12,6 +12,7 @@ import {
     pairKey,
     computeMutualPairs,
     findAvailableTimeslot,
+    withDelegatePreferences,
     wouldViolateCompanyDiversity,
 } from "./helpers";
 import type { SchedulerFailureReason } from "./report";
@@ -217,15 +218,24 @@ export interface PreexistingSchedule {
  * generates a duplicate pairing or double-books someone against a Cvent booking.
  * Callers still run post-reconciliation for anything not covered here.
  *
+ * Delegates express their side of the request graph on the event's intake form
+ * rather than in the portal, so `requests` is widened here with one
+ * delegate→sponsor request per entry in each delegate's
+ * `scheduling.requestedSponsorAccountIds`. Everything downstream — mutuality,
+ * the pass filters, candidate ordering — then treats both sides identically. The
+ * widened list comes back as `effectiveRequests` so the run report tallies
+ * exactly what the engine considered.
+ *
  * @param {Attendee[]} attendees - All attendees to schedule meetings for.
- * @param {MeetingRequest[]} requests - All submitted meeting requests.
+ * @param {MeetingRequest[]} requests - Meeting requests submitted through the portal.
  * @param {Timeslot[]} timeslots - The event's global, Cvent-sourced timeslots.
  * @param {Location[]} _locations - The event's locations (reserved for future location-aware assignment).
  * @param {PreexistingSchedule} [preexisting] - Pairs/times already booked in Cvent to schedule around.
- * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[]; skipReasons: Map<string, SchedulerFailureReason> }>}
+ * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[]; skipReasons: Map<string, SchedulerFailureReason>; effectiveRequests: MeetingRequest[] }>}
  *   Resolves to the flat list of newly scheduled meetings, a per-attendee
- *   breakdown, and — for the run report — why each attempted-but-unscheduled
- *   pair was skipped, keyed by canonical pairKey.
+ *   breakdown, — for the run report — why each attempted-but-unscheduled
+ *   pair was skipped, keyed by canonical pairKey, and the full request list the
+ *   run actually considered (portal requests plus derived delegate preferences).
  */
 export async function runScheduler(
 	attendees: Attendee[],
@@ -237,7 +247,14 @@ export async function runScheduler(
 	schedule: ScheduledMeeting[];
 	attendeeSchedules: AttendeeSchedule[];
 	skipReasons: Map<string, SchedulerFailureReason>;
+	effectiveRequests: MeetingRequest[];
 }> {
+
+	// Fold each delegate's intake-form "sponsors I want to meet" answers into the
+	// request list, so the delegate side of every pairing is a first-class
+	// request from here on. Done once, up front — every structure below reads
+	// from this list.
+	const effectiveRequests = withDelegatePreferences(requests, attendees);
 
 	// Group sponsors into companies (one scheduling unit per Account id, reps
 	// combined) — the single place company grouping is derived.
@@ -286,7 +303,7 @@ export async function runScheduler(
 	// Requests are normalized to party ids first so a mutual pair between a
 	// company and a delegate is detected regardless of which rep requested.
 	const mutualPairs = computeMutualPairs(
-		requests.map(r => ({ ...r, requesterId: norm(r.requesterId), targetId: norm(r.targetId) })),
+		effectiveRequests.map(r => ({ ...r, requesterId: norm(r.requesterId), targetId: norm(r.targetId) })),
 	);
 
 	// Track which pairs are already scheduled (to prevent duplicates), seeded with
@@ -325,7 +342,7 @@ export async function runScheduler(
 		const candidates: Array<{ req: MeetingRequest; isMutual: boolean }> = [];
 
 		// Loop through all requests to find candidates for this pass.
-		for (const req of requests) {
+		for (const req of effectiveRequests) {
 
 			// Resolve both sides to party ids (company for sponsor reps).
 			const requesterParty = norm(req.requesterId);
@@ -382,27 +399,25 @@ export async function runScheduler(
 			const requesterDayCount = countMeetingsOnDay(allMeetings, requesterParty, day);
 			const targetDayCount    = countMeetingsOnDay(allMeetings, targetParty,    day);
 
-			// Busy-time sets for each party, used both to count remaining availability
-			// and to find a free timeslot below.
+			// Busy-time sets for each party, used to find a free timeslot below.
 			const requesterBusy = busyByAttendee.get(requesterParty) ?? new Set<string>();
 			const targetBusy    = busyByAttendee.get(targetParty)    ?? new Set<string>();
 
-			// Count timeslots on this day that the attendee is still free for and that
-			// have capacity left. Bounds the cap to realistic availability.
-			const countAvailable = (busy: Set<string>) =>
-				timeslots.filter(t =>
-					t.day === day &&
-					!busy.has(t.startTime) &&
-					(timeslotRemaining.get(t.id) ?? 0) > 0
-				).length;
-
-			// Cap is the lower of the pass cap and the attendee's reachable availability on this day.
-			const requesterCap = Math.min(getCap(requester, pass), countAvailable(requesterBusy) + requesterDayCount);
-			const targetCap    = Math.min(getCap(target,    pass), countAvailable(targetBusy)    + targetDayCount);
-
-			// Skip if either attendee has already reached their cumulative cap for this pass.
-			if (requesterDayCount >= requesterCap) { skipReasons.set(key, "cap_reached"); continue; }
-			if (targetDayCount    >= targetCap)    { skipReasons.set(key, "cap_reached"); continue; }
+			// Skip if either party has already reached the POLICY cap for this pass.
+			//
+			// Deliberately the pass cap alone. This check used to also fold in how
+			// many timeslots the party could still reach
+			// (`min(passCap, available + dayCount)`), which meant an event that had
+			// simply run out of appointment capacity reported every remaining pair
+			// as "cap_reached" — even a party with zero meetings, since the cap
+			// collapsed to its own meeting count and `0 >= 0` holds. Running out of
+			// room is a different problem from hitting a contractual limit, and the
+			// run report is the only place an admin sees the difference.
+			//
+			// Nothing is lost by dropping the availability term: findAvailableTimeslot
+			// below rejects exactly the same pairs, and labels them "no_availability".
+			if (requesterDayCount >= getCap(requester, pass)) { skipReasons.set(key, "cap_reached"); continue; }
+			if (targetDayCount    >= getCap(target,    pass)) { skipReasons.set(key, "cap_reached"); continue; }
 
 			// Skip if this meeting would violate the company diversity rule for either party.
 			const requesterMaxSame = requester.maxSameCompanyMeetings ?? 2;
@@ -413,13 +428,31 @@ export async function runScheduler(
 			// Find a timeslot on this day where both attendees are free and capacity remains.
 			const timeslot = findAvailableTimeslot(timeslots, day, requesterBusy, targetBusy, timeslotRemaining);
 
-			// Skip this pair if no usable timeslot exists.
+			// Skip this pair if no usable timeslot exists — the event is out of
+			// appointment capacity for this day, or one of the two is already
+			// booked at every remaining start time.
 			if (!timeslot) { skipReasons.set(key, "no_availability"); continue; }
 
 			// Book the timeslot: mark both attendees busy at its start time and draw down capacity.
 			requesterBusy.add(timeslot.startTime);
 			targetBusy.add(timeslot.startTime);
 			timeslotRemaining.set(timeslot.id, (timeslotRemaining.get(timeslot.id) ?? 0) - 1);
+
+			// Storage orientation is CANONICAL, not request direction: on a
+			// sponsor↔delegate meeting the sponsor company is always attendeeA.
+			// Readers depend on it to find a company's meetings and to resolve
+			// appointment hosts — see ScheduledMeeting's field docs, the
+			// per-sponsor admin page, and lib/cvent/push.ts.
+			//
+			// It used to hold for free, because the requester of a sponsor↔delegate
+			// pairing was always the sponsor. Delegates became requesters too once
+			// their intake-form preferences started being folded in as requests
+			// (see withDelegatePreferences), so the orientation has to be made
+			// explicit here. matchKind below still records who actually asked.
+			const delegateInitiated =
+				requester.role === 'delegate' && target.role === 'sponsor';
+			const attendeeA = delegateInitiated ? targetParty : requesterParty;
+			const attendeeB = delegateInitiated ? requesterParty : targetParty;
 
 			// Build the ScheduledMeeting record with all required fields. Location defaults
 			// to the timeslot's native Cvent location; an admin can reassign it later.
@@ -429,8 +462,8 @@ export async function runScheduler(
 			// still attached to an old, deleted-but-cancelled Cvent appointment.
 			const meeting: ScheduledMeeting = {
 				id: `mtg-${String(meetingCounter++).padStart(3, '0')}-${Date.now()}`,
-				attendeeA: requesterParty,
-				attendeeB: targetParty,
+				attendeeA,
+				attendeeB,
 				day,
 				timeslotId: timeslot.id,
 				passNumber: pass.passNumber,
@@ -473,5 +506,5 @@ export async function runScheduler(
 			.sort((x, y) => startTimeOf(x).localeCompare(startTimeOf(y))),
 	}));
 
-	return { schedule: allMeetings, attendeeSchedules, skipReasons };
+	return { schedule: allMeetings, attendeeSchedules, skipReasons, effectiveRequests };
 }

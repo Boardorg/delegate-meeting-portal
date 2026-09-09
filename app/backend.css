@@ -515,6 +515,13 @@
 .adm-row-conflict {
     border-left: 3px solid var(--gold);
 }
+/* Both parties asked for this pairing — the outcome the engine optimizes for,
+   so it reads as a positive wash. Same --green family as .adm-chip-mutual, and
+   a background rather than a left border so it composes with
+   .adm-row-conflict's gold border instead of fighting it. */
+.adm-row-mutual td {
+    background: var(--green-s);
+}
 .adm-row-muted {
     opacity: 0.7;
 }

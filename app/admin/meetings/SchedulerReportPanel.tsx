@@ -93,9 +93,13 @@ export default function SchedulerReportPanel({
                     value={String(report.meetingsScheduled)}
                     valueColor={GREEN}
                 />
+                {/* Green like "Meetings scheduled": a mutual pairing is the best
+                    outcome of a run, so it reads as a positive metric rather
+                    than a neutral count. */}
                 <StatChip
                     label="Mutual meetings"
                     value={String(report.mutualMeetings)}
+                    valueColor={GREEN}
                 />
                 <StatChip
                     label="Unscheduled requests"

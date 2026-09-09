@@ -7,11 +7,13 @@ import { partyId } from "@/lib/attendees/companies";
 import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
 import TopBar, { type TopBarEventLogo } from "@/app/components/TopBar";
 import DetailsModal from "@/app/components/DetailsModal";
+import TagPills from "@/app/components/TagPills";
 import {
     orderValues,
     revClass,
     dotTags,
     shortTags,
+    tagColorClass,
     str,
     hasValue,
 } from "@/app/components/catalogFormat";
@@ -66,10 +68,18 @@ interface FilterConfig {
      */
     type: "single" | "multi";
     options: string[];
+    /**
+     * When true, each option gets a color swatch matching the pill color that
+     * value renders with in the card / list views (see TagPills).
+     */
+    colorize?: boolean;
 }
 
 /** Ordered distinct values per scalar profile field, derived from the delegates. */
 type ValueOrder = Record<ScalarProfileField, string[]>;
+
+/** How many interest-area pills a compact view shows before collapsing to "+N". */
+const PILL_LIMIT = 3;
 
 interface Props {
     delegates: Attendee[];
@@ -388,31 +398,42 @@ function FiltersPanel({
                             )}
                         </button>
                         <div className="acc-body">
-                            {f.options.map((opt) => (
-                                <label key={opt} className="filter-opt">
-                                    <input
-                                        type={
-                                            f.type === "multi"
-                                                ? "checkbox"
-                                                : "radio"
-                                        }
-                                        name={`${prefix}-f-${f.id}`}
-                                        value={opt}
-                                        checked={(
-                                            activeFilters[f.id] || []
-                                        ).includes(opt)}
-                                        onChange={(e) =>
-                                            onApplyFilter(
-                                                f.id,
-                                                opt,
-                                                e.target.checked,
-                                                f.type,
-                                            )
-                                        }
-                                    />
-                                    {opt}
-                                </label>
-                            ))}
+                            {f.options.map((opt) => {
+                                const checked = (
+                                    activeFilters[f.id] || []
+                                ).includes(opt);
+                                return (
+                                    <label
+                                        key={opt}
+                                        className={`filter-opt ${checked ? "is-active" : ""}`}
+                                    >
+                                        <input
+                                            type={
+                                                f.type === "multi"
+                                                    ? "checkbox"
+                                                    : "radio"
+                                            }
+                                            name={`${prefix}-f-${f.id}`}
+                                            value={opt}
+                                            checked={checked}
+                                            onChange={(e) =>
+                                                onApplyFilter(
+                                                    f.id,
+                                                    opt,
+                                                    e.target.checked,
+                                                    f.type,
+                                                )
+                                            }
+                                        />
+                                        {f.colorize && (
+                                            <span
+                                                className={`filter-swatch ${tagColorClass(opt, f.options)}`}
+                                            />
+                                        )}
+                                        {opt}
+                                    </label>
+                                );
+                            })}
                         </div>
                     </div>
                 );
@@ -482,9 +503,9 @@ export default function SponsorCatalog({
     // buildValueOrder.
     const valueOrder = useMemo(() => buildValueOrder(delegates), [delegates]);
 
-    const filterConfig = useMemo((): FilterConfig[] => {
-        // Multi-value fields: flatten every delegate's tags, dedupe, alphabetize.
-        const collectTags = (key: keyof AttendeeProfile): string[] =>
+    // Multi-value fields: flatten every delegate's tags, dedupe, alphabetize.
+    const collectTags = useCallback(
+        (key: keyof AttendeeProfile): string[] =>
             [
                 ...new Set(
                     delegates.flatMap((d) => {
@@ -492,8 +513,19 @@ export default function SponsorCatalog({
                         return Array.isArray(v) ? (v as string[]) : [];
                     }),
                 ),
-            ].sort();
+            ].sort(),
+        [delegates],
+    );
 
+    // The interest-area option list, hoisted out of filterConfig because it also
+    // fixes each value's pill color (tagColorClass) — sharing one list is what
+    // keeps a pill's color matched to its sidebar swatch.
+    const interestAreaOrder = useMemo(
+        () => collectTags("interestAreas"),
+        [collectTags],
+    );
+
+    const filterConfig = useMemo((): FilterConfig[] => {
         // Every option list below comes from the loaded delegates, never from a
         // hardcoded list — the values are intake-form text, so the form can
         // change its wording or its bands without a code change. The trailing
@@ -503,7 +535,10 @@ export default function SponsorCatalog({
                 id: "interestAreas",
                 label: "Planned Interest Areas",
                 type: "multi" as const,
-                options: collectTags("interestAreas"),
+                options: interestAreaOrder,
+                // The one field rendered as colorized pills in the card / list
+                // views, so its options carry matching color swatches here.
+                colorize: true,
             },
             {
                 id: "industrySectors",
@@ -554,7 +589,7 @@ export default function SponsorCatalog({
                 options: collectTags("meetingInterests"),
             },
         ].filter((f) => f.options.length > 0);
-    }, [delegates, valueOrder]);
+    }, [collectTags, interestAreaOrder, valueOrder]);
 
     useEffect(() => {
         setOpenAccordions(new Set(filterConfig.slice(0, 2).map((f) => f.id)));
@@ -622,6 +657,10 @@ export default function SponsorCatalog({
         (d: Attendee) => revClass(d.profile.annualRevenue, valueOrder.annualRevenue),
         [valueOrder],
     );
+
+    // Interest areas currently selected in the sidebar. Drives the pills' active
+    // state so a pill and its filter row always agree.
+    const activeInterestAreas = activeFilters.interestAreas ?? [];
 
     // ── Request lookups ──
 
@@ -800,6 +839,21 @@ export default function SponsorCatalog({
         [],
     );
 
+    // Clicking an interest-area pill in the grid / list toggles that value in
+    // the Planned Interest Areas filter — the same state a sidebar checkbox
+    // writes, so the two stay in lockstep and "Clear all" clears both.
+    const toggleInterestArea = useCallback(
+        (value: string) => {
+            handleApplyFilter(
+                "interestAreas",
+                value,
+                !(activeFilters.interestAreas ?? []).includes(value),
+                "multi",
+            );
+        },
+        [activeFilters, handleApplyFilter],
+    );
+
     const handleClearFilters = useCallback(() => {
         setActiveFilters({});
         setSearchQuery("");
@@ -933,16 +987,6 @@ export default function SponsorCatalog({
                                         </span>
                                     </div>
                                 )}
-                                {hasValue(p.interestAreas) && (
-                                    <div className="card-attr">
-                                        <span className="ca-label">
-                                            Interest areas
-                                        </span>
-                                        <span className="ca-value">
-                                            {shortTags(p.interestAreas)}
-                                        </span>
-                                    </div>
-                                )}
                                 <div className="card-attr">
                                     <span className="ca-label">Co. size</span>
                                     <span className="ca-value">
@@ -950,6 +994,24 @@ export default function SponsorCatalog({
                                     </span>
                                 </div>
                             </div>
+                            {/* Stacked pills need the card's full width, so
+                                interest areas sit in their own block rather than
+                                as a label/value row in .card-attrs. */}
+                            {hasValue(p.interestAreas) && (
+                                <div className="card-tag-block">
+                                    <span className="ca-label">
+                                        Interest areas
+                                    </span>
+                                    <TagPills
+                                        values={p.interestAreas}
+                                        order={interestAreaOrder}
+                                        activeValues={activeInterestAreas}
+                                        limit={PILL_LIMIT}
+                                        onToggle={toggleInterestArea}
+                                        onMore={() => setDetailsDelegate(d)}
+                                    />
+                                </div>
+                            )}
                             {/* Opens the same DetailsModal the list view uses,
                                 replacing the old inline expand/collapse. */}
                             <button
@@ -1093,9 +1155,14 @@ export default function SponsorCatalog({
                                     </span>
                                 </div>
                                 <div className="list-cell">
-                                    <span className="lc-tags">
-                                        {shortTags(p.interestAreas)}
-                                    </span>
+                                    <TagPills
+                                        values={p.interestAreas}
+                                        order={interestAreaOrder}
+                                        activeValues={activeInterestAreas}
+                                        limit={PILL_LIMIT}
+                                        onToggle={toggleInterestArea}
+                                        onMore={() => setDetailsDelegate(d)}
+                                    />
                                 </div>
                                 <div className="list-cell">
                                     <span className="lc-val">
@@ -1227,16 +1294,6 @@ export default function SponsorCatalog({
                                             </span>
                                         </div>
                                     )}
-                                    {hasValue(p.interestAreas) && (
-                                        <div className="hcard-attr">
-                                            <span className="hca-label">
-                                                Interest areas
-                                            </span>
-                                            <span className="hca-value">
-                                                {shortTags(p.interestAreas)}
-                                            </span>
-                                        </div>
-                                    )}
                                     <div className="hcard-attr">
                                         <span className="hca-label">
                                             Co. size
@@ -1245,6 +1302,25 @@ export default function SponsorCatalog({
                                             {str(p.companySize)}
                                         </span>
                                     </div>
+                                    {hasValue(p.interestAreas) && (
+                                        <div className="card-tag-block">
+                                            <span className="hca-label">
+                                                Interest areas
+                                            </span>
+                                            <TagPills
+                                                values={p.interestAreas}
+                                                order={interestAreaOrder}
+                                                activeValues={
+                                                    activeInterestAreas
+                                                }
+                                                limit={PILL_LIMIT}
+                                                onToggle={toggleInterestArea}
+                                                onMore={() =>
+                                                    setDetailsDelegate(d)
+                                                }
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="hcard-right">
                                     <div className="hcard-tag-attr">
@@ -1536,6 +1612,8 @@ export default function SponsorCatalog({
                 <DetailsModal
                     d={detailsDelegate}
                     revClass={revenueClass(detailsDelegate)}
+                    interestAreaOrder={interestAreaOrder}
+                    activeInterestAreas={activeInterestAreas}
                     onClose={() => setDetailsDelegate(null)}
                 >
                     <RequestActions

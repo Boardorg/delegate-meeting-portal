@@ -37,6 +37,13 @@ export type MeetingRow = {
     delegateName: string;
     delegateCompany: string;
     matchKind: MeetingMatchKind;
+    /**
+     * Whether both parties asked for this pairing — the sponsor through the
+     * portal and the delegate on the event's intake form. Read straight off the
+     * stored row rather than inferred from `matchKind`, so the highlight tracks
+     * what the engine actually recorded. Always false for admin-created rows.
+     */
+    mutual: boolean;
     rank: number | null;
     timeslotId: string;
     locationId: string | null;
@@ -145,6 +152,7 @@ export async function getMeetingDetail(params: {
                 delegateName: delegate?.name ?? delegateId,
                 delegateCompany: delegate?.company ?? "",
                 matchKind: m.matchKind as MeetingMatchKind,
+                mutual: m.mutual,
                 rank: m.rank,
                 timeslotId: m.timeslotId,
                 locationId: m.locationId,

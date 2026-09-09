@@ -46,6 +46,16 @@
      (interactive/positive) so revenue color-coding never collides with UI state. */
   --rev-1: #2b1730; --rev-2: #432447; --rev-3: #5c2f66;
   --rev-4: #7a3f7e; --rev-5: #9c579c; --rev-6: #c17fbc; --rev-7: #d9b3d6;
+
+  /* Tag color scale: CATEGORICAL, not a gradient — unlike --rev-N above, the
+     order carries no meaning. Used to give each of an event's interest areas its
+     own identity so a delegate's three pills read apart at a glance (see
+     .tag-pill in frontend.css). Hues are spread around the wheel and all sit at
+     a similar mid-dark lightness, so each is legible as text on its own 12%
+     tint. Assigned by the value's position in the event's option list, so a
+     given interest area keeps one color everywhere it appears. */
+  --tag-1: #1f6f4a; --tag-2: #14638c; --tag-3: #3f4bab; --tag-4: #7b3fa3;
+  --tag-5: #a62f6b; --tag-6: #b0422a; --tag-7: #8a6a10; --tag-8: #4a6b1e;
 }
 
 html, body {

@@ -239,6 +239,23 @@ export interface Attendee {
          * Null for sponsors because the rule does not apply to them (@todo need to confirm this).
          */
         maxSameCompanyMeetings: number | null;
+
+        /**
+         * Salesforce Account ids of the sponsor COMPANIES this delegate asked to
+         * meet, from the intake form's "people to meet" question
+         * (CventEvents_NP_People_to_Meet__c).
+         *
+         * This is the delegate side of the request graph. The engine turns each
+         * id into a delegate→sponsor MeetingRequest (see
+         * withDelegatePreferences in lib/scheduling/helpers.ts), which is what
+         * makes a pairing count as MUTUAL when the sponsor asked for the
+         * delegate too, and what feeds the delegate-choice pass otherwise.
+         *
+         * Account ids (not rep salesforceIds) because a sponsor is scheduled as
+         * one company — the same party id the engine keys by. Always empty for
+         * sponsors, who have no intake form.
+         */
+        requestedSponsorAccountIds: string[];
     };
 }
 
@@ -291,10 +308,21 @@ export interface ScheduledMeeting {
     /** Unique identifier for this scheduled meeting. */
     id: string;
 
-    /** Attendee ID of the first participant. */
+    /**
+     * Party id of the first participant.
+     *
+     * INVARIANT: on a sponsor↔delegate meeting this is always the sponsor
+     * COMPANY (its Account id), whichever side actually requested the meeting.
+     * The per-sponsor admin page and the Cvent push both rely on it to tell the
+     * company side from the delegate side. Delegate↔delegate meetings (Day 2)
+     * carry no meaningful orientation.
+     */
     attendeeA: string;
 
-    /** Attendee ID of the second participant. */
+    /**
+     * Party id of the second participant — the delegate on a sponsor↔delegate
+     * meeting. See the invariant on `attendeeA`.
+     */
     attendeeB: string;
 
     /** The event day on which this meeting is scheduled. */

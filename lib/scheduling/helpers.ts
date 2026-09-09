@@ -1,4 +1,77 @@
-import { Timeslot, MeetingRequest, ScheduledMeeting } from '@/types';
+import { Attendee, Timeslot, MeetingRequest, ScheduledMeeting } from '@/types';
+import { sponsorCompaniesByAccountId } from '@/lib/attendees/companies';
+
+/**
+ * Interest level given to a delegate's intake-form request.
+ *
+ * The form asks which sponsors a delegate wants to meet but not how badly, so
+ * every derived request needs one assumed rank. 4 is the threshold the engine
+ * treats as "high interest" (passes 2 and 3 gate on `rank >= 4`), so a delegate
+ * preference is strong enough to be scheduled on its own in the delegate-choice
+ * pass, without outranking a sponsor's explicit 5 when they compete for the same
+ * slot.
+ */
+export const DELEGATE_PREFERENCE_RANK = 4;
+
+/**
+ * Merges each delegate's intake-form "sponsors I want to meet" list into the
+ * request list as delegate→sponsor requests.
+ *
+ * Requests are the only currency the engine understands, so expressing the
+ * preference this way is what wires it into the existing priority logic for
+ * free: `computeMutualPairs` starts seeing delegate↔sponsor pairs as MUTUAL
+ * when the sponsor also requested that delegate (passes 1 and 4), and an
+ * unreciprocated preference becomes a delegate-choice candidate (pass 3).
+ *
+ * Targets are validated against the event's sponsor companies, so a stale or
+ * foreign Account id in the form is ignored rather than surfacing as a
+ * "not an attendee" row in the run report. A preference is also skipped when the
+ * same directed pair already exists as a real portal request, so the submitted
+ * rank always wins over the assumed one.
+ *
+ * @param {MeetingRequest[]} requests - Requests submitted through the portal.
+ * @param {Attendee[]} attendees - The event's attendees, carrying the intake lists.
+ * @returns {MeetingRequest[]} The requests plus the derived delegate preferences.
+ */
+export function withDelegatePreferences(
+	requests: MeetingRequest[],
+	attendees: Attendee[],
+): MeetingRequest[] {
+
+	// Only sponsors actually attending this event are valid targets.
+	const sponsorAccountIds = new Set(sponsorCompaniesByAccountId(attendees).keys());
+
+	// Directed keys already covered, so a real request beats a derived one and a
+	// duplicated id within one delegate's answer only counts once.
+	const seen = new Set(requests.map(r => `${r.requesterId}->${r.targetId}`));
+
+	const derived: MeetingRequest[] = [];
+
+	for (const attendee of attendees) {
+		if (attendee.role !== 'delegate') continue;
+
+		// Defensive: mock/fixture attendees may predate this field.
+		for (const accountId of attendee.scheduling.requestedSponsorAccountIds ?? []) {
+			if (!sponsorAccountIds.has(accountId)) continue;
+
+			const key = `${attendee.salesforceId}->${accountId}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+
+			derived.push({
+				// Prefixed so a derived request is recognizable in a report or log
+				// and can't collide with a DB row's numeric id.
+				id: `pref:${attendee.salesforceId}:${accountId}`,
+				requesterId: attendee.salesforceId,
+				targetId: accountId,
+				rank: DELEGATE_PREFERENCE_RANK,
+			});
+		}
+	}
+
+	// Preserve the caller's array identity when there's nothing to add.
+	return derived.length > 0 ? [...requests, ...derived] : requests;
+}
 
 /**
  * Produces a canonical, order-independent key for a pair of attendee IDs (e.g. `"d1|s2"`).

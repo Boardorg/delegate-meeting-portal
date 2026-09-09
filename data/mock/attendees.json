@@ -25,7 +25,8 @@
             "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -54,7 +55,8 @@
             "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -82,7 +84,8 @@
             "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -110,7 +113,8 @@
             "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -138,7 +142,8 @@
             "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -166,7 +171,8 @@
             "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -207,7 +213,11 @@
             "priorityInitiative": "LMS / Learning Tech Stack Consolidation"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001PF0000000001",
+                "001CV0000000002"
+            ]
         }
     },
     {
@@ -246,7 +256,10 @@
             "priorityInitiative": "Learning Analytics & ROI Measurement"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001OP0000000003"
+            ]
         }
     },
     {
@@ -283,7 +296,12 @@
             "priorityInitiative": "Digital Learning Content Modernization"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001PF0000000001",
+                "001HM0000000004",
+                "001VS0000000005"
+            ]
         }
     },
     {
@@ -318,7 +336,10 @@
             "priorityInitiative": "Leadership & Succession Pipeline Investment"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001CV0000000002"
+            ]
         }
     },
     {
@@ -357,7 +378,8 @@
             "priorityInitiative": "Skills Taxonomy & Career Frameworks"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -383,7 +405,11 @@
             "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001VS0000000005",
+                "001ZZ0000000099"
+            ]
         }
     },
     {
@@ -419,7 +445,10 @@
             "priorityInitiative": "Global Learning Governance Model"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001HM0000000004"
+            ]
         }
     },
     {
@@ -458,7 +487,11 @@
             "priorityInitiative": "Onboarding Experience Redesign"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001PF0000000001",
+                "001OP0000000003"
+            ]
         }
     }
 ]

@@ -1,5 +1,9 @@
 import { Attendee, MeetingRequest, ScheduledMeeting } from "@/types";
 import { pairKey } from "./helpers";
+import {
+    resolvePartyName,
+    sponsorCompaniesByAccountId,
+} from "@/lib/attendees/companies";
 
 // ---------------------------------------------------------------------------
 // Scheduler run report
@@ -17,8 +21,15 @@ import { pairKey } from "./helpers";
  * codes so the value is safe to store and to switch on in the UI.
  *
  * The engine *attempted* the pair but couldn't place it:
- * - cap_reached: an attendee had already hit their per-day meeting cap.
- * - no_availability: no timeslot left where both parties were free.
+ * - cap_reached: a party had already hit the meeting cap its pass allows — a
+ *   POLICY limit (a sponsor's contracted count, a delegate's per-day ceiling).
+ *   Raising it is a rules decision.
+ * - no_availability: no timeslot left where both parties were free — either the
+ *   event is out of appointment capacity for that day, or one party is already
+ *   booked at every remaining start time. This is a SUPPLY problem: the fix is
+ *   more available times in Cvent, not a rule change. Note that an attendee can
+ *   never have more meetings than there are distinct start times, however many
+ *   parallel slots each one holds.
  * - company_diversity: scheduling it would break the same-company meeting limit.
  *
  * The engine never attempted the pair (rejected during candidate collection):
@@ -121,7 +132,17 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
     } = args;
 
     // Name lookup for rendering the unscheduled list without extra queries.
-    const nameById = new Map(attendees.map((a) => [a.salesforceId, a.name]));
+    //
+    // Resolved by PARTY id, matching how requests are keyed: a sponsor side is a
+    // company Account id, a delegate side is a salesforceId. Looking up only
+    // salesforceIds would leave every sponsor party unnamed and — worse —
+    // misclassify it as "not an attendee" below.
+    const companies = sponsorCompaniesByAccountId(attendees);
+    const attendeesBySalesforceId = new Map(
+        attendees.map((a) => [a.salesforceId, a]),
+    );
+    const partyName = (id: string): string | undefined =>
+        resolvePartyName(id, companies, attendeesBySalesforceId)?.name;
 
     // The pairs that survived reconciliation — a request is "scheduled" iff its
     // canonical pair is among these.
@@ -153,12 +174,12 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
             bucket.unscheduled += 1;
             unscheduledRequests.push({
                 requesterId: req.requesterId,
-                requesterName: nameById.get(req.requesterId) ?? req.requesterId,
+                requesterName: partyName(req.requesterId) ?? req.requesterId,
                 targetId: req.targetId,
-                targetName: nameById.get(req.targetId) ?? req.targetId,
+                targetName: partyName(req.targetId) ?? req.targetId,
                 rank: req.rank,
                 reason: classifyUnscheduled(req, {
-                    nameById,
+                    partyName,
                     reconciledOutPairs,
                     skipReasons,
                     preexistingPairs,
@@ -183,7 +204,9 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
     return {
         eventCode,
         generatedAt,
-        sponsorsConsidered: attendees.filter((a) => a.role === "sponsor").length,
+        // Count distinct sponsor COMPANIES (reps of one company are one party),
+        // not individual reps.
+        sponsorsConsidered: companies.size,
         requestsConsidered: requests.length,
         meetingsScheduled: reconciled.length,
         mutualMeetings: reconciled.filter((m) => m.mutual).length,
@@ -202,20 +225,20 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
  * attendee data rather than reported by the engine.
  *
  * @param {MeetingRequest} req - The unscheduled request.
- * @param {object} ctx - Lookups: attendee names, dropped pairs, engine skips, and this request's pairKey.
+ * @param {object} ctx - Lookups: party names, dropped pairs, engine skips, and this request's pairKey.
  * @returns {SchedulerFailureReason} The classified reason.
  */
 function classifyUnscheduled(
     req: MeetingRequest,
     ctx: {
-        nameById: Map<string, string>;
+        partyName: (id: string) => string | undefined;
         reconciledOutPairs: Set<string>;
         skipReasons: Map<string, SchedulerFailureReason>;
         preexistingPairs: Set<string>;
         pair: string;
     },
 ): SchedulerFailureReason {
-    const { nameById, reconciledOutPairs, skipReasons, preexistingPairs, pair } = ctx;
+    const { partyName, reconciledOutPairs, skipReasons, preexistingPairs, pair } = ctx;
 
     // Placed by the engine, then dropped for conflicting with a pushed meeting.
     if (reconciledOutPairs.has(pair)) return "conflict_existing";
@@ -230,7 +253,7 @@ function classifyUnscheduled(
     // attendees, then self-request, then whether the pair already meets in
     // Cvent; anything else is a valid pair that simply matched none of the
     // scheduling passes.
-    if (!nameById.has(req.requesterId) || !nameById.has(req.targetId)) {
+    if (!partyName(req.requesterId) || !partyName(req.targetId)) {
         return "not_an_attendee";
     }
     if (req.requesterId === req.targetId) return "self_request";

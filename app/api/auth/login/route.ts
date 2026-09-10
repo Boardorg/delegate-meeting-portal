@@ -3,6 +3,8 @@ import { sendVerificationCode } from "@/lib/auth/twilio";
 import { normalizePhone, toE164 } from "@/lib/auth/phone";
 import { normalizeEmail } from "@/lib/auth/email";
 import { resolveIdentity } from "@/lib/auth/identity";
+import { MissingEventCodeError } from "@/lib/helpers/getEventCode";
+import { isTestingMode } from "@/lib/helpers/testingMode";
 import type { Channel } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -80,6 +82,19 @@ export async function POST(request: NextRequest) {
     try {
         identity = await resolveIdentity(contact, channel, eventCode);
     } catch (err) {
+        // A contact with no row in the portal's own users table needs an
+        // event code to be checked against Salesforce at all. Flag this
+        // distinctly so the client can reveal an event-code field and let
+        // the user retry, rather than showing a generic "try again" error.
+        if (err instanceof MissingEventCodeError) {
+            return NextResponse.json(
+                {
+                    error: "Enter your event code to continue.",
+                    eventCodeRequired: true,
+                },
+                { status: 400 },
+            );
+        }
         console.error("resolveIdentity failed", err);
         return NextResponse.json(
             { error: "Could not verify access. Please try again." },
@@ -92,6 +107,23 @@ export async function POST(request: NextRequest) {
                 error: `We couldn't find that ${channel === "email" ? "email address" : "phone number"} for this event.`,
             },
             { status: 403 },
+        );
+    }
+
+    // A match in the portal's own users table (admin or manually-managed
+    // account) doesn't need an event code to be *found* — but it still lands
+    // on the frontend catalog (non-admins always; admins too when
+    // TESTING_MODE lets them stand in), which requires a real event code to
+    // load attendees. Ask for one now rather than let them hit that wall
+    // post-login.
+    const landsOnFrontend = identity.role !== "admin" || isTestingMode();
+    if (!eventCode && landsOnFrontend) {
+        return NextResponse.json(
+            {
+                error: "Enter your event code to continue.",
+                eventCodeRequired: true,
+            },
+            { status: 400 },
         );
     }
 

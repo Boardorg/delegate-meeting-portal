@@ -4,13 +4,17 @@ import { db } from "@/lib/db/client";
 import { meetingRequests, type MeetingRequestRow } from "@/lib/db/schema";
 import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import { getEventCode } from "@/lib/helpers/getEventCode";
+import { partyId } from "@/lib/attendees/companies";
 import type { MeetingRequest } from "@/types";
 
 // ---------------------------------------------------------------------------
-// /api/requests — a sponsor's meeting requests for the current event.
+// /api/requests — a company's meeting requests for the current event.
 //
-// The requester is always the logged-in user (their Salesforce id), never
-// taken from the body, so a client can't write requests as someone else. The
+// The requester is always the logged-in user's PARTY id (their company's
+// Salesforce Account id for sponsors, their salesforceId for delegates),
+// derived server-side from the resolved identity — never taken from the body,
+// so a client can't write requests as someone else. Because sponsors are keyed
+// by company, any rep of a company sees and edits the same request set. The
 // target is the delegate's Salesforce id. Rows are scoped to the active event
 // code resolved server-side.
 //
@@ -49,10 +53,11 @@ export async function POST(request: NextRequest) {
     if (!identity) {
         return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
     }
-    const requesterId = identity.salesforceId;
+    // Requester = the identity's party id (company Account id for sponsors).
+    const requesterId = partyId(identity.attendee);
     if (!requesterId) {
         return NextResponse.json(
-            { error: "Your account has no Salesforce id; cannot save requests." },
+            { error: "Your account has no company/Salesforce id; cannot save requests." },
             { status: 403 },
         );
     }
@@ -74,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     const eventCode = await getEventCode();
 
-    // Explicit delete — remove the (requester, target) pair if present.
+    // Explicit delete — remove the (requester, target) pair for this event.
     if (body.delete === true) {
         await db
             .delete(meetingRequests)
@@ -82,6 +87,7 @@ export async function POST(request: NextRequest) {
                 and(
                     eq(meetingRequests.requesterId, requesterId),
                     eq(meetingRequests.targetId, targetId),
+                    eq(meetingRequests.eventCode, eventCode),
                 ),
             );
         return NextResponse.json({ ok: true, deleted: true });
@@ -125,8 +131,8 @@ export async function GET() {
     if (!identity) {
         return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
     }
-    const requesterId = identity.salesforceId;
-    // No Salesforce id → no requests to recall (e.g. an admin viewing the page).
+    const requesterId = partyId(identity.attendee);
+    // No party id → no requests to recall (e.g. an admin viewing the page).
     if (!requesterId) {
         return NextResponse.json({ requests: [] });
     }

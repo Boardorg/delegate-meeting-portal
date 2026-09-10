@@ -84,58 +84,85 @@ export interface Location {
 /**
  * Profile attributes used by the browse and filter UI when attendees are submitting meeting requests.
  * These fields are not used by the scheduling engine.
+ *
+ * For DELEGATES, all but `industrySectors` come from the event's intake form,
+ * landing on CventEvents__Attendee__c (see lib/salesforce/client.ts). Salesforce
+ * stores every one of those answers as free text — semicolon-delimited where the
+ * form question allowed multiple choices — so the multi-answer fields are
+ * modeled as string[] and split on ingest by
+ * `splitPicklist` (lib/attendees/formatProfile.ts).
+ *
+ * Because the values are form text rather than a fixed picklist, nothing in the
+ * app hardcodes the possible values: the catalog's filter options and sort
+ * ordering are both derived from the loaded delegates (see
+ * app/components/catalogFormat.ts).
+ *
+ * SPONSORS have no intake form, so only the Account-derived fields
+ * (annualRevenue, companySize, industrySectors) are ever populated for them —
+ * and nothing in the UI reads a sponsor's profile today.
  */
 export interface AttendeeProfile {
     /**
-     * Attendee's company annual revenue range.
-     * Null for sponsors.
-     * Example values: '<10M' | '10M-50M' | '50M-100M' | '100M-500M' | '500M-1B' | '1B-5B' | '>5B'
+     * "What is your company's annual revenue?"
+     * Delegates: CventEvents_NP_Annual_Revenue__c.
+     * Sponsors: bucketed from Account.AnnualRevenue.
      */
-    annualRevenue: number | string | null;
+    annualRevenue: string | null;
 
     /**
-     * Attendee's budgetary responsibility level.
-     * Null for sponsors.
-     * Example values: '<1M' | '1M-10M' | '10M-50M' | '50M-100M' | '100M-500M' | '500M-1B' | '>1B'
+     * "Your personal budgetary responsibility."
+     * Delegates: CventEvents_NP_Budget_Responsibility__c. Null for sponsors.
      */
     budgetaryResponsibility: string | null;
 
     /**
-     * The attendee's areas of professional specialization.
-     * Example values: ['cybersecurity', 'cloud infrastructure', 'AI/ML']
+     * "How many employees does your company have?"
+     * Delegates: CventEvents_NP_Company_Size__c.
+     * Sponsors: bucketed from Account.NumberOfEmployees.
      */
-    areasOfSpecialization: string[];
+    companySize: string | null;
 
     /**
-     * The industry sector the attendee's company operates in.
-     * Example values: ['technology', 'healthcare', 'financial services', 'manufacturing']
+     * The industry sector(s) the attendee's company operates in.
+     * Sourced from Account.Industry_Category__c for both roles.
+     * Example values: ['technology', 'healthcare', 'financial services']
      */
     industrySectors: string[];
 
     /**
-     * Planned company spend on the attendee's selected areas of specialization over the next 12–24 months.
-     * Example values: '<1M' | '1M-5M' | '5M-25M' | '25M-100M' | '>100M'
+     * "Pick the 3–4 topics closest to your current focus."
+     * Delegates: CventEvents_NP_Current_Focus_Topics__c. Surfaced in the UI as
+     * "Planned Interest Areas". Empty for sponsors.
      */
-    plannedSpend: string | null;
+    interestAreas: string[];
 
     /**
-     * Attendee's company size.
-     * Null for sponsors.
-     * Example values: '1-50' | '51-200' | '200-500' | '500-1000' | '1000-5000' | '>5000'
+     * "Where is your organization on its transformation journey in this area?"
+     * Delegates: CventEvents_NP_Transformation_Stage__c. Surfaced in the UI as
+     * "Progress on Interest Areas". Null for sponsors.
      */
-    companySize: number | string | null;
+    transformationStage: string | null;
 
     /**
-     * The geographic regions the attendee oversees or is responsible for.
-     * Example values: ['North America', 'EMEA', 'APAC', 'LATAM']
+     * "What systems and platforms are you using today?"
+     * Delegates: CventEvents_NP_Systems_and_Platforms__c. Empty for sponsors.
      */
-    regionsOverseen: string[];
+    systemsAndPlatforms: string[];
 
     /**
-     * The attendee's top strategic priorities for the coming year.
-     * Example values: ['cost reduction', 'digital transformation', 'talent acquisition']
+     * "For the pre-arranged one-to-one meetings, which of the following areas
+     * are you interested in?"
+     * Delegates: CventEvents_NP_One_to_One_Interests__c. Surfaced in the UI as
+     * "Meeting Interests". Empty for sponsors.
      */
-    strategicPriorities: string[];
+    meetingInterests: string[];
+
+    /**
+     * "If you could fund one initiative over the next 24 months, which would
+     * you prioritize?"
+     * Delegates: CventEvents_NP_Initiative_Priority__c. Null for sponsors.
+     */
+    priorityInitiative: string | null;
 }
 
 /**
@@ -158,6 +185,17 @@ export interface Attendee {
      * Used by the Salesforce integration to query and update the correct record.
      */
     salesforceId: string;
+
+    /**
+     * Salesforce Account id of the attendee's employer (company).
+     *
+     * For SPONSORS this is the scheduling/storage "party id": all reps of a
+     * company share it, so requests and meetings are keyed by company rather
+     * than by the individual rep. For delegates it is informational only —
+     * delegates still schedule by their own salesforceId. See
+     * lib/attendees/companies.ts (`partyId`). Empty string when unknown.
+     */
+    accountId: string;
 
     /** Full display name. */
     name: string;
@@ -201,6 +239,23 @@ export interface Attendee {
          * Null for sponsors because the rule does not apply to them (@todo need to confirm this).
          */
         maxSameCompanyMeetings: number | null;
+
+        /**
+         * Salesforce Account ids of the sponsor COMPANIES this delegate asked to
+         * meet, from the intake form's "people to meet" question
+         * (CventEvents_NP_People_to_Meet__c).
+         *
+         * This is the delegate side of the request graph. The engine turns each
+         * id into a delegate→sponsor MeetingRequest (see
+         * withDelegatePreferences in lib/scheduling/helpers.ts), which is what
+         * makes a pairing count as MUTUAL when the sponsor asked for the
+         * delegate too, and what feeds the delegate-choice pass otherwise.
+         *
+         * Account ids (not rep salesforceIds) because a sponsor is scheduled as
+         * one company — the same party id the engine keys by. Always empty for
+         * sponsors, who have no intake form.
+         */
+        requestedSponsorAccountIds: string[];
     };
 }
 
@@ -211,6 +266,10 @@ export interface Attendee {
  */
 export type SponsorDetail = Attendee & {
     sponsorTier: "diamond" | "standard";
+    /** Company Salesforce Account id — the sponsor-side party id. */
+    accountId: string;
+    /** All reps belonging to the company (each hosts the company's Cvent appointments). */
+    reps: Attendee[];
     contracted: number;
     bonus: number;
     requestCount: number;
@@ -249,10 +308,21 @@ export interface ScheduledMeeting {
     /** Unique identifier for this scheduled meeting. */
     id: string;
 
-    /** Attendee ID of the first participant. */
+    /**
+     * Party id of the first participant.
+     *
+     * INVARIANT: on a sponsor↔delegate meeting this is always the sponsor
+     * COMPANY (its Account id), whichever side actually requested the meeting.
+     * The per-sponsor admin page and the Cvent push both rely on it to tell the
+     * company side from the delegate side. Delegate↔delegate meetings (Day 2)
+     * carry no meaningful orientation.
+     */
     attendeeA: string;
 
-    /** Attendee ID of the second participant. */
+    /**
+     * Party id of the second participant — the delegate on a sponsor↔delegate
+     * meeting. See the invariant on `attendeeA`.
+     */
     attendeeB: string;
 
     /** The event day on which this meeting is scheduled. */

@@ -145,7 +145,11 @@ export const scheduledMeetings = pgTable("scheduled_meetings", {
 
     eventCode: text("event_code").notNull(),
 
-    // Attendee ids (Salesforce ids, matching MeetingRequest.requesterId/targetId).
+    // Party ids (matching MeetingRequest.requesterId/targetId). On a
+    // sponsor↔delegate meeting attendee_a is ALWAYS the sponsor company's
+    // Account id and attendee_b the delegate, regardless of which side
+    // requested it — queries here filter on that. See ScheduledMeeting in
+    // types/index.ts for the invariant.
     attendeeA: text("attendee_a").notNull(),
     attendeeB: text("attendee_b").notNull(),
 
@@ -205,6 +209,15 @@ export const eventSettings = pgTable("event_settings", {
 
     // Optional human-friendly label shown in the event dropdown.
     name: text("name"),
+
+    // Optional per-event brand color (hex, e.g. "#089e9d"). When set it drives
+    // the frontend's --accent primary accent; when null the CSS fallback (the
+    // default Assemble teal in globals.css) is used instead.
+    themeColor: text("theme_color"),
+
+    // Optional per-event logo URL, shown in the header next to the Assemble
+    // mark. An absolute (https://…) or root-relative (/…) URL; null hides it.
+    logoUrl: text("logo_url"),
 
     // Cvent Event id (the overall event).
     cventEventId: text("cvent_event_id"),

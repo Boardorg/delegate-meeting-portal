@@ -3,6 +3,7 @@
         "id": "s1",
         "cventContactId": "bfcd62eb-210b-45d4-89bd-983d8614c202",
         "salesforceId": "a00PZ00000TMKz1YAH",
+        "accountId": "001PF0000000001",
         "name": "Morgan Labbree",
         "email": "morgan.labbree@precisionmedicinegrp.com",
         "phone": "+19523935770",
@@ -11,23 +12,58 @@
         "title": "VP, Strategic Partnerships",
         "sponsorTier": "diamond",
         "profile": {
-            "annualRevenue": 185000000,
+            "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
-            "companySize": 420,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "200-500",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "s6",
+        "cventContactId": "cvent-s6-uuid",
+        "salesforceId": "a00PZ00000TMKz9YAH",
+        "accountId": "001PF0000000001",
+        "name": "Jordan Avila",
+        "email": "jordan.avila@precisionmedicinegrp.com",
+        "phone": "+19523935771",
+        "role": "sponsor",
+        "company": "Project Farma",
+        "title": "Director, Partnerships",
+        "sponsorTier": "standard",
+        "profile": {
+            "annualRevenue": "100M-500M",
+            "budgetaryResponsibility": null,
+            "companySize": "200-500",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
         "id": "s2",
         "cventContactId": "cvent-s2-uuid",
-        "salesforceId": "a00PZ00000TMKz1YAH",
+        "salesforceId": "a00PZ00000TMKz2YAH",
+        "accountId": "001CV0000000002",
         "name": "Priya Sundaram",
         "email": "priya.sundaram@cellavance.com",
         "role": "sponsor",
@@ -35,23 +71,28 @@
         "title": "Director, Global Marketing",
         "sponsorTier": "standard",
         "profile": {
-            "annualRevenue": 62000000,
+            "annualRevenue": "50M-100M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
-            "companySize": 99,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "51-200",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
         "id": "s3",
         "cventContactId": "cvent-s3-uuid",
         "salesforceId": "a00PZ00000fp2wQYAQ",
+        "accountId": "001OP0000000003",
         "name": "Marcus Delacroix",
         "email": "marcus.delacroix@omnipathbio.com",
         "role": "sponsor",
@@ -61,21 +102,26 @@
         "profile": {
             "annualRevenue": null,
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
             "companySize": null,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
         "id": "s4",
         "cventContactId": "cvent-s4-uuid",
         "salesforceId": "a00PZ00000TML09YAH",
+        "accountId": "001HM0000000004",
         "name": "Elaine Forster",
         "email": "elaine.forster@helix-mfg.com",
         "role": "sponsor",
@@ -83,23 +129,28 @@
         "title": "VP Sales & Client Success",
         "sponsorTier": "standard",
         "profile": {
-            "annualRevenue": 310000000,
+            "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Manufacturing"],
-            "plannedSpend": null,
-            "companySize": 850,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "500-1000",
+            "industrySectors": [
+                "Manufacturing"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
         "id": "s5",
         "cventContactId": "cvent-s5-uuid",
         "salesforceId": "a00PZ00000TML0EYAX",
+        "accountId": "001VS0000000005",
         "name": "Tobias Wren",
         "email": "tobias.wren@vericelsciences.com",
         "role": "sponsor",
@@ -107,23 +158,28 @@
         "title": "Chief Revenue Officer",
         "sponsorTier": "diamond",
         "profile": {
-            "annualRevenue": 520000000,
+            "annualRevenue": "500M-1B",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Biotechnology"],
-            "plannedSpend": null,
-            "companySize": 1200,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "1000-5000",
+            "industrySectors": [
+                "Biotechnology"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
         "id": "d1",
         "cventContactId": "cvent-d1-uuid",
         "salesforceId": "a00PZ00000cOBpoYAG",
+        "accountId": "001BX0000000010",
         "name": "Miriam Kastner",
         "email": "m.kastner@brenvaxpharma.com",
         "phone": "+15555550102",
@@ -132,23 +188,43 @@
         "title": "Chief Quality Officer & SVP, Global Operations",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 54100000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 94300,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$5B–$10B",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+                "Data & Insights: Proving L&D's ROI and Business Impact",
+                "Other"
+            ],
+            "transformationStage": "Embedded in core operations",
+            "systemsAndPlatforms": [
+                "Workday",
+                "SuccessFactors",
+                "Go1"
+            ],
+            "meetingInterests": [
+                "Leadership Development",
+                "Data, Reporting & Learning Analytics",
+                "Other"
+            ],
+            "priorityInitiative": "LMS / Learning Tech Stack Consolidation"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001PF0000000001",
+                "001CV0000000002"
+            ]
         }
     },
     {
         "id": "d2",
         "cventContactId": "cvent-d2-uuid",
         "salesforceId": "a00PZ00000ckAv1YAE",
+        "accountId": "001GM0000000011",
         "name": "Renata Osei",
         "email": "r.osei@genomerabiologics.com",
         "role": "delegate",
@@ -156,23 +232,41 @@
         "title": "Executive Vice President & President, Manufacturing Operations",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 34126000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 28000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$500M–$1B",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
+            "industrySectors": [
+                "Biotechnology;Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes",
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It",
+                "Professional Development & Skills: Moving to Skills-Based Career Frameworks"
+            ],
+            "transformationStage": "Piloting in key areas",
+            "systemsAndPlatforms": [
+                "UKG",
+                "Litmos LMS",
+                "SkillJar"
+            ],
+            "meetingInterests": [
+                "HiPo & Succession Programs",
+                "Organizational Development"
+            ],
+            "priorityInitiative": "Learning Analytics & ROI Measurement"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001OP0000000003"
+            ]
         }
     },
     {
         "id": "d3",
         "cventContactId": "cvent-d3-uuid",
         "salesforceId": "a00PZ00000cuEKCYA2",
+        "accountId": "001BX0000000010",
         "name": "Stefan Holmqvist",
         "email": "stefan.holmqvist@brenvaxpharma.com",
         "role": "delegate",
@@ -180,23 +274,41 @@
         "title": "SVP, Head of Global MSAT, Engineering & Sustainability",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 54100000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 94300,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "Under $500M",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Learning Design & Delivery: Engaging Time-Constrained, Distracted Learners at Scale"
+            ],
+            "transformationStage": "No active initiatives",
+            "systemsAndPlatforms": [
+                "Go1",
+                "SkillJar"
+            ],
+            "meetingInterests": [
+                "Digital Learning Strategy",
+                "Onboarding & New-to-Career Learning"
+            ],
+            "priorityInitiative": "Digital Learning Content Modernization"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001PF0000000001",
+                "001HM0000000004",
+                "001VS0000000005"
+            ]
         }
     },
     {
         "id": "d4",
         "cventContactId": "cvent-d4-uuid",
         "salesforceId": "a00PZ00000cxnS0YAI",
+        "accountId": "001CL0000000012",
         "name": "Anita Rourke",
         "email": "anita.rourke@clarivantbio.com",
         "role": "delegate",
@@ -204,23 +316,37 @@
         "title": "Vice President, Quality Assurance",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": null,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
+            "annualRevenue": "Undisclosed",
+            "budgetaryResponsibility": "Undisclosed",
+            "companySize": "1,000–5,000",
             "industrySectors": [],
-            "plannedSpend": null,
-            "companySize": null,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "interestAreas": [
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite",
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive"
+            ],
+            "transformationStage": "Early planning",
+            "systemsAndPlatforms": [
+                "Korn Ferry",
+                "BTS"
+            ],
+            "meetingInterests": [
+                "Coaching & Mentorship Programs",
+                "Leadership Development"
+            ],
+            "priorityInitiative": "Leadership & Succession Pipeline Investment"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001CV0000000002"
+            ]
         }
     },
     {
         "id": "d5",
         "cventContactId": "cvent-d5-uuid",
         "salesforceId": "a00PZ00000dFeF5YAK",
+        "accountId": "001GM0000000011",
         "name": "Laurence Mbeki",
         "email": "l.mbeki@genomera.com",
         "role": "delegate",
@@ -228,23 +354,39 @@
         "title": "Executive Director, Manufacturing Plant Manager",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 34126000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 28000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$5B–$10B",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
+            "industrySectors": [
+                "Biotechnology;Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Professional Development & Skills: Moving to Skills-Based Career Frameworks",
+                "Data & Insights: Proving L&D's ROI and Business Impact",
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes"
+            ],
+            "transformationStage": "Embedded in core operations",
+            "systemsAndPlatforms": [
+                "Workday",
+                "Oracle",
+                "SuccessFactors"
+            ],
+            "meetingInterests": [
+                "Personalized & Skills-Based Learning",
+                "Learning Governance & Team Structure"
+            ],
+            "priorityInitiative": "Skills Taxonomy & Career Frameworks"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
         }
     },
     {
         "id": "d6",
         "cventContactId": "cvent-d6-uuid",
         "salesforceId": "a00PZ00000dINr4YAG",
+        "accountId": "001CL0000000012",
         "name": "Ingrid Solvang",
         "email": "ingrid.solvang@clarivantbio.com",
         "role": "delegate",
@@ -254,21 +396,27 @@
         "profile": {
             "annualRevenue": null,
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": [],
-            "plannedSpend": null,
             "companySize": null,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "industrySectors": [],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001VS0000000005",
+                "001ZZ0000000099"
+            ]
         }
     },
     {
         "id": "d7",
         "cventContactId": "cvent-d7-uuid",
         "salesforceId": "a00PZ00000dIinUYAS",
+        "accountId": "001SL0000000013",
         "name": "Devon Harcastle",
         "email": "d.harcastle@solisbiogen.com",
         "role": "delegate",
@@ -276,23 +424,38 @@
         "title": "SVP, Product Development & Clinical Supply",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 63616000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 75000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$500M–$1B",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It"
+            ],
+            "transformationStage": "Piloting in key areas",
+            "systemsAndPlatforms": [
+                "SuccessFactors",
+                "UKG"
+            ],
+            "meetingInterests": [
+                "Global Learning Governance",
+                "HiPo & Succession Programs"
+            ],
+            "priorityInitiative": "Global Learning Governance Model"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001HM0000000004"
+            ]
         }
     },
     {
         "id": "d8",
         "cventContactId": "cvent-d8-uuid",
         "salesforceId": "a00PZ00000e8YDcYAM",
+        "accountId": "001SL0000000013",
         "name": "Camille Tran",
         "email": "camille.tran@solisbiogen.com",
         "role": "delegate",
@@ -300,17 +463,35 @@
         "title": "Vice President, Manufacturing Sciences",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 63616000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 75000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "Under $500M",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Learning Design & Delivery: Engaging Time-Constrained, Distracted Learners at Scale",
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite"
+            ],
+            "transformationStage": "Early planning",
+            "systemsAndPlatforms": [
+                "SkillJar",
+                "Go1",
+                "Korn Ferry"
+            ],
+            "meetingInterests": [
+                "Onboarding & New-to-Career Learning",
+                "Digital Learning Strategy"
+            ],
+            "priorityInitiative": "Onboarding Experience Redesign"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001PF0000000001",
+                "001OP0000000003"
+            ]
         }
     }
 ]

@@ -12,17 +12,21 @@
         "title": "VP, Strategic Partnerships",
         "sponsorTier": "diamond",
         "profile": {
-            "annualRevenue": 185000000,
+            "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
-            "companySize": 420,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "200-500",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -38,17 +42,21 @@
         "title": "Director, Partnerships",
         "sponsorTier": "standard",
         "profile": {
-            "annualRevenue": 185000000,
+            "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
-            "companySize": 420,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "200-500",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -63,17 +71,21 @@
         "title": "Director, Global Marketing",
         "sponsorTier": "standard",
         "profile": {
-            "annualRevenue": 62000000,
+            "annualRevenue": "50M-100M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
-            "companySize": 99,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "51-200",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -90,15 +102,19 @@
         "profile": {
             "annualRevenue": null,
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["BtoB Services"],
-            "plannedSpend": null,
             "companySize": null,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -113,17 +129,21 @@
         "title": "VP Sales & Client Success",
         "sponsorTier": "standard",
         "profile": {
-            "annualRevenue": 310000000,
+            "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Manufacturing"],
-            "plannedSpend": null,
-            "companySize": 850,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "500-1000",
+            "industrySectors": [
+                "Manufacturing"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -138,17 +158,21 @@
         "title": "Chief Revenue Officer",
         "sponsorTier": "diamond",
         "profile": {
-            "annualRevenue": 520000000,
+            "annualRevenue": "500M-1B",
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Biotechnology"],
-            "plannedSpend": null,
-            "companySize": 1200,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "companySize": "1000-5000",
+            "industrySectors": [
+                "Biotechnology"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": null
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -164,17 +188,36 @@
         "title": "Chief Quality Officer & SVP, Global Operations",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 54100000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 94300,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$5B–$10B",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+                "Data & Insights: Proving L&D's ROI and Business Impact",
+                "Other"
+            ],
+            "transformationStage": "Embedded in core operations",
+            "systemsAndPlatforms": [
+                "Workday",
+                "SuccessFactors",
+                "Go1"
+            ],
+            "meetingInterests": [
+                "Leadership Development",
+                "Data, Reporting & Learning Analytics",
+                "Other"
+            ],
+            "priorityInitiative": "LMS / Learning Tech Stack Consolidation"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001PF0000000001",
+                "001CV0000000002"
+            ]
         }
     },
     {
@@ -189,17 +232,34 @@
         "title": "Executive Vice President & President, Manufacturing Operations",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 34126000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 28000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$500M–$1B",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
+            "industrySectors": [
+                "Biotechnology;Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes",
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It",
+                "Professional Development & Skills: Moving to Skills-Based Career Frameworks"
+            ],
+            "transformationStage": "Piloting in key areas",
+            "systemsAndPlatforms": [
+                "UKG",
+                "Litmos LMS",
+                "SkillJar"
+            ],
+            "meetingInterests": [
+                "HiPo & Succession Programs",
+                "Organizational Development"
+            ],
+            "priorityInitiative": "Learning Analytics & ROI Measurement"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001OP0000000003"
+            ]
         }
     },
     {
@@ -214,17 +274,34 @@
         "title": "SVP, Head of Global MSAT, Engineering & Sustainability",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 54100000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 94300,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "Under $500M",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Learning Design & Delivery: Engaging Time-Constrained, Distracted Learners at Scale"
+            ],
+            "transformationStage": "No active initiatives",
+            "systemsAndPlatforms": [
+                "Go1",
+                "SkillJar"
+            ],
+            "meetingInterests": [
+                "Digital Learning Strategy",
+                "Onboarding & New-to-Career Learning"
+            ],
+            "priorityInitiative": "Digital Learning Content Modernization"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001PF0000000001",
+                "001HM0000000004",
+                "001VS0000000005"
+            ]
         }
     },
     {
@@ -239,17 +316,30 @@
         "title": "Vice President, Quality Assurance",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": null,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
+            "annualRevenue": "Undisclosed",
+            "budgetaryResponsibility": "Undisclosed",
+            "companySize": "1,000–5,000",
             "industrySectors": [],
-            "plannedSpend": null,
-            "companySize": null,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "interestAreas": [
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite",
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive"
+            ],
+            "transformationStage": "Early planning",
+            "systemsAndPlatforms": [
+                "Korn Ferry",
+                "BTS"
+            ],
+            "meetingInterests": [
+                "Coaching & Mentorship Programs",
+                "Leadership Development"
+            ],
+            "priorityInitiative": "Leadership & Succession Pipeline Investment"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001CV0000000002"
+            ]
         }
     },
     {
@@ -264,17 +354,32 @@
         "title": "Executive Director, Manufacturing Plant Manager",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 34126000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Biotechnology;Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 28000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$5B–$10B",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
+            "industrySectors": [
+                "Biotechnology;Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Professional Development & Skills: Moving to Skills-Based Career Frameworks",
+                "Data & Insights: Proving L&D's ROI and Business Impact",
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes"
+            ],
+            "transformationStage": "Embedded in core operations",
+            "systemsAndPlatforms": [
+                "Workday",
+                "Oracle",
+                "SuccessFactors"
+            ],
+            "meetingInterests": [
+                "Personalized & Skills-Based Learning",
+                "Learning Governance & Team Structure"
+            ],
+            "priorityInitiative": "Skills Taxonomy & Career Frameworks"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
         }
     },
     {
@@ -291,15 +396,20 @@
         "profile": {
             "annualRevenue": null,
             "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": [],
-            "plannedSpend": null,
             "companySize": null,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "industrySectors": [],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001VS0000000005",
+                "001ZZ0000000099"
+            ]
         }
     },
     {
@@ -314,17 +424,31 @@
         "title": "SVP, Product Development & Clinical Supply",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 63616000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 75000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "$500M–$1B",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It"
+            ],
+            "transformationStage": "Piloting in key areas",
+            "systemsAndPlatforms": [
+                "SuccessFactors",
+                "UKG"
+            ],
+            "meetingInterests": [
+                "Global Learning Governance",
+                "HiPo & Succession Programs"
+            ],
+            "priorityInitiative": "Global Learning Governance Model"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001HM0000000004"
+            ]
         }
     },
     {
@@ -339,17 +463,35 @@
         "title": "Vice President, Manufacturing Sciences",
         "sponsorTier": null,
         "profile": {
-            "annualRevenue": 63616000000,
-            "budgetaryResponsibility": null,
-            "areasOfSpecialization": [],
-            "industrySectors": ["Healthcare;Pharmaceuticals"],
-            "plannedSpend": null,
-            "companySize": 75000,
-            "regionsOverseen": [],
-            "strategicPriorities": []
+            "annualRevenue": "Under $500M",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Learning Design & Delivery: Engaging Time-Constrained, Distracted Learners at Scale",
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite"
+            ],
+            "transformationStage": "Early planning",
+            "systemsAndPlatforms": [
+                "SkillJar",
+                "Go1",
+                "Korn Ferry"
+            ],
+            "meetingInterests": [
+                "Onboarding & New-to-Career Learning",
+                "Digital Learning Strategy"
+            ],
+            "priorityInitiative": "Onboarding Experience Redesign"
         },
         "scheduling": {
-            "maxSameCompanyMeetings": 2
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": [
+                "001PF0000000001",
+                "001OP0000000003"
+            ]
         }
     }
 ]

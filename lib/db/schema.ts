@@ -145,7 +145,11 @@ export const scheduledMeetings = pgTable("scheduled_meetings", {
 
     eventCode: text("event_code").notNull(),
 
-    // Attendee ids (Salesforce ids, matching MeetingRequest.requesterId/targetId).
+    // Party ids (matching MeetingRequest.requesterId/targetId). On a
+    // sponsor↔delegate meeting attendee_a is ALWAYS the sponsor company's
+    // Account id and attendee_b the delegate, regardless of which side
+    // requested it — queries here filter on that. See ScheduledMeeting in
+    // types/index.ts for the invariant.
     attendeeA: text("attendee_a").notNull(),
     attendeeB: text("attendee_b").notNull(),
 

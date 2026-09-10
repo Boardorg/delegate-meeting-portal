@@ -276,8 +276,15 @@ function MeetingTableRow({
     const isCvent = m.source === "cvent";
     const showPush = !isCvent && m.syncStatus !== "synced";
 
+    // Row state classes compose rather than override: mutual adds a background
+    // wash so the best matches stand out when scanning a sponsor's schedule,
+    // conflict keeps its left border, and Cvent rows keep their dimming. The
+    // MatchKindChip below still labels "Mutual" in text, so the wash is a
+    // reinforcement rather than the only cue.
     return (
-        <tr className={`adm-row${hasConflict ? " adm-row-conflict" : ""}${isCvent ? " adm-row-muted" : ""}`}>
+        <tr
+            className={`adm-row${m.mutual ? " adm-row-mutual" : ""}${hasConflict ? " adm-row-conflict" : ""}${isCvent ? " adm-row-muted" : ""}`}
+        >
             {/* Delegate */}
             <td>
                 <div className="adm-party-name">{m.delegateName}</div>

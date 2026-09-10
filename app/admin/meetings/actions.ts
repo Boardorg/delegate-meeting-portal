@@ -258,7 +258,12 @@ export async function runSchedulerForEvent(
 
     // Run the engine. It avoids the pre-existing Cvent pairs/times; pushed DB
     // meetings are additionally guarded via post-reconciliation below.
-    const { schedule, skipReasons } = await runScheduler(
+    //
+    // `effectiveRequests` is what the engine actually considered: the portal
+    // requests above plus one delegate→sponsor request per entry in each
+    // delegate's intake-form "sponsors I want to meet" answer. The report is
+    // built from it so its tallies match the run.
+    const { schedule, skipReasons, effectiveRequests } = await runScheduler(
         attendees,
         engineRequests,
         scheduleData.timeslots,
@@ -338,7 +343,7 @@ export async function runSchedulerForEvent(
         eventCode,
         generatedAt: new Date().toISOString(),
         attendees,
-        requests: engineRequests,
+        requests: effectiveRequests,
         reconciled: reconciledSchedule,
         skipReasons,
         reconciledOutPairs,

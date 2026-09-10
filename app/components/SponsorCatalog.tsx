@@ -7,51 +7,48 @@ import { partyId } from "@/lib/attendees/companies";
 import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
 import TopBar, { type TopBarEventLogo } from "@/app/components/TopBar";
 import DetailsModal from "@/app/components/DetailsModal";
+import TagPills from "@/app/components/TagPills";
 import {
-    REV_TIERS,
+    orderValues,
     revClass,
     dotTags,
+    shortTags,
+    tagColorClass,
     str,
     hasValue,
 } from "@/app/components/catalogFormat";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const SORT_ORDER: Record<string, string[]> = {
-    annualRevenue: REV_TIERS,
-    budgetaryResponsibility: [
-        "<1M",
-        "1M-10M",
-        "10M-50M",
-        "50M-100M",
-        "100M-500M",
-        "500M-1B",
-        ">1B",
-    ],
-    plannedSpend: ["<1M", "1M-5M", "5M-25M", "25M-100M", ">100M"],
-    companySize: [
-        "1-50",
-        "51-200",
-        "200-500",
-        "500-1000",
-        "1000-5000",
-        ">5000",
-    ],
-};
+// Profile fields holding a single free-text answer. Their filter options and
+// sort order are derived from the loaded delegates and put in natural
+// smallest → largest order by orderValues; the array-valued fields sort
+// alphabetically instead. See buildValueOrder below.
+const SCALAR_PROFILE_FIELDS = [
+    "annualRevenue",
+    "budgetaryResponsibility",
+    "companySize",
+    "transformationStage",
+    "priorityInitiative",
+] as const satisfies readonly (keyof AttendeeProfile)[];
+
+type ScalarProfileField = (typeof SCALAR_PROFILE_FIELDS)[number];
 
 const LIST_BREAK = 860;
-// Trailing 96px column is the (header-less) "More details" button.
-const LIST_COLS = "140px 110px 72px 82px 72px 68px 1fr 1fr 1fr 96px";
+// The list view's column WIDTHS live with the rest of its layout, as
+// `--list-cols` on .list-view in frontend.css. Only the header labels are here,
+// because they're content. The grid is positional, so this array has to stay the
+// same length as those tracks and as the .list-cell divs each row renders.
 const LIST_HEADERS = [
     "Name / Title",
     "Company",
     "Revenue",
     "Budget Resp.",
-    "Planned Spend",
+    "Interest Areas",
     "Co. Size",
-    "Specialization",
     "Industries",
-    "Priorities",
+    "Priority Initiative",
+    // Trailing control column — deliberately unlabelled.
     "",
 ];
 
@@ -63,9 +60,27 @@ type SortDir = "asc" | "desc";
 interface FilterConfig {
     id: string;
     label: string;
+    /**
+     * "multi" renders checkboxes and ORs the selections; "single" renders radios
+     * and keeps one value. Every filter is "multi" for now — including the
+     * single-answer profile fields, where checkboxes let a requester pick, say,
+     * two adjacent revenue bands — but the radio path is kept so any filter can
+     * be switched back by changing this one value.
+     */
     type: "single" | "multi";
     options: string[];
+    /**
+     * When true, each option gets a color swatch matching the pill color that
+     * value renders with in the card / list views (see TagPills).
+     */
+    colorize?: boolean;
 }
+
+/** Ordered distinct values per scalar profile field, derived from the delegates. */
+type ValueOrder = Record<ScalarProfileField, string[]>;
+
+/** How many interest-area pills a compact view shows before collapsing to "+N". */
+const PILL_LIMIT = 3;
 
 interface Props {
     delegates: Attendee[];
@@ -78,13 +93,47 @@ interface Props {
 // Presentational helpers (revClass, dotTags, str, hasValue) live in
 // ./catalogFormat and are imported above so DetailsModal can share them.
 
-function getSortVal(d: Attendee, field: string): string | number {
+/**
+ * Collects each scalar profile field's distinct values across the delegates and
+ * puts them in natural smallest → largest order.
+ *
+ * This one derived map drives three things that must agree: the sidebar filter
+ * option order, the sort-by-field order, and the revenue chip's color grade.
+ * Deriving it means the catalog needs no knowledge of how the intake form words
+ * its answers.
+ *
+ * @param {Attendee[]} delegates - The loaded delegate pool.
+ * @returns {ValueOrder} Ordered distinct values, keyed by profile field.
+ */
+function buildValueOrder(delegates: Attendee[]): ValueOrder {
+    return SCALAR_PROFILE_FIELDS.reduce((acc, key) => {
+        const distinct = new Set<string>();
+        for (const d of delegates) {
+            const v = d.profile[key];
+            if (typeof v === "string" && v) distinct.add(v);
+        }
+        acc[key] = orderValues([...distinct]);
+        return acc;
+    }, {} as ValueOrder);
+}
+
+/**
+ * Resolves a delegate's sort key for the given field. Identity fields sort
+ * alphabetically; scalar profile fields sort by their position in the derived
+ * value order, so revenue and company-size bands sort by magnitude rather than
+ * by their text. Missing values sort to the front (-1), as before.
+ */
+function getSortVal(
+    d: Attendee,
+    field: string,
+    valueOrder: ValueOrder,
+): string | number {
     if (field === "name") return d.name.toLowerCase();
     if (field === "title") return d.title.toLowerCase();
     if (field === "company") return d.company.toLowerCase();
     const v = (d.profile as unknown as Record<string, unknown>)[field];
     if (v == null) return -1;
-    const ord = SORT_ORDER[field];
+    const ord = valueOrder[field as ScalarProfileField];
     return ord ? ord.indexOf(String(v)) : -1;
 }
 
@@ -171,18 +220,21 @@ function RequestActions({
 
 function DrawerItem({
     d,
+    revenueClass,
     rank,
     onRank,
     onRemove,
 }: {
     d: Attendee;
+    /** The `rev-N` class for this delegate's revenue chip, from the catalog. */
+    revenueClass: string;
     rank: number;
     onRank: (delegate: Attendee, r: number) => void;
     onRemove: (delegate: Attendee) => void;
 }) {
     const [detailOpen, setDetailOpen] = useState(false);
     const p = d.profile;
-    const rc = revClass(p.annualRevenue) || "rev-na";
+    const rc = revenueClass || "rev-na";
 
     return (
         <div className="d-item">
@@ -253,10 +305,10 @@ function DrawerItem({
                     }}
                 >
                     <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Planned spend
+                        Interest areas
                     </span>
                     <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {p.plannedSpend || "N/A"}
+                        {shortTags(p.interestAreas) || "N/A"}
                     </span>
                 </div>
                 <div
@@ -272,22 +324,6 @@ function DrawerItem({
                     </span>
                     <span style={{ color: "var(--t2)", textAlign: "right" }}>
                         {str(p.companySize)}
-                    </span>
-                </div>
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                        fontSize: "11px",
-                        marginTop: "2px",
-                    }}
-                >
-                    <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Specialization
-                    </span>
-                    <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {dotTags(p.areasOfSpecialization) || "N/A"}
                     </span>
                 </div>
                 <div
@@ -363,31 +399,49 @@ function FiltersPanel({
                             )}
                         </button>
                         <div className="acc-body">
-                            {f.options.map((opt) => (
-                                <label key={opt} className="filter-opt">
-                                    <input
-                                        type={
-                                            f.type === "multi"
-                                                ? "checkbox"
-                                                : "radio"
-                                        }
-                                        name={`${prefix}-f-${f.id}`}
-                                        value={opt}
-                                        checked={(
-                                            activeFilters[f.id] || []
-                                        ).includes(opt)}
-                                        onChange={(e) =>
-                                            onApplyFilter(
-                                                f.id,
-                                                opt,
-                                                e.target.checked,
-                                                f.type,
-                                            )
-                                        }
-                                    />
-                                    {opt}
-                                </label>
-                            ))}
+                            {f.options.map((opt) => {
+                                const checked = (
+                                    activeFilters[f.id] || []
+                                ).includes(opt);
+                                return (
+                                    <label
+                                        key={opt}
+                                        className={`filter-opt ${checked ? "is-active" : ""}`}
+                                    >
+                                        <input
+                                            type={
+                                                f.type === "multi"
+                                                    ? "checkbox"
+                                                    : "radio"
+                                            }
+                                            name={`${prefix}-f-${f.id}`}
+                                            value={opt}
+                                            checked={checked}
+                                            onChange={(e) =>
+                                                onApplyFilter(
+                                                    f.id,
+                                                    opt,
+                                                    e.target.checked,
+                                                    f.type,
+                                                )
+                                            }
+                                        />
+                                        {/* The swatch sits inside the label's
+                                            own inline flow, after the text, so
+                                            on a wrapping option it trails the
+                                            last line rather than floating
+                                            beside the whole block. */}
+                                        <span className="filter-opt-label">
+                                            {f.colorize && (
+                                                <span
+                                                    className={`filter-swatch ${tagColorClass(opt, f.options)}`}
+                                                />
+                                            )}
+                                            {opt}
+                                        </span>
+                                    </label>
+                                );
+                            })}
                         </div>
                     </div>
                 );
@@ -452,8 +506,14 @@ export default function SponsorCatalog({
 
     // ── Filter config ──
 
-    const filterConfig = useMemo((): FilterConfig[] => {
-        const collect = (key: keyof AttendeeProfile): string[] =>
+    // Ordered distinct values for the scalar profile fields. Drives the filter
+    // options, the sort order, and the revenue chip grading — see
+    // buildValueOrder.
+    const valueOrder = useMemo(() => buildValueOrder(delegates), [delegates]);
+
+    // Multi-value fields: flatten every delegate's tags, dedupe, alphabetize.
+    const collectTags = useCallback(
+        (key: keyof AttendeeProfile): string[] =>
             [
                 ...new Set(
                     delegates.flatMap((d) => {
@@ -461,67 +521,83 @@ export default function SponsorCatalog({
                         return Array.isArray(v) ? (v as string[]) : [];
                     }),
                 ),
-            ].sort();
+            ].sort(),
+        [delegates],
+    );
 
+    // The interest-area option list, hoisted out of filterConfig because it also
+    // fixes each value's pill color (tagColorClass) — sharing one list is what
+    // keeps a pill's color matched to its sidebar swatch.
+    const interestAreaOrder = useMemo(
+        () => collectTags("interestAreas"),
+        [collectTags],
+    );
+
+    const filterConfig = useMemo((): FilterConfig[] => {
+        // Every option list below comes from the loaded delegates, never from a
+        // hardcoded list — the values are intake-form text, so the form can
+        // change its wording or its bands without a code change. The trailing
+        // filter drops any field nobody answered.
         return [
             {
-                id: "annualRevenue",
-                label: "Annual company revenue",
-                type: "single" as const,
-                options: REV_TIERS,
-            },
-            {
-                id: "budgetaryResponsibility",
-                label: "Personal budgetary responsibility",
-                type: "single" as const,
-                options: [
-                    "<1M",
-                    "1M-10M",
-                    "10M-50M",
-                    "50M-100M",
-                    "100M-500M",
-                    "500M-1B",
-                    ">1B",
-                ],
-            },
-            {
-                id: "areasOfSpecialization",
-                label: "Areas of specialization",
+                id: "interestAreas",
+                label: "Planned Interest Areas",
                 type: "multi" as const,
-                options: collect("areasOfSpecialization"),
-            },
-            {
-                id: "plannedSpend",
-                label: "Planned spend (next 12–24 months)",
-                type: "single" as const,
-                options: ["<1M", "1M-5M", "5M-25M", "25M-100M", ">100M"],
+                options: interestAreaOrder,
+                // The one field rendered as colorized pills in the card / list
+                // views, so its options carry matching color swatches here.
+                colorize: true,
             },
             {
                 id: "industrySectors",
-                label: "Industry sectors",
+                label: "Industry Sectors",
                 type: "multi" as const,
-                options: collect("industrySectors"),
+                options: collectTags("industrySectors"),
+            },
+            {
+                id: "annualRevenue",
+                label: "Annual Revenue",
+                type: "multi" as const,
+                options: valueOrder.annualRevenue,
+            },
+            {
+                id: "budgetaryResponsibility",
+                label: "Budget Responsibility",
+                type: "multi" as const,
+                options: valueOrder.budgetaryResponsibility,
             },
             {
                 id: "companySize",
-                label: "Company size (employees)",
-                type: "single" as const,
-                options: SORT_ORDER.companySize,
+                label: "Company Size",
+                type: "multi" as const,
+                options: valueOrder.companySize,
             },
             {
-                id: "regionsOverseen",
-                label: "Regions overseen",
+                id: "transformationStage",
+                label: "Progress on Interest Areas",
                 type: "multi" as const,
-                options: collect("regionsOverseen"),
+                options: valueOrder.transformationStage,
             },
             {
-                id: "strategicPriorities",
-                label: "Strategic priorities",
+                id: "systemsAndPlatforms",
+                label: "Systems and Platforms",
                 type: "multi" as const,
-                options: collect("strategicPriorities"),
+                options: collectTags("systemsAndPlatforms"),
+            },
+            {
+                id: "priorityInitiative",
+                label: "Priority Initiative",
+                type: "multi" as const,
+                options: valueOrder.priorityInitiative,
+            },
+            {
+                id: "meetingInterests",
+                label: "Meeting Interests",
+                type: "multi" as const,
+                options: collectTags("meetingInterests"),
             },
         ].filter((f) => f.options.length > 0);
-    }, [delegates]);
+    }, [collectTags, interestAreaOrder, valueOrder]);
 
     useEffect(() => {
         setOpenAccordions(new Set(filterConfig.slice(0, 2).map((f) => f.id)));
@@ -568,8 +644,8 @@ export default function SponsorCatalog({
         }
 
         result.sort((a, b) => {
-            const av = getSortVal(a, sortField);
-            const bv = getSortVal(b, sortField);
+            const av = getSortVal(a, sortField, valueOrder);
+            const bv = getSortVal(b, sortField, valueOrder);
             if (typeof av === "string") {
                 return sortDir === "asc"
                     ? av.localeCompare(bv as string)
@@ -581,7 +657,19 @@ export default function SponsorCatalog({
         });
 
         return result;
-    }, [delegates, searchQuery, activeFilters, sortField, sortDir]);
+    }, [delegates, searchQuery, activeFilters, sortField, sortDir, valueOrder]);
+
+    // Grades a delegate's revenue chip against the event's own revenue bands.
+    // Wrapped so every view (and the details modal) reads one implementation.
+    const revenueClass = useCallback(
+        (d: Attendee) =>
+            revClass(d.profile.annualRevenue, valueOrder.annualRevenue),
+        [valueOrder],
+    );
+
+    // Interest areas currently selected in the sidebar. Drives the pills' active
+    // state so a pill and its filter row always agree.
+    const activeInterestAreas = activeFilters.interestAreas ?? [];
 
     // ── Request lookups ──
 
@@ -760,6 +848,21 @@ export default function SponsorCatalog({
         [],
     );
 
+    // Clicking an interest-area pill in the grid / list toggles that value in
+    // the Planned Interest Areas filter — the same state a sidebar checkbox
+    // writes, so the two stay in lockstep and "Clear all" clears both.
+    const toggleInterestArea = useCallback(
+        (value: string) => {
+            handleApplyFilter(
+                "interestAreas",
+                value,
+                !(activeFilters.interestAreas ?? []).includes(value),
+                "multi",
+            );
+        },
+        [activeFilters, handleApplyFilter],
+    );
+
     const handleClearFilters = useCallback(() => {
         setActiveFilters({});
         setSearchQuery("");
@@ -865,7 +968,7 @@ export default function SponsorCatalog({
                 {pool.map((d) => {
                     const req = requestByTarget.get(d.salesforceId);
                     const p = d.profile;
-                    const rc = revClass(p.annualRevenue) || "rev-na";
+                    const rc = revenueClass(d) || "rev-na";
                     return (
                         <div
                             key={d.id}
@@ -893,16 +996,6 @@ export default function SponsorCatalog({
                                         </span>
                                     </div>
                                 )}
-                                {hasValue(p.plannedSpend) && (
-                                    <div className="card-attr">
-                                        <span className="ca-label">
-                                            Planned spend
-                                        </span>
-                                        <span className="ca-value">
-                                            {p.plannedSpend}
-                                        </span>
-                                    </div>
-                                )}
                                 <div className="card-attr">
                                     <span className="ca-label">Co. size</span>
                                     <span className="ca-value">
@@ -910,6 +1003,24 @@ export default function SponsorCatalog({
                                     </span>
                                 </div>
                             </div>
+                            {/* Stacked pills need the card's full width, so
+                                interest areas sit in their own block rather than
+                                as a label/value row in .card-attrs. */}
+                            {hasValue(p.interestAreas) && (
+                                <div className="card-tag-block">
+                                    <span className="ca-label">
+                                        Interest areas
+                                    </span>
+                                    <TagPills
+                                        values={p.interestAreas}
+                                        order={interestAreaOrder}
+                                        activeValues={activeInterestAreas}
+                                        limit={PILL_LIMIT}
+                                        onToggle={toggleInterestArea}
+                                        onMore={() => setDetailsDelegate(d)}
+                                    />
+                                </div>
+                            )}
                             {/* Opens the same DetailsModal the list view uses,
                                 replacing the old inline expand/collapse. */}
                             <button
@@ -939,16 +1050,10 @@ export default function SponsorCatalog({
             );
         return (
             <div className="list-wrap">
-                <div
-                    className="list-view"
-                    style={{ "--list-cols": LIST_COLS } as React.CSSProperties}
-                >
-                    <div
-                        className="list-header"
-                        style={
-                            { "--list-cols": LIST_COLS } as React.CSSProperties
-                        }
-                    >
+                {/* .list-view declares --list-cols; the header and rows inherit
+                    it, so neither needs the tracks passed in. */}
+                <div className="list-view">
+                    <div className="list-header">
                         {LIST_HEADERS.map((h) => (
                             <div key={h} className="list-header-cell">
                                 {h}
@@ -959,7 +1064,7 @@ export default function SponsorCatalog({
                         const req = requestByTarget.get(d.salesforceId);
                         const isPicking = pickingId === d.id;
                         const p = d.profile;
-                        const rc = revClass(p.annualRevenue) || "rev-na";
+                        const rc = revenueClass(d) || "rev-na";
 
                         let action: React.ReactNode;
                         if (isPicking) {
@@ -1033,9 +1138,6 @@ export default function SponsorCatalog({
                                 <div className="list-cell">
                                     <div className="lc-name">{d.name}</div>
                                     <div className="lc-title">{d.title}</div>
-                                    <div className="list-action-cell">
-                                        {action}
-                                    </div>
                                 </div>
                                 <div className="list-cell">
                                     <div className="lc-company">
@@ -1053,18 +1155,18 @@ export default function SponsorCatalog({
                                     </span>
                                 </div>
                                 <div className="list-cell">
-                                    <span className="lc-val">
-                                        {p.plannedSpend || "N/A"}
-                                    </span>
+                                    <TagPills
+                                        values={p.interestAreas}
+                                        order={interestAreaOrder}
+                                        activeValues={activeInterestAreas}
+                                        limit={PILL_LIMIT}
+                                        onToggle={toggleInterestArea}
+                                        onMore={() => setDetailsDelegate(d)}
+                                    />
                                 </div>
                                 <div className="list-cell">
                                     <span className="lc-val">
                                         {str(p.companySize)}
-                                    </span>
-                                </div>
-                                <div className="list-cell">
-                                    <span className="lc-tags">
-                                        {dotTags(p.areasOfSpecialization)}
                                     </span>
                                 </div>
                                 <div className="list-cell">
@@ -1074,16 +1176,24 @@ export default function SponsorCatalog({
                                 </div>
                                 <div className="list-cell">
                                     <span className="lc-tags">
-                                        {dotTags(p.strategicPriorities)}
+                                        {p.priorityInitiative || ""}
                                     </span>
                                 </div>
-                                <div className="list-cell list-details-cell">
-                                    <button
-                                        className="list-details-btn"
-                                        onClick={() => setDetailsDelegate(d)}
-                                    >
-                                        More details
-                                    </button>
+                                {/* Every control for the row, in a trailing
+                                    (header-less) column: the request action
+                                    group on top, "More details" beneath it. */}
+                                <div className="list-cell">
+                                    <div className="list-action-cell">
+                                        {action}
+                                        <button
+                                            className="list-details-btn"
+                                            onClick={() =>
+                                                setDetailsDelegate(d)
+                                            }
+                                        >
+                                            More details
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -1108,7 +1218,7 @@ export default function SponsorCatalog({
                     const req = requestByTarget.get(d.salesforceId);
                     const isPicking = pickingId === d.id;
                     const p = d.profile;
-                    const rc = revClass(p.annualRevenue) || "rev-na";
+                    const rc = revenueClass(d) || "rev-na";
 
                     let action: React.ReactNode;
                     if (isPicking) {
@@ -1192,16 +1302,6 @@ export default function SponsorCatalog({
                                             </span>
                                         </div>
                                     )}
-                                    {hasValue(p.plannedSpend) && (
-                                        <div className="hcard-attr">
-                                            <span className="hca-label">
-                                                Planned spend
-                                            </span>
-                                            <span className="hca-value">
-                                                {p.plannedSpend}
-                                            </span>
-                                        </div>
-                                    )}
                                     <div className="hcard-attr">
                                         <span className="hca-label">
                                             Co. size
@@ -1210,17 +1310,27 @@ export default function SponsorCatalog({
                                             {str(p.companySize)}
                                         </span>
                                     </div>
+                                    {hasValue(p.interestAreas) && (
+                                        <div className="card-tag-block">
+                                            <span className="hca-label">
+                                                Interest areas
+                                            </span>
+                                            <TagPills
+                                                values={p.interestAreas}
+                                                order={interestAreaOrder}
+                                                activeValues={
+                                                    activeInterestAreas
+                                                }
+                                                limit={PILL_LIMIT}
+                                                onToggle={toggleInterestArea}
+                                                onMore={() =>
+                                                    setDetailsDelegate(d)
+                                                }
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="hcard-right">
-                                    <div className="hcard-tag-attr">
-                                        <span className="hca-label">
-                                            Specialization
-                                        </span>
-                                        <span className="hca-value">
-                                            {dotTags(p.areasOfSpecialization) ||
-                                                "N/A"}
-                                        </span>
-                                    </div>
                                     <div className="hcard-tag-attr">
                                         <span className="hca-label">
                                             Industries
@@ -1232,20 +1342,10 @@ export default function SponsorCatalog({
                                     </div>
                                     <div className="hcard-tag-attr">
                                         <span className="hca-label">
-                                            Regions
+                                            Priority initiative
                                         </span>
                                         <span className="hca-value">
-                                            {dotTags(p.regionsOverseen) ||
-                                                "N/A"}
-                                        </span>
-                                    </div>
-                                    <div className="hcard-tag-attr">
-                                        <span className="hca-label">
-                                            Priorities
-                                        </span>
-                                        <span className="hca-value">
-                                            {dotTags(p.strategicPriorities) ||
-                                                "N/A"}
+                                            {p.priorityInitiative || "N/A"}
                                         </span>
                                     </div>
                                 </div>
@@ -1359,9 +1459,6 @@ export default function SponsorCatalog({
                                 </option>
                                 <option value="budgetaryResponsibility">
                                     Budgetary Resp.
-                                </option>
-                                <option value="plannedSpend">
-                                    Planned Spend
                                 </option>
                                 <option value="companySize">
                                     Company Size
@@ -1508,6 +1605,7 @@ export default function SponsorCatalog({
                             <DrawerItem
                                 key={d.id}
                                 d={d}
+                                revenueClass={revenueClass(d)}
                                 rank={rank}
                                 onRank={saveRequest}
                                 onRemove={deleteRequest}
@@ -1517,10 +1615,13 @@ export default function SponsorCatalog({
                 </div>
             </div>
 
-            {/* Delegate "More details" modal (list view) */}
+            {/* Delegate "More details" modal (grid card + list row) */}
             {detailsDelegate && (
                 <DetailsModal
                     d={detailsDelegate}
+                    revClass={revenueClass(detailsDelegate)}
+                    interestAreaOrder={interestAreaOrder}
+                    activeInterestAreas={activeInterestAreas}
                     onClose={() => setDetailsDelegate(null)}
                 >
                     <RequestActions

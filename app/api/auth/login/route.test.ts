@@ -13,6 +13,12 @@ import type { ResolvedIdentity } from '@/types';
 vi.mock('@/lib/auth/twilio', () => ({ sendVerificationCode: vi.fn() }));
 vi.mock('@/lib/auth/identity', () => ({ resolveIdentity: vi.fn() }));
 
+// Replace the event-code helper (imports server-only) with a stub. Only
+// MissingEventCodeError is used here, as a real class for `instanceof` checks.
+vi.mock('@/lib/helpers/getEventCode', () => ({
+    MissingEventCodeError: class MissingEventCodeError extends Error {},
+}));
+
 import { POST } from './route';
 import { sendVerificationCode } from '@/lib/auth/twilio';
 import { resolveIdentity } from '@/lib/auth/identity';
@@ -93,10 +99,10 @@ describe('POST /api/auth/login — body validation', () => {
         vi.mocked(resolveIdentity).mockResolvedValue(mockIdentity);
         vi.mocked(sendVerificationCode).mockResolvedValue(undefined);
 
-        const res = await POST(makePostRequest({ contact: '5555550123' }));
+        const res = await POST(makePostRequest({ contact: '5555550123', eventCode: 'PARTY1999' }));
 
         expect(res.status).toBe(200);
-        expect(resolveIdentity).toHaveBeenCalledWith('5555550123', 'sms', undefined);
+        expect(resolveIdentity).toHaveBeenCalledWith('5555550123', 'sms', 'PARTY1999');
     });
 });
 
@@ -136,7 +142,9 @@ describe('POST /api/auth/login — Twilio', () => {
         vi.mocked(resolveIdentity).mockResolvedValue(mockIdentity);
         vi.mocked(sendVerificationCode).mockRejectedValue(new Error('twilio down'));
 
-        const res = await POST(makePostRequest({ contact: '5555550123', channel: 'sms' }));
+        const res = await POST(
+            makePostRequest({ contact: '5555550123', channel: 'sms', eventCode: 'PARTY1999' }),
+        );
 
         expect(res.status).toBe(502);
     });
@@ -160,12 +168,14 @@ describe('POST /api/auth/login — Twilio', () => {
         vi.mocked(resolveIdentity).mockResolvedValue(mockIdentity);
         vi.mocked(sendVerificationCode).mockResolvedValue(undefined);
 
-        const res = await POST(makePostRequest({ contact: ' Jane@Example.com ', channel: 'email' }));
+        const res = await POST(
+            makePostRequest({ contact: ' Jane@Example.com ', channel: 'email', eventCode: 'PARTY1999' }),
+        );
         const json = await res.json();
 
         expect(res.status).toBe(200);
         expect(json).toEqual({ contact: 'jane@example.com', channel: 'email' });
-        expect(resolveIdentity).toHaveBeenCalledWith('jane@example.com', 'email', undefined);
+        expect(resolveIdentity).toHaveBeenCalledWith('jane@example.com', 'email', 'PARTY1999');
         expect(sendVerificationCode).toHaveBeenCalledWith('jane@example.com', 'email');
     });
 });

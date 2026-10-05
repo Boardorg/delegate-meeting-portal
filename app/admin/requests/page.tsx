@@ -46,12 +46,14 @@ export default async function AdminRequestsPage({
     // The active event is global (cookie-backed), shared with the sidebar switcher.
     const selectedEvent = await getActiveEventCode();
 
+    // Default view: requests sorted A→Z by requester name. Any explicit ?sort
+    // in the URL still wins.
     const sortField: RequestSortField = SORT_FIELDS.includes(
         sp.sort as RequestSortField,
     )
         ? (sp.sort as RequestSortField)
-        : "updatedAt";
-    const sortDir = sp.dir === "asc" ? "asc" : "desc";
+        : "requesterName";
+    const sortDir = sp.dir === "desc" ? "desc" : "asc";
     const query = sp.q ?? "";
     const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
 

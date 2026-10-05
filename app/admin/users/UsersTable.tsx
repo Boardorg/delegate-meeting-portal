@@ -297,7 +297,7 @@ export default function UsersTable({ data }: Props) {
                 <h1 className="adm-page-title">Users</h1>
                 <button
                     type="button"
-                    className="adm-new-btn"
+                    className="adm-new-btn adm-new-btn-primary"
                     onClick={beginCreate}
                     disabled={creating || pending}
                 >

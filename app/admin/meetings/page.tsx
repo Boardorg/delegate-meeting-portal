@@ -19,7 +19,6 @@ import SponsorsTable from "./SponsorsTable";
 
 const SORT_FIELDS: SponsorSortField[] = [
     "company",
-    "name",
     "tier",
     "requestCount",
     "scheduledCount",

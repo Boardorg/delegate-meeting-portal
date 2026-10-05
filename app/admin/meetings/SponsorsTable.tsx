@@ -15,13 +15,22 @@ import { SortableHeaders } from "../_components/SortableHeaders";
 import { TablePagination } from "../_components/TablePagination";
 import { TierPill } from "./_components/TierPill";
 import SchedulerReportPanel from "./SchedulerReportPanel";
-import { pushAllForEvent, runSchedulerForEvent } from "./actions";
+import SyncReportPanel from "./SyncReportPanel";
+import MaintenanceReportPanel from "./MaintenanceReportPanel";
+import {
+    clearUnsyncedForEvent,
+    pushAllForEvent,
+    runSchedulerForEvent,
+    unpushAllForEvent,
+} from "./actions";
 import type {
+    MaintenanceReport,
     SponsorRow,
     SponsorSortField,
     SponsorsPage,
 } from "./actions";
 import type { SchedulerReport } from "@/lib/scheduling/report";
+import type { SyncReport } from "@/lib/cvent/syncReport";
 
 // ---------------------------------------------------------------------------
 // SponsorsTable — sponsor list for /admin/meetings.
@@ -55,7 +64,14 @@ export default function SponsorsTable({
     const [runError, setRunError] = useState<string | null>(null);
     const [showPushAllModal, setShowPushAllModal] = useState(false);
     const [pushAllError, setPushAllError] = useState<string | null>(null);
+    const [showClearModal, setShowClearModal] = useState(false);
+    const [clearError, setClearError] = useState<string | null>(null);
+    const [showUnpushModal, setShowUnpushModal] = useState(false);
+    const [unpushError, setUnpushError] = useState<string | null>(null);
     const [report, setReport] = useState<SchedulerReport | null>(null);
+    const [syncReport, setSyncReport] = useState<SyncReport | null>(null);
+    const [maintenanceReport, setMaintenanceReport] =
+        useState<MaintenanceReport | null>(null);
     const [isPending, startTransition] = useTransition();
 
     // Handler for running the scheduling engine for the selected event.
@@ -80,11 +96,45 @@ export default function SponsorsTable({
         startTransition(async () => {
             try {
                 setPushAllError(null);
-                await pushAllForEvent(selectedEvent);
+                const result = await pushAllForEvent(selectedEvent);
+                setSyncReport(result);
                 setShowPushAllModal(false);
                 router.refresh();
             } catch (e) {
                 setPushAllError(e instanceof Error ? e.message : "An unexpected error occurred.");
+            }
+        });
+    }
+
+    // Handler for clearing all un-synced meetings for the selected event.
+    function handleClearUnsynced() {
+        if (!selectedEvent) return;
+        startTransition(async () => {
+            try {
+                setClearError(null);
+                const result = await clearUnsyncedForEvent(selectedEvent);
+                setMaintenanceReport(result);
+                setShowClearModal(false);
+                router.refresh();
+            } catch (e) {
+                setClearError(e instanceof Error ? e.message : "An unexpected error occurred.");
+            }
+        });
+    }
+
+    // Handler for unpushing (cancelling in Cvent) all synced meetings for the
+    // selected event. The meetings stay in the DB but become un-synced.
+    function handleUnpushAll() {
+        if (!selectedEvent) return;
+        startTransition(async () => {
+            try {
+                setUnpushError(null);
+                const result = await unpushAllForEvent(selectedEvent);
+                setMaintenanceReport(result);
+                setShowUnpushModal(false);
+                router.refresh();
+            } catch (e) {
+                setUnpushError(e instanceof Error ? e.message : "An unexpected error occurred.");
             }
         });
     }
@@ -142,7 +192,6 @@ export default function SponsorsTable({
     const columns = useMemo<ColumnDef<SponsorRow>[]>(
         () => [
             { id: "company", header: "Company" },
-            { id: "name", header: "Contact" },
             { id: "tier", header: "Tier" },
             { id: "contracted", header: "Contracted", enableSorting: false },
             { id: "bonus", header: "Bonus", enableSorting: false },
@@ -187,10 +236,10 @@ export default function SponsorsTable({
     });
 
     // Handler for changing the selected event.
-    // Handler for navigating to a sponsor's detail page. The active event is
+    // Handler for navigating to a company's detail page. The active event is
     // global (cookie-backed), so no event param is needed on the URL.
-    function goToSponsor(salesforceId: string) {
-        router.push(`/admin/meetings/${encodeURIComponent(salesforceId)}`);
+    function goToSponsor(accountId: string) {
+        router.push(`/admin/meetings/${encodeURIComponent(accountId)}`);
     }
 
     // Render the table with toolbar and modals.
@@ -209,18 +258,32 @@ export default function SponsorsTable({
                     onChange={(e) => setSearchInput(e.target.value)}
                 />
                 <button
-                    className="adm-new-btn"
+                    className="adm-new-btn adm-new-btn-primary"
                     disabled={!selectedEvent || isPending}
                     onClick={() => { setRunError(null); setShowRunModal(true); }}
                 >
                     {isPending ? "Running…" : "Run Scheduling Engine"}
                 </button>
                 <button
-                    className="adm-new-btn"
+                    className="adm-new-btn adm-new-btn-primary"
                     disabled={!selectedEvent || isPending}
                     onClick={() => { setPushAllError(null); setShowPushAllModal(true); }}
                 >
-                    Push All to Cvent
+                    {isPending ? "Working…" : "Push All to Cvent"}
+                </button>
+                <button
+                    className="adm-new-btn adm-new-btn-danger"
+                    disabled={!selectedEvent || isPending}
+                    onClick={() => { setClearError(null); setShowClearModal(true); }}
+                >
+                    {isPending ? "Working…" : "Clear All Unsynced"}
+                </button>
+                <button
+                    className="adm-new-btn adm-new-btn-danger-solid"
+                    disabled={!selectedEvent || isPending}
+                    onClick={() => { setUnpushError(null); setShowUnpushModal(true); }}
+                >
+                    {isPending ? "Working…" : "Unpush All Synced"}
                 </button>
             </div>
 
@@ -244,10 +307,44 @@ export default function SponsorsTable({
                 />
             )}
 
+            {showClearModal && selectedEvent && (
+                <ClearUnsyncedModal
+                    eventCode={selectedEvent}
+                    isPending={isPending}
+                    error={clearError}
+                    onConfirm={handleClearUnsynced}
+                    onCancel={() => setShowClearModal(false)}
+                />
+            )}
+
+            {showUnpushModal && selectedEvent && (
+                <UnpushAllModal
+                    eventCode={selectedEvent}
+                    isPending={isPending}
+                    error={unpushError}
+                    onConfirm={handleUnpushAll}
+                    onCancel={() => setShowUnpushModal(false)}
+                />
+            )}
+
             {report && (
                 <SchedulerReportPanel
                     report={report}
                     onDismiss={() => setReport(null)}
+                />
+            )}
+
+            {syncReport && (
+                <SyncReportPanel
+                    report={syncReport}
+                    onDismiss={() => setSyncReport(null)}
+                />
+            )}
+
+            {maintenanceReport && (
+                <MaintenanceReportPanel
+                    report={maintenanceReport}
+                    onDismiss={() => setMaintenanceReport(null)}
                 />
             )}
 
@@ -267,9 +364,9 @@ export default function SponsorsTable({
                     ) : (
                         data.rows.map((row) => (
                             <SponsorRow
-                                key={row.salesforceId}
+                                key={row.accountId}
                                 row={row}
-                                onView={() => goToSponsor(row.salesforceId)}
+                                onView={() => goToSponsor(row.accountId)}
                             />
                         ))
                     )}
@@ -310,10 +407,6 @@ function SponsorRow({
                 <div className="adm-party-name">{row.company}</div>
             </td>
             <td>
-                <div className="adm-party-name">{row.name}</div>
-                <div className="adm-party-company">{row.title}</div>
-            </td>
-            <td>
                 <TierPill tier={row.sponsorTier} />
             </td>
             <td className="adm-mono">{row.contracted}</td>
@@ -347,10 +440,10 @@ function ProgressCell({
     const barColor = isOver
         ? "var(--red)"
         : percent >= 100
-          ? "var(--green)"
+          ? "var(--progress-full)"
           : percent >= 80
             ? "var(--gold)"
-            : "var(--blue)";
+            : "var(--progress-mid)";
 
     return (
         <div className="adm-progress">
@@ -397,6 +490,84 @@ function PushAllModal({
                     <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
                     <button className="adm-btn adm-btn-primary" onClick={onConfirm} disabled={isPending}>
                         {isPending ? "Pushing…" : "Push All"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ClearUnsyncedModal — confirmation dialog for deleting all un-synced meetings.
+// ---------------------------------------------------------------------------
+
+function ClearUnsyncedModal({
+    eventCode,
+    isPending,
+    error,
+    onConfirm,
+    onCancel,
+}: {
+    eventCode: string;
+    isPending: boolean;
+    error: string | null;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <div className="adm-modal-overlay">
+            <div className="adm-modal adm-modal-md">
+                <div className="adm-modal-title">Clear All Unsynced Meetings?</div>
+                <p className="adm-modal-body">
+                    This permanently deletes every meeting for{" "}
+                    <strong>{eventCode}</strong>{" "}
+                    that has not been pushed to Cvent. Meetings already synced to
+                    Cvent are kept. This cannot be undone.
+                </p>
+                {error && <div className="adm-modal-error">{error}</div>}
+                <div className="adm-modal-actions">
+                    <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
+                    <button className="adm-btn adm-btn-danger" onClick={onConfirm} disabled={isPending}>
+                        {isPending ? "Clearing…" : "Clear Unsynced"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// UnpushAllModal — confirmation dialog for cancelling all synced Cvent
+// appointments while keeping the meetings in the DB.
+// ---------------------------------------------------------------------------
+
+function UnpushAllModal({
+    eventCode,
+    isPending,
+    error,
+    onConfirm,
+    onCancel,
+}: {
+    eventCode: string;
+    isPending: boolean;
+    error: string | null;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <div className="adm-modal-overlay">
+            <div className="adm-modal adm-modal-md">
+                <div className="adm-modal-title">Unpush All Synced Meetings?</div>
+                <p className="adm-modal-body">
+                    This cancels the Cvent appointment behind every synced meeting
+                    for <strong>{eventCode}</strong>. The meetings stay in the
+                    portal but return to un-synced. This cannot be undone.
+                </p>
+                {error && <div className="adm-modal-error">{error}</div>}
+                <div className="adm-modal-actions">
+                    <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
+                    <button className="adm-btn adm-btn-danger" onClick={onConfirm} disabled={isPending}>
+                        {isPending ? "Unpushing…" : "Unpush All"}
                     </button>
                 </div>
             </div>

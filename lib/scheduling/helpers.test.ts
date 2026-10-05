@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
-import { pairKey, computeMutualPairs, findAvailableTimeslot, wouldViolateCompanyDiversity } from './helpers';
+import { pairKey, computeMutualPairs, findAvailableTimeslot, withDelegatePreferences, wouldViolateCompanyDiversity, DELEGATE_PREFERENCE_RANK } from './helpers';
+import { emptyProfile } from '@/lib/attendees/formatProfile';
 import type { Attendee, MeetingRequest, Timeslot, ScheduledMeeting } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -36,20 +37,15 @@ function remainingOf(timeslots: Timeslot[]): Map<string, number> {
 }
 
 /**
- * Helper to generate a minimal fake attendee for testing.
+ * Minimal scheduling-entity stub carrying just the companyKey the diversity
+ * check reads. wouldViolateCompanyDiversity compares parties by companyKey
+ * (the account id), so two entities sharing a key model reps of one company.
  *
- * @param {string} id - The attendee's unique ID.
- * @param {string} company - The attendee's company name.
- * @returns {Attendee} A minimal attendee object with the specified ID and company.
+ * @param {string} companyKey - The party's company key (account id).
+ * @returns {{ companyKey: string }} The stub entity.
  */
-function makeAttendee(id: string, company: string): Attendee {
-    return {
-        id, company,
-        cventContactId: '', salesforceId: id, name: '', email: '', phone: '',
-        role: 'delegate', title: '', sponsorTier: null,
-        profile: { annualRevenue: null, budgetaryResponsibility: null, areasOfSpecialization: [], industrySectors: [], plannedSpend: null, companySize: null, regionsOverseen: [], strategicPriorities: [] },
-        scheduling: { maxSameCompanyMeetings: null },
-    };
+function ent(companyKey: string): { companyKey: string } {
+    return { companyKey };
 }
 
 /**
@@ -145,46 +141,190 @@ describe('findAvailableTimeslot', () => {
 });
 
 describe('wouldViolateCompanyDiversity', () => {
-    test('returns false when the candidate is not in the attendee map', () => {
-        const attendees = new Map([['d1', makeAttendee('d1', 'Acme')]]);
-        expect(wouldViolateCompanyDiversity([], attendees, 'd1', 'unknown', 2)).toBe(false);
+    test('returns false when the candidate is not in the entity map', () => {
+        const entities = new Map([['d1', ent('acct-acme')]]);
+        expect(wouldViolateCompanyDiversity([], entities, 'd1', 'unknown', 2)).toBe(false);
     });
 
     test('returns false when the attendee has no existing meetings', () => {
-        const attendees = new Map([
-            ['d1', makeAttendee('d1', 'Acme')],
-            ['s1', makeAttendee('s1', 'Globex')],
+        const entities = new Map([
+            ['d1', ent('acct-acme')],
+            ['s1', ent('acct-globex')],
         ]);
-        expect(wouldViolateCompanyDiversity([], attendees, 'd1', 's1', 2)).toBe(false);
+        expect(wouldViolateCompanyDiversity([], entities, 'd1', 's1', 2)).toBe(false);
     });
 
     test('returns false when same-company meetings are below the cap', () => {
-        const attendees = new Map([
-            ['d1', makeAttendee('d1', 'Acme')],
-            ['s1', makeAttendee('s1', 'Globex')],
-            ['s2', makeAttendee('s2', 'Globex')],
+        // s1 and s2 share a company key (reps of one company / same account).
+        const entities = new Map([
+            ['d1', ent('acct-acme')],
+            ['s1', ent('acct-globex')],
+            ['s2', ent('acct-globex')],
         ]);
         const meetings = [makeMeeting('d1', 's1')];
-        expect(wouldViolateCompanyDiversity(meetings, attendees, 'd1', 's2', 2)).toBe(false);
+        expect(wouldViolateCompanyDiversity(meetings, entities, 'd1', 's2', 2)).toBe(false);
     });
 
     test('returns true when same-company meetings equal the cap', () => {
-        const attendees = new Map([
-            ['d1', makeAttendee('d1', 'Acme')],
-            ['s1', makeAttendee('s1', 'Globex')],
-            ['s2', makeAttendee('s2', 'Globex')],
+        const entities = new Map([
+            ['d1', ent('acct-acme')],
+            ['s1', ent('acct-globex')],
+            ['s2', ent('acct-globex')],
         ]);
         const meetings = [makeMeeting('d1', 's1'), makeMeeting('d1', 's2')];
-        expect(wouldViolateCompanyDiversity(meetings, attendees, 'd1', 's2', 2)).toBe(true);
+        expect(wouldViolateCompanyDiversity(meetings, entities, 'd1', 's2', 2)).toBe(true);
     });
 
     test('counts meetings correctly when the attendee appears as either participant', () => {
-        const attendees = new Map([
-            ['d1', makeAttendee('d1', 'Acme')],
-            ['s1', makeAttendee('s1', 'Globex')],
-            ['s2', makeAttendee('s2', 'Globex')],
+        const entities = new Map([
+            ['d1', ent('acct-acme')],
+            ['s1', ent('acct-globex')],
+            ['s2', ent('acct-globex')],
         ]);
         const meetings = [makeMeeting('s1', 'd1')];
-        expect(wouldViolateCompanyDiversity(meetings, attendees, 'd1', 's2', 1)).toBe(true);
+        expect(wouldViolateCompanyDiversity(meetings, entities, 'd1', 's2', 1)).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// withDelegatePreferences
+//
+// Delegates express who they want to meet on the event's intake form, not in
+// the portal. Folding those answers in as delegate→sponsor requests is what
+// makes the existing mutual / delegate-choice passes see the delegate side at
+// all, so these cases pin the derivation and its guards.
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds an attendee for the preference tests.
+ *
+ * @param {string} id - Salesforce id (also the delegate's party id).
+ * @param {'sponsor' | 'delegate'} role - The attendee's role.
+ * @param {string} accountId - Employer account id; the party id for sponsors.
+ * @param {string[]} requestedSponsorAccountIds - Intake-form answers.
+ * @returns {Attendee} The attendee.
+ */
+function makeAttendee(
+    id: string,
+    role: 'sponsor' | 'delegate',
+    accountId: string,
+    requestedSponsorAccountIds: string[] = [],
+): Attendee {
+    return {
+        id,
+        cventContactId: '',
+        salesforceId: id,
+        accountId,
+        name: id,
+        email: '',
+        phone: '',
+        role,
+        company: accountId,
+        title: '',
+        sponsorTier: role === 'sponsor' ? 'standard' : null,
+        profile: emptyProfile(),
+        scheduling: {
+            maxSameCompanyMeetings: role === 'sponsor' ? null : 2,
+            requestedSponsorAccountIds,
+        },
+    };
+}
+
+describe('withDelegatePreferences', () => {
+    const sponsorRep = makeAttendee('rep-1', 'sponsor', 'acct-A');
+    const otherSponsor = makeAttendee('rep-2', 'sponsor', 'acct-B');
+
+    test('turns each intake answer into a delegate → sponsor request', () => {
+        const delegate = makeAttendee('del-1', 'delegate', 'acct-D', [
+            'acct-A',
+            'acct-B',
+        ]);
+        const out = withDelegatePreferences([], [sponsorRep, otherSponsor, delegate]);
+
+        expect(out).toHaveLength(2);
+        expect(out.map((r) => [r.requesterId, r.targetId])).toEqual([
+            ['del-1', 'acct-A'],
+            ['del-1', 'acct-B'],
+        ]);
+        // Targets are company account ids — the party id the engine keys by —
+        // not an individual rep's salesforceId.
+        expect(out.map((r) => r.targetId)).not.toContain('rep-1');
+    });
+
+    test('ranks derived requests at the engine\'s high-interest threshold', () => {
+        const delegate = makeAttendee('del-1', 'delegate', 'acct-D', ['acct-A']);
+        const [derived] = withDelegatePreferences([], [sponsorRep, delegate]);
+        // Pass 3 gates delegate→sponsor candidates on rank >= 4.
+        expect(derived.rank).toBe(DELEGATE_PREFERENCE_RANK);
+        expect(derived.rank).toBeGreaterThanOrEqual(4);
+    });
+
+    test('makes a pair mutual when the sponsor also requested the delegate', () => {
+        const delegate = makeAttendee('del-1', 'delegate', 'acct-D', ['acct-A']);
+        const sponsorRequest: MeetingRequest = {
+            id: '1',
+            requesterId: 'acct-A',
+            targetId: 'del-1',
+            rank: 5,
+        };
+        const merged = withDelegatePreferences(
+            [sponsorRequest],
+            [sponsorRep, delegate],
+        );
+        expect(computeMutualPairs(merged)).toContain(pairKey('acct-A', 'del-1'));
+    });
+
+    test('leaves an unreciprocated preference as a one-sided request', () => {
+        const delegate = makeAttendee('del-1', 'delegate', 'acct-D', ['acct-A']);
+        const merged = withDelegatePreferences([], [sponsorRep, delegate]);
+        expect(computeMutualPairs(merged).size).toBe(0);
+        expect(merged).toHaveLength(1);
+    });
+
+    test('ignores an account id that is not a sponsor at this event', () => {
+        // A stale or foreign id would otherwise surface in the run report as
+        // "not an attendee".
+        const delegate = makeAttendee('del-1', 'delegate', 'acct-D', [
+            'acct-A',
+            'acct-GONE',
+        ]);
+        const out = withDelegatePreferences([], [sponsorRep, delegate]);
+        expect(out.map((r) => r.targetId)).toEqual(['acct-A']);
+    });
+
+    test('keeps the submitted request when a portal request already covers the pair', () => {
+        const delegate = makeAttendee('del-1', 'delegate', 'acct-D', ['acct-A']);
+        const submitted: MeetingRequest = {
+            id: '7',
+            requesterId: 'del-1',
+            targetId: 'acct-A',
+            rank: 2,
+        };
+        const out = withDelegatePreferences([submitted], [sponsorRep, delegate]);
+        expect(out).toHaveLength(1);
+        expect(out[0]).toBe(submitted);
+    });
+
+    test('deduplicates a repeated id within one delegate\'s answer', () => {
+        const delegate = makeAttendee('del-1', 'delegate', 'acct-D', [
+            'acct-A',
+            'acct-A',
+        ]);
+        expect(withDelegatePreferences([], [sponsorRep, delegate])).toHaveLength(1);
+    });
+
+    test('ignores sponsors and delegates with no answers', () => {
+        const quiet = makeAttendee('del-2', 'delegate', 'acct-D');
+        const existing = [{ id: '1', requesterId: 'acct-A', targetId: 'del-2', rank: 5 }];
+        // Same array back when there's nothing to add.
+        expect(withDelegatePreferences(existing, [sponsorRep, quiet])).toBe(existing);
+    });
+
+    test('tolerates an attendee predating the field (mock/fixture data)', () => {
+        const legacy = makeAttendee('del-3', 'delegate', 'acct-D');
+        // @ts-expect-error — simulating data written before the field existed.
+        delete legacy.scheduling.requestedSponsorAccountIds;
+        expect(() => withDelegatePreferences([], [sponsorRep, legacy])).not.toThrow();
+        expect(withDelegatePreferences([], [sponsorRep, legacy])).toEqual([]);
     });
 });

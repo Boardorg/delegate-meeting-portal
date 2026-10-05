@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, type User } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
+import { emptyProfile } from "@/lib/attendees/formatProfile";
 import { toE164 } from "@/lib/auth/phone";
 import { normalizeEmail } from "@/lib/auth/email";
 import type { Attendee, Channel, ResolvedIdentity } from "@/types";
@@ -35,6 +36,7 @@ function userToAttendee(user: User): Attendee {
         id: String(user.id),
         cventContactId: "",
         salesforceId: user.salesforceId ?? "",
+        accountId: "",
         name: user.username ?? "",
         email: user.email ?? "",
         phone: user.phone,
@@ -42,17 +44,11 @@ function userToAttendee(user: User): Attendee {
         company: "",
         title: "",
         sponsorTier: null,
-        profile: {
-            annualRevenue: null,
-            budgetaryResponsibility: null,
-            areasOfSpecialization: [],
-            industrySectors: [],
-            plannedSpend: null,
-            companySize: null,
-            regionsOverseen: [],
-            strategicPriorities: [],
+        profile: emptyProfile(),
+        scheduling: {
+            maxSameCompanyMeetings: null,
+            requestedSponsorAccountIds: [],
         },
-        scheduling: { maxSameCompanyMeetings: null },
     };
 }
 

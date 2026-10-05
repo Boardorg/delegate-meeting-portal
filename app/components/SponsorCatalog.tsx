@@ -3,56 +3,53 @@
 import "@/app/frontend.css";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { contractedMeetings } from "@/lib/attendees/caps";
+import { partyId } from "@/lib/attendees/companies";
 import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
-import TopBar from "@/app/components/TopBar";
+import TopBar, { type TopBarEventLogo } from "@/app/components/TopBar";
+import DetailsModal from "@/app/components/DetailsModal";
+import TagPills from "@/app/components/TagPills";
+import {
+    orderValues,
+    revClass,
+    dotTags,
+    shortTags,
+    tagColorClass,
+    str,
+    hasValue,
+} from "@/app/components/catalogFormat";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const REV_TIERS = [
-    "<10M",
-    "10M-50M",
-    "50M-100M",
-    "100M-500M",
-    "500M-1B",
-    "1B-5B",
-    ">5B",
-];
+// Profile fields holding a single free-text answer. Their filter options and
+// sort order are derived from the loaded delegates and put in natural
+// smallest → largest order by orderValues; the array-valued fields sort
+// alphabetically instead. See buildValueOrder below.
+const SCALAR_PROFILE_FIELDS = [
+    "annualRevenue",
+    "budgetaryResponsibility",
+    "companySize",
+    "transformationStage",
+    "priorityInitiative",
+] as const satisfies readonly (keyof AttendeeProfile)[];
 
-const SORT_ORDER: Record<string, string[]> = {
-    annualRevenue: REV_TIERS,
-    budgetaryResponsibility: [
-        "<1M",
-        "1M-10M",
-        "10M-50M",
-        "50M-100M",
-        "100M-500M",
-        "500M-1B",
-        ">1B",
-    ],
-    plannedSpend: ["<1M", "1M-5M", "5M-25M", "25M-100M", ">100M"],
-    companySize: [
-        "1-50",
-        "51-200",
-        "200-500",
-        "500-1000",
-        "1000-5000",
-        ">5000",
-    ],
-};
+type ScalarProfileField = (typeof SCALAR_PROFILE_FIELDS)[number];
 
 const LIST_BREAK = 860;
-const LIST_COLS = "140px 110px 72px 82px 72px 68px 1fr 1fr 1fr 1fr";
+// The list view's column WIDTHS live with the rest of its layout, as
+// `--list-cols` on .list-view in frontend.css. Only the header labels are here,
+// because they're content. The grid is positional, so this array has to stay the
+// same length as those tracks and as the .list-cell divs each row renders.
 const LIST_HEADERS = [
     "Name / Title",
     "Company",
     "Revenue",
     "Budget Resp.",
-    "Planned Spend",
+    "Interest Areas",
     "Co. Size",
-    "Specialization",
     "Industries",
-    "Regions",
-    "Priorities",
+    "Priority Initiative",
+    // Trailing control column — deliberately unlabelled.
+    "",
 ];
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -63,100 +60,181 @@ type SortDir = "asc" | "desc";
 interface FilterConfig {
     id: string;
     label: string;
+    /**
+     * "multi" renders checkboxes and ORs the selections; "single" renders radios
+     * and keeps one value. Every filter is "multi" for now — including the
+     * single-answer profile fields, where checkboxes let a requester pick, say,
+     * two adjacent revenue bands — but the radio path is kept so any filter can
+     * be switched back by changing this one value.
+     */
     type: "single" | "multi";
     options: string[];
+    /**
+     * When true, each option gets a color swatch matching the pill color that
+     * value renders with in the card / list views (see TagPills).
+     */
+    colorize?: boolean;
 }
+
+/** Ordered distinct values per scalar profile field, derived from the delegates. */
+type ValueOrder = Record<ScalarProfileField, string[]>;
+
+/** How many interest-area pills a compact view shows before collapsing to "+N". */
+const PILL_LIMIT = 3;
 
 interface Props {
     delegates: Attendee[];
     currentSponsor: Attendee;
+    /** Current-event logo for the header, or null when the event has none. */
+    eventLogo?: TopBarEventLogo | null;
 }
 
 // ── Pure helpers ───────────────────────────────────────────────────────────
+// Presentational helpers (revClass, dotTags, str, hasValue) live in
+// ./catalogFormat and are imported above so DetailsModal can share them.
 
-function revClass(val: string | number | null | undefined): string {
-    if (!val) return "";
-    const i = REV_TIERS.indexOf(String(val));
-    return i >= 0 ? `rev-${i + 1}` : "";
+/**
+ * Collects each scalar profile field's distinct values across the delegates and
+ * puts them in natural smallest → largest order.
+ *
+ * This one derived map drives three things that must agree: the sidebar filter
+ * option order, the sort-by-field order, and the revenue chip's color grade.
+ * Deriving it means the catalog needs no knowledge of how the intake form words
+ * its answers.
+ *
+ * @param {Attendee[]} delegates - The loaded delegate pool.
+ * @returns {ValueOrder} Ordered distinct values, keyed by profile field.
+ */
+function buildValueOrder(delegates: Attendee[]): ValueOrder {
+    return SCALAR_PROFILE_FIELDS.reduce((acc, key) => {
+        const distinct = new Set<string>();
+        for (const d of delegates) {
+            const v = d.profile[key];
+            if (typeof v === "string" && v) distinct.add(v);
+        }
+        acc[key] = orderValues([...distinct]);
+        return acc;
+    }, {} as ValueOrder);
 }
 
-function getSortVal(d: Attendee, field: string): string | number {
+/**
+ * Resolves a delegate's sort key for the given field. Identity fields sort
+ * alphabetically; scalar profile fields sort by their position in the derived
+ * value order, so revenue and company-size bands sort by magnitude rather than
+ * by their text. Missing values sort to the front (-1), as before.
+ */
+function getSortVal(
+    d: Attendee,
+    field: string,
+    valueOrder: ValueOrder,
+): string | number {
     if (field === "name") return d.name.toLowerCase();
     if (field === "title") return d.title.toLowerCase();
     if (field === "company") return d.company.toLowerCase();
     const v = (d.profile as unknown as Record<string, unknown>)[field];
     if (v == null) return -1;
-    const ord = SORT_ORDER[field];
+    const ord = valueOrder[field as ScalarProfileField];
     return ord ? ord.indexOf(String(v)) : -1;
-}
-
-function dotTags(arr: string[] | null | undefined): string {
-    return (arr || []).join(" · ");
-}
-
-function str(v: unknown): string {
-    return v != null ? String(v) : "N/A";
-}
-
-/** Returns true if a scalar profile value should be shown on a card. */
-function hasValue(v: unknown): boolean {
-    return v != null && v !== "";
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function CardMoreToggle({ p }: { p: AttendeeProfile }) {
-    const [open, setOpen] = useState(false);
-    const groups = [
-        { label: "Specialization", items: p.areasOfSpecialization },
-        { label: "Industries", items: p.industrySectors },
-        { label: "Regions", items: p.regionsOverseen },
-        { label: "Priorities", items: p.strategicPriorities },
-    ].filter((g) => g.items?.length);
-
-    if (!groups.length) return null;
-
-    return (
-        <div className={`card-more ${open ? "open" : ""}`}>
-            <button
-                className="card-more-trigger"
-                onClick={() => setOpen((o) => !o)}
-            >
-                <span>More details</span>
-                <span className="card-more-chevron">▼</span>
-            </button>
-            {open && (
-                <div className="card-more-body">
-                    {groups.map((g) => (
-                        <div key={g.label}>
-                            <div className="card-more-group-label">
-                                {g.label}
-                            </div>
-                            <div className="card-more-group-val">
-                                {g.items.join(" · ")}
-                            </div>
+/**
+ * The Request → Edit / Remove action group for a single delegate, including the
+ * interest-level picker. Presentational: all state (which target is being
+ * picked, the just-requested lock) lives in SponsorCatalog and is passed in, so
+ * the same group can render in the grid card, the list row, and the details
+ * modal off one implementation.
+ */
+function RequestActions({
+    d,
+    req,
+    isPicking,
+    justRequested,
+    onStartPick,
+    onCancelPick,
+    onSelectRank,
+    onRemove,
+}: {
+    d: Attendee;
+    /** The delegate's existing request, or undefined when none. */
+    req: MeetingRequest | undefined;
+    /** True while this delegate's interest-level picker is open. */
+    isPicking: boolean;
+    /** True during the 2s locked "Requested" confirmation after a save. */
+    justRequested: boolean;
+    onStartPick: (d: Attendee) => void;
+    onCancelPick: () => void;
+    onSelectRank: (d: Attendee, rank: number) => void;
+    onRemove: (d: Attendee) => void;
+}) {
+    if (isPicking) {
+        return (
+            <div className="rank-picker">
+                <div className="rank-pips">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                        <div
+                            key={n}
+                            className="rank-pip"
+                            onClick={() => onSelectRank(d, n)}
+                        >
+                            {n}
                         </div>
                     ))}
                 </div>
-            )}
-        </div>
+                <div className="rank-picker-label">Rate interest level</div>
+                <button className="rank-pip-cancel" onClick={onCancelPick}>
+                    Cancel
+                </button>
+            </div>
+        );
+    }
+
+    if (req !== undefined) {
+        // Locked confirmation for 2s after requesting; then editable/removable.
+        if (justRequested) {
+            return (
+                <button className="requested-btn" disabled>
+                    👍 Requested
+                </button>
+            );
+        }
+        return (
+            <div className="req-edit-actions">
+                <button className="req-btn" onClick={() => onStartPick(d)}>
+                    Edit request
+                </button>
+                <button className="req-remove-btn" onClick={() => onRemove(d)}>
+                    Remove
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <button className="req-btn" onClick={() => onStartPick(d)}>
+            + Request Meeting
+        </button>
     );
 }
 
 function DrawerItem({
     d,
+    revenueClass,
     rank,
     onRank,
     onRemove,
 }: {
     d: Attendee;
+    /** The `rev-N` class for this delegate's revenue chip, from the catalog. */
+    revenueClass: string;
     rank: number;
     onRank: (delegate: Attendee, r: number) => void;
     onRemove: (delegate: Attendee) => void;
 }) {
     const [detailOpen, setDetailOpen] = useState(false);
     const p = d.profile;
-    const rc = revClass(p.annualRevenue) || "rev-na";
+    const rc = revenueClass || "rev-na";
 
     return (
         <div className="d-item">
@@ -227,10 +305,10 @@ function DrawerItem({
                     }}
                 >
                     <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Planned spend
+                        Interest areas
                     </span>
                     <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {p.plannedSpend || "N/A"}
+                        {shortTags(p.interestAreas) || "N/A"}
                     </span>
                 </div>
                 <div
@@ -246,22 +324,6 @@ function DrawerItem({
                     </span>
                     <span style={{ color: "var(--t2)", textAlign: "right" }}>
                         {str(p.companySize)}
-                    </span>
-                </div>
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                        fontSize: "11px",
-                        marginTop: "2px",
-                    }}
-                >
-                    <span style={{ color: "var(--t3)", flexShrink: 0 }}>
-                        Specialization
-                    </span>
-                    <span style={{ color: "var(--t2)", textAlign: "right" }}>
-                        {dotTags(p.areasOfSpecialization) || "N/A"}
                     </span>
                 </div>
                 <div
@@ -337,31 +399,49 @@ function FiltersPanel({
                             )}
                         </button>
                         <div className="acc-body">
-                            {f.options.map((opt) => (
-                                <label key={opt} className="filter-opt">
-                                    <input
-                                        type={
-                                            f.type === "multi"
-                                                ? "checkbox"
-                                                : "radio"
-                                        }
-                                        name={`${prefix}-f-${f.id}`}
-                                        value={opt}
-                                        checked={(
-                                            activeFilters[f.id] || []
-                                        ).includes(opt)}
-                                        onChange={(e) =>
-                                            onApplyFilter(
-                                                f.id,
-                                                opt,
-                                                e.target.checked,
-                                                f.type,
-                                            )
-                                        }
-                                    />
-                                    {opt}
-                                </label>
-                            ))}
+                            {f.options.map((opt) => {
+                                const checked = (
+                                    activeFilters[f.id] || []
+                                ).includes(opt);
+                                return (
+                                    <label
+                                        key={opt}
+                                        className={`filter-opt ${checked ? "is-active" : ""}`}
+                                    >
+                                        <input
+                                            type={
+                                                f.type === "multi"
+                                                    ? "checkbox"
+                                                    : "radio"
+                                            }
+                                            name={`${prefix}-f-${f.id}`}
+                                            value={opt}
+                                            checked={checked}
+                                            onChange={(e) =>
+                                                onApplyFilter(
+                                                    f.id,
+                                                    opt,
+                                                    e.target.checked,
+                                                    f.type,
+                                                )
+                                            }
+                                        />
+                                        {/* The swatch sits inside the label's
+                                            own inline flow, after the text, so
+                                            on a wrapping option it trails the
+                                            last line rather than floating
+                                            beside the whole block. */}
+                                        <span className="filter-opt-label">
+                                            {f.colorize && (
+                                                <span
+                                                    className={`filter-swatch ${tagColorClass(opt, f.options)}`}
+                                                />
+                                            )}
+                                            {opt}
+                                        </span>
+                                    </label>
+                                );
+                            })}
                         </div>
                     </div>
                 );
@@ -372,19 +452,43 @@ function FiltersPanel({
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
-    // This sponsor's saved requests. Each links to its delegate via targetId
-    // (a Salesforce id), so the catalog never translates between id spaces.
+export default function SponsorCatalog({
+    delegates,
+    currentSponsor,
+    eventLogo,
+}: Props) {
+    // The current company's party id (its Account id) — the key the server uses
+    // for this company's shared request set. Extracted so it can be a stable,
+    // statically-checkable effect dependency.
+    const currentPartyId = partyId(currentSponsor);
+    // This company's saved requests (shared across all of the company's reps;
+    // the server keys them by the company party id). Each links to its delegate
+    // via targetId (a Salesforce id), so the catalog never translates ids.
     const [requests, setRequests] = useState<MeetingRequest[]>([]);
     const [pickingId, setPickingId] = useState<string | null>(null);
+    // Targets (by salesforceId) whose request was just placed/edited in this
+    // session. Each shows a locked "Requested" confirmation for 2s before the
+    // button re-enables as "Edit request". Requests loaded from the server are
+    // never in this set, so they're editable immediately.
+    const [justRequestedIds, setJustRequestedIds] = useState<Set<string>>(
+        new Set(),
+    );
+    // Pending 2s timers keyed by target id, so we can clear them on unmount.
+    const justRequestedTimers = useRef<
+        Map<string, ReturnType<typeof setTimeout>>
+    >(new Map());
     const [activeFilters, setActiveFilters] = useState<
         Record<string, string[]>
     >({});
-    const [viewMode, setViewMode] = useState<ViewMode>("grid");
+    const [viewMode, setViewMode] = useState<ViewMode>("list");
     const [sortField, setSortField] = useState("company");
     const [sortDir, setSortDir] = useState<SortDir>("asc");
     const [searchQuery, setSearchQuery] = useState("");
     const [drawerOpen, setDrawerOpen] = useState(false);
+    // Delegate whose "More details" modal is open (list view), or null.
+    const [detailsDelegate, setDetailsDelegate] = useState<Attendee | null>(
+        null,
+    );
     const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
     const [openAccordions, setOpenAccordions] = useState<Set<string>>(
         new Set(),
@@ -392,14 +496,24 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
     const [catalogWidth, setCatalogWidth] = useState(999);
     const catalogRef = useRef<HTMLDivElement>(null);
 
+    // The contracted amount is a reference point, not a cap: requesters can
+    // file as many requests as they like (the scheduling engine still only
+    // schedules up to the contracted amount). `reachedPackage` just drives an
+    // informational nudge once they've filed enough to fill that amount.
     const maxMeetings = contractedMeetings(currentSponsor.sponsorTier);
     const reqCount = requests.length;
-    const atCap = reqCount >= maxMeetings;
+    const reachedPackage = reqCount >= maxMeetings;
 
     // ── Filter config ──
 
-    const filterConfig = useMemo((): FilterConfig[] => {
-        const collect = (key: keyof AttendeeProfile): string[] =>
+    // Ordered distinct values for the scalar profile fields. Drives the filter
+    // options, the sort order, and the revenue chip grading — see
+    // buildValueOrder.
+    const valueOrder = useMemo(() => buildValueOrder(delegates), [delegates]);
+
+    // Multi-value fields: flatten every delegate's tags, dedupe, alphabetize.
+    const collectTags = useCallback(
+        (key: keyof AttendeeProfile): string[] =>
             [
                 ...new Set(
                     delegates.flatMap((d) => {
@@ -407,67 +521,83 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                         return Array.isArray(v) ? (v as string[]) : [];
                     }),
                 ),
-            ].sort();
+            ].sort(),
+        [delegates],
+    );
 
+    // The interest-area option list, hoisted out of filterConfig because it also
+    // fixes each value's pill color (tagColorClass) — sharing one list is what
+    // keeps a pill's color matched to its sidebar swatch.
+    const interestAreaOrder = useMemo(
+        () => collectTags("interestAreas"),
+        [collectTags],
+    );
+
+    const filterConfig = useMemo((): FilterConfig[] => {
+        // Every option list below comes from the loaded delegates, never from a
+        // hardcoded list — the values are intake-form text, so the form can
+        // change its wording or its bands without a code change. The trailing
+        // filter drops any field nobody answered.
         return [
             {
-                id: "annualRevenue",
-                label: "Annual company revenue",
-                type: "single" as const,
-                options: REV_TIERS,
-            },
-            {
-                id: "budgetaryResponsibility",
-                label: "Personal budgetary responsibility",
-                type: "single" as const,
-                options: [
-                    "<1M",
-                    "1M-10M",
-                    "10M-50M",
-                    "50M-100M",
-                    "100M-500M",
-                    "500M-1B",
-                    ">1B",
-                ],
-            },
-            {
-                id: "areasOfSpecialization",
-                label: "Areas of specialization",
+                id: "interestAreas",
+                label: "Planned Interest Areas",
                 type: "multi" as const,
-                options: collect("areasOfSpecialization"),
-            },
-            {
-                id: "plannedSpend",
-                label: "Planned spend (next 12–24 months)",
-                type: "single" as const,
-                options: ["<1M", "1M-5M", "5M-25M", "25M-100M", ">100M"],
+                options: interestAreaOrder,
+                // The one field rendered as colorized pills in the card / list
+                // views, so its options carry matching color swatches here.
+                colorize: true,
             },
             {
                 id: "industrySectors",
-                label: "Industry sectors",
+                label: "Industry Sectors",
                 type: "multi" as const,
-                options: collect("industrySectors"),
+                options: collectTags("industrySectors"),
+            },
+            {
+                id: "annualRevenue",
+                label: "Annual Revenue",
+                type: "multi" as const,
+                options: valueOrder.annualRevenue,
+            },
+            {
+                id: "budgetaryResponsibility",
+                label: "Budget Responsibility",
+                type: "multi" as const,
+                options: valueOrder.budgetaryResponsibility,
             },
             {
                 id: "companySize",
-                label: "Company size (employees)",
-                type: "single" as const,
-                options: SORT_ORDER.companySize,
+                label: "Company Size",
+                type: "multi" as const,
+                options: valueOrder.companySize,
             },
             {
-                id: "regionsOverseen",
-                label: "Regions overseen",
+                id: "transformationStage",
+                label: "Progress on Interest Areas",
                 type: "multi" as const,
-                options: collect("regionsOverseen"),
+                options: valueOrder.transformationStage,
             },
             {
-                id: "strategicPriorities",
-                label: "Strategic priorities",
+                id: "systemsAndPlatforms",
+                label: "Systems and Platforms",
                 type: "multi" as const,
-                options: collect("strategicPriorities"),
+                options: collectTags("systemsAndPlatforms"),
+            },
+            {
+                id: "priorityInitiative",
+                label: "Priority Initiative",
+                type: "multi" as const,
+                options: valueOrder.priorityInitiative,
+            },
+            {
+                id: "meetingInterests",
+                label: "Meeting Interests",
+                type: "multi" as const,
+                options: collectTags("meetingInterests"),
             },
         ].filter((f) => f.options.length > 0);
-    }, [delegates]);
+    }, [collectTags, interestAreaOrder, valueOrder]);
 
     useEffect(() => {
         setOpenAccordions(new Set(filterConfig.slice(0, 2).map((f) => f.id)));
@@ -514,8 +644,8 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
         }
 
         result.sort((a, b) => {
-            const av = getSortVal(a, sortField);
-            const bv = getSortVal(b, sortField);
+            const av = getSortVal(a, sortField, valueOrder);
+            const bv = getSortVal(b, sortField, valueOrder);
             if (typeof av === "string") {
                 return sortDir === "asc"
                     ? av.localeCompare(bv as string)
@@ -527,7 +657,19 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
         });
 
         return result;
-    }, [delegates, searchQuery, activeFilters, sortField, sortDir]);
+    }, [delegates, searchQuery, activeFilters, sortField, sortDir, valueOrder]);
+
+    // Grades a delegate's revenue chip against the event's own revenue bands.
+    // Wrapped so every view (and the details modal) reads one implementation.
+    const revenueClass = useCallback(
+        (d: Attendee) =>
+            revClass(d.profile.annualRevenue, valueOrder.annualRevenue),
+        [valueOrder],
+    );
+
+    // Interest areas currently selected in the sidebar. Drives the pills' active
+    // state so a pill and its filter row always agree.
+    const activeInterestAreas = activeFilters.interestAreas ?? [];
 
     // ── Request lookups ──
 
@@ -549,11 +691,14 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
 
     // ── Handlers ──
 
-    // Load the current sponsor's saved requests. Keyed on the sponsor id so it
-    // re-fetches when the identity changes without a reload — e.g. the
-    // testing-mode spoof-sponsor switch, where router.refresh() swaps in a new
-    // `currentSponsor` prop but doesn't remount this component. The `active`
-    // guard drops a stale in-flight response if the sponsor changes again mid-fetch.
+    // Load the current company's saved requests. Keyed on the party id (the
+    // company Account id for sponsors) so it re-fetches when the identity
+    // changes without a reload — e.g. the testing-mode spoof-sponsor switch,
+    // where router.refresh() swaps in a new `currentSponsor` prop but doesn't
+    // remount this component. Switching between reps of the SAME company keeps
+    // the same party id, so the shared request set isn't needlessly refetched.
+    // The `active` guard drops a stale in-flight response if it changes again
+    // mid-fetch.
     useEffect(() => {
         let active = true;
         fetch("/api/requests")
@@ -565,9 +710,9 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
         return () => {
             active = false;
         };
-    }, [currentSponsor.salesforceId]);
+    }, [currentPartyId]);
 
-    // Upsert a request for a delegate. `targetId` is the unique key per sponsor
+    // Upsert a request for a delegate. `targetId` is the unique key per company
     // (one request per delegate), so a save replaces any existing entry for that
     // target. New requests show optimistically; the server returns the saved row
     // (with its real id) which then replaces the optimistic one. The requester
@@ -583,12 +728,13 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
 
             // Optimistic add for brand-new requests (no id until the server
             // responds). Re-ranks are left until the response so an error keeps
-            // the prior rank.
+            // the prior rank. The requester id is cosmetic here (the server is
+            // authoritative and keys by the company party id).
             if (isNew) {
                 setRequests(
                     replaceTarget({
                         id: `temp:${target.salesforceId}`,
-                        requesterId: currentSponsor.salesforceId,
+                        requesterId: partyId(currentSponsor),
                         targetId: target.salesforceId,
                         rank,
                     }),
@@ -614,14 +760,12 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                 // untouched above, so there's nothing to restore for re-ranks.
                 if (isNew) {
                     setRequests((prev) =>
-                        prev.filter(
-                            (r) => r.targetId !== target.salesforceId,
-                        ),
+                        prev.filter((r) => r.targetId !== target.salesforceId),
                     );
                 }
             }
         },
-        [requestByTarget, currentSponsor.salesforceId],
+        [requestByTarget, currentSponsor],
     );
 
     // Remove a delegate's request: optimistically drop it, then tell the server.
@@ -643,12 +787,42 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
         [requestByTarget],
     );
 
+    // Mark a target as just-requested, then clear that flag after 2s so the
+    // button re-enables as "Edit request". Re-requesting restarts the timer.
+    const markJustRequested = useCallback((targetId: string) => {
+        setJustRequestedIds((prev) => new Set(prev).add(targetId));
+        const timers = justRequestedTimers.current;
+        const existing = timers.get(targetId);
+        if (existing) clearTimeout(existing);
+        timers.set(
+            targetId,
+            setTimeout(() => {
+                setJustRequestedIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(targetId);
+                    return next;
+                });
+                timers.delete(targetId);
+            }, 2000),
+        );
+    }, []);
+
+    // Clear any pending confirmation timers on unmount.
+    useEffect(() => {
+        const timers = justRequestedTimers.current;
+        return () => {
+            timers.forEach(clearTimeout);
+            timers.clear();
+        };
+    }, []);
+
     const handleSelectRank = useCallback(
         (delegate: Attendee, rank: number) => {
             setPickingId(null);
             saveRequest(delegate, rank);
+            markJustRequested(delegate.salesforceId);
         },
-        [saveRequest],
+        [saveRequest, markJustRequested],
     );
 
     const handleApplyFilter = useCallback(
@@ -672,6 +846,21 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
             });
         },
         [],
+    );
+
+    // Clicking an interest-area pill in the grid / list toggles that value in
+    // the Planned Interest Areas filter — the same state a sidebar checkbox
+    // writes, so the two stay in lockstep and "Clear all" clears both.
+    const toggleInterestArea = useCallback(
+        (value: string) => {
+            handleApplyFilter(
+                "interestAreas",
+                value,
+                !(activeFilters.interestAreas ?? []).includes(value),
+                "multi",
+            );
+        },
+        [activeFilters, handleApplyFilter],
     );
 
     const handleClearFilters = useCallback(() => {
@@ -714,14 +903,6 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
         const req = requestByTarget.get(d.salesforceId);
         const isPicking = pickingId === d.id;
 
-        if (req !== undefined && !isPicking) {
-            return (
-                <button className="requested-btn" disabled>
-                    👍 Requested
-                </button>
-            );
-        }
-
         if (isPicking) {
             return (
                 <div className="rank-picker">
@@ -750,6 +931,22 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
             );
         }
 
+        if (req !== undefined) {
+            // Locked confirmation for 2s after requesting; then editable.
+            if (justRequestedIds.has(d.salesforceId)) {
+                return (
+                    <button className="requested-btn" disabled>
+                        👍 Requested
+                    </button>
+                );
+            }
+            return (
+                <button className="req-btn" onClick={() => setPickingId(d.id)}>
+                    Edit Request
+                </button>
+            );
+        }
+
         return (
             <button className="req-btn" onClick={() => setPickingId(d.id)}>
                 + Request Meeting
@@ -770,13 +967,12 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
             <div className="card-grid">
                 {pool.map((d) => {
                     const req = requestByTarget.get(d.salesforceId);
-                    const capped = atCap && req === undefined;
                     const p = d.profile;
-                    const rc = revClass(p.annualRevenue) || "rev-na";
+                    const rc = revenueClass(d) || "rev-na";
                     return (
                         <div
                             key={d.id}
-                            className={`a-card ${req !== undefined ? "is-requested" : ""} ${capped ? "is-capped" : ""}`}
+                            className={`a-card ${req !== undefined ? "is-requested" : ""}`}
                         >
                             <div className="card-identity">
                                 <div className="card-company">{d.company}</div>
@@ -800,16 +996,6 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                         </span>
                                     </div>
                                 )}
-                                {hasValue(p.plannedSpend) && (
-                                    <div className="card-attr">
-                                        <span className="ca-label">
-                                            Planned spend
-                                        </span>
-                                        <span className="ca-value">
-                                            {p.plannedSpend}
-                                        </span>
-                                    </div>
-                                )}
                                 <div className="card-attr">
                                     <span className="ca-label">Co. size</span>
                                     <span className="ca-value">
@@ -817,7 +1003,32 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                     </span>
                                 </div>
                             </div>
-                            <CardMoreToggle p={p} />
+                            {/* Stacked pills need the card's full width, so
+                                interest areas sit in their own block rather than
+                                as a label/value row in .card-attrs. */}
+                            {hasValue(p.interestAreas) && (
+                                <div className="card-tag-block">
+                                    <span className="ca-label">
+                                        Interest areas
+                                    </span>
+                                    <TagPills
+                                        values={p.interestAreas}
+                                        order={interestAreaOrder}
+                                        activeValues={activeInterestAreas}
+                                        limit={PILL_LIMIT}
+                                        onToggle={toggleInterestArea}
+                                        onMore={() => setDetailsDelegate(d)}
+                                    />
+                                </div>
+                            )}
+                            {/* Opens the same DetailsModal the list view uses,
+                                replacing the old inline expand/collapse. */}
+                            <button
+                                className="card-details-btn"
+                                onClick={() => setDetailsDelegate(d)}
+                            >
+                                More details
+                            </button>
                             <div className="card-action">
                                 {renderCardAction(d)}
                             </div>
@@ -839,16 +1050,10 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
             );
         return (
             <div className="list-wrap">
-                <div
-                    className="list-view"
-                    style={{ "--list-cols": LIST_COLS } as React.CSSProperties}
-                >
-                    <div
-                        className="list-header"
-                        style={
-                            { "--list-cols": LIST_COLS } as React.CSSProperties
-                        }
-                    >
+                {/* .list-view declares --list-cols; the header and rows inherit
+                    it, so neither needs the tracks passed in. */}
+                <div className="list-view">
+                    <div className="list-header">
                         {LIST_HEADERS.map((h) => (
                             <div key={h} className="list-header-cell">
                                 {h}
@@ -858,36 +1063,59 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                     {pool.map((d) => {
                         const req = requestByTarget.get(d.salesforceId);
                         const isPicking = pickingId === d.id;
-                        const capped = atCap && req === undefined;
                         const p = d.profile;
-                        const rc = revClass(p.annualRevenue) || "rev-na";
+                        const rc = revenueClass(d) || "rev-na";
 
                         let action: React.ReactNode;
-                        if (req !== undefined && !isPicking) {
-                            action = (
-                                <button className="list-requested-btn" disabled>
-                                    👍 Requested
-                                </button>
-                            );
-                        } else if (isPicking) {
+                        if (isPicking) {
                             action = (
                                 <div className="list-rank-picker">
-                                    {[1, 2, 3, 4, 5].map((n) => (
-                                        <div
-                                            key={n}
-                                            className="list-rank-pip"
-                                            onClick={() =>
-                                                handleSelectRank(d, n)
-                                            }
-                                        >
-                                            {n}
-                                        </div>
-                                    ))}
+                                    <span className="list-rank-label">
+                                        Rate interest level
+                                    </span>
+                                    <div className="list-rank-pips">
+                                        {[1, 2, 3, 4, 5].map((n) => (
+                                            <div
+                                                key={n}
+                                                className="list-rank-pip"
+                                                onClick={() =>
+                                                    handleSelectRank(d, n)
+                                                }
+                                            >
+                                                {n}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {/* Cancel on its own line — inside the pip
+                                        row it overflowed the narrow name column
+                                        and got clipped by .list-cell. */}
                                     <button
                                         className="list-rank-cancel"
                                         onClick={() => setPickingId(null)}
                                     >
-                                        ✕
+                                        Cancel
+                                    </button>
+                                </div>
+                            );
+                        } else if (req !== undefined) {
+                            // Locked confirmation for 2s, then editable.
+                            action = justRequestedIds.has(d.salesforceId) ? (
+                                <button className="list-requested-btn" disabled>
+                                    👍 Requested
+                                </button>
+                            ) : (
+                                <div className="list-edit-actions">
+                                    <button
+                                        className="list-req-btn"
+                                        onClick={() => setPickingId(d.id)}
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        className="list-remove-btn"
+                                        onClick={() => deleteRequest(d)}
+                                    >
+                                        Remove
                                     </button>
                                 </div>
                             );
@@ -905,14 +1133,11 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                         return (
                             <div
                                 key={d.id}
-                                className={`list-row ${req !== undefined ? "is-requested" : ""} ${capped ? "is-capped" : ""}`}
+                                className={`list-row ${req !== undefined ? "is-requested" : ""}`}
                             >
                                 <div className="list-cell">
                                     <div className="lc-name">{d.name}</div>
                                     <div className="lc-title">{d.title}</div>
-                                    <div className="list-action-cell">
-                                        {action}
-                                    </div>
                                 </div>
                                 <div className="list-cell">
                                     <div className="lc-company">
@@ -930,18 +1155,18 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                     </span>
                                 </div>
                                 <div className="list-cell">
-                                    <span className="lc-val">
-                                        {p.plannedSpend || "N/A"}
-                                    </span>
+                                    <TagPills
+                                        values={p.interestAreas}
+                                        order={interestAreaOrder}
+                                        activeValues={activeInterestAreas}
+                                        limit={PILL_LIMIT}
+                                        onToggle={toggleInterestArea}
+                                        onMore={() => setDetailsDelegate(d)}
+                                    />
                                 </div>
                                 <div className="list-cell">
                                     <span className="lc-val">
                                         {str(p.companySize)}
-                                    </span>
-                                </div>
-                                <div className="list-cell">
-                                    <span className="lc-tags">
-                                        {dotTags(p.areasOfSpecialization)}
                                     </span>
                                 </div>
                                 <div className="list-cell">
@@ -951,13 +1176,24 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                 </div>
                                 <div className="list-cell">
                                     <span className="lc-tags">
-                                        {dotTags(p.regionsOverseen)}
+                                        {p.priorityInitiative || ""}
                                     </span>
                                 </div>
+                                {/* Every control for the row, in a trailing
+                                    (header-less) column: the request action
+                                    group on top, "More details" beneath it. */}
                                 <div className="list-cell">
-                                    <span className="lc-tags">
-                                        {dotTags(p.strategicPriorities)}
-                                    </span>
+                                    <div className="list-action-cell">
+                                        {action}
+                                        <button
+                                            className="list-details-btn"
+                                            onClick={() =>
+                                                setDetailsDelegate(d)
+                                            }
+                                        >
+                                            More details
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -981,18 +1217,11 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                 {pool.map((d) => {
                     const req = requestByTarget.get(d.salesforceId);
                     const isPicking = pickingId === d.id;
-                    const capped = atCap && req === undefined;
                     const p = d.profile;
-                    const rc = revClass(p.annualRevenue) || "rev-na";
+                    const rc = revenueClass(d) || "rev-na";
 
                     let action: React.ReactNode;
-                    if (req !== undefined && !isPicking) {
-                        action = (
-                            <button className="requested-btn" disabled>
-                                👍 Requested
-                            </button>
-                        );
-                    } else if (isPicking) {
+                    if (isPicking) {
                         action = (
                             <div className="hcard-rank-picker">
                                 <span className="hcard-rank-label">
@@ -1019,6 +1248,20 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                 </button>
                             </div>
                         );
+                    } else if (req !== undefined) {
+                        // Locked confirmation for 2s, then editable.
+                        action = justRequestedIds.has(d.salesforceId) ? (
+                            <button className="requested-btn" disabled>
+                                👍 Requested
+                            </button>
+                        ) : (
+                            <button
+                                className="req-btn"
+                                onClick={() => setPickingId(d.id)}
+                            >
+                                Edit Request
+                            </button>
+                        );
                     } else {
                         action = (
                             <button
@@ -1033,7 +1276,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                     return (
                         <div
                             key={d.id}
-                            className={`hcard ${req !== undefined ? "is-requested" : ""} ${capped ? "is-capped" : ""}`}
+                            className={`hcard ${req !== undefined ? "is-requested" : ""}`}
                         >
                             <div className="hcard-top">
                                 <div className="hcard-identity">
@@ -1059,16 +1302,6 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                             </span>
                                         </div>
                                     )}
-                                    {hasValue(p.plannedSpend) && (
-                                        <div className="hcard-attr">
-                                            <span className="hca-label">
-                                                Planned spend
-                                            </span>
-                                            <span className="hca-value">
-                                                {p.plannedSpend}
-                                            </span>
-                                        </div>
-                                    )}
                                     <div className="hcard-attr">
                                         <span className="hca-label">
                                             Co. size
@@ -1077,17 +1310,27 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                             {str(p.companySize)}
                                         </span>
                                     </div>
+                                    {hasValue(p.interestAreas) && (
+                                        <div className="card-tag-block">
+                                            <span className="hca-label">
+                                                Interest areas
+                                            </span>
+                                            <TagPills
+                                                values={p.interestAreas}
+                                                order={interestAreaOrder}
+                                                activeValues={
+                                                    activeInterestAreas
+                                                }
+                                                limit={PILL_LIMIT}
+                                                onToggle={toggleInterestArea}
+                                                onMore={() =>
+                                                    setDetailsDelegate(d)
+                                                }
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="hcard-right">
-                                    <div className="hcard-tag-attr">
-                                        <span className="hca-label">
-                                            Specialization
-                                        </span>
-                                        <span className="hca-value">
-                                            {dotTags(p.areasOfSpecialization) ||
-                                                "N/A"}
-                                        </span>
-                                    </div>
                                     <div className="hcard-tag-attr">
                                         <span className="hca-label">
                                             Industries
@@ -1099,20 +1342,10 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                     </div>
                                     <div className="hcard-tag-attr">
                                         <span className="hca-label">
-                                            Regions
+                                            Priority initiative
                                         </span>
                                         <span className="hca-value">
-                                            {dotTags(p.regionsOverseen) ||
-                                                "N/A"}
-                                        </span>
-                                    </div>
-                                    <div className="hcard-tag-attr">
-                                        <span className="hca-label">
-                                            Priorities
-                                        </span>
-                                        <span className="hca-value">
-                                            {dotTags(p.strategicPriorities) ||
-                                                "N/A"}
+                                            {p.priorityInitiative || "N/A"}
                                         </span>
                                     </div>
                                 </div>
@@ -1134,12 +1367,11 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
 
     const pkgLabel =
         currentSponsor.sponsorTier === "diamond" ? "◆ Diamond" : "● Standard";
-    const reqCountColor =
-        reqCount >= maxMeetings
-            ? "var(--red)"
-            : reqCount > 0
-              ? "var(--green)"
-              : "var(--t2)";
+    // Counter sits on the solid --blue-deep "My Requests" button, so this needs
+    // to read on a dark background. The count is a reference against the package
+    // amount, not a limit, so hitting it isn't flagged — full white once any
+    // request exists, dimmed when empty.
+    const reqCountColor = reqCount > 0 ? "#ffffff" : "rgba(255,255,255,0.7)";
 
     const showHCards = viewMode === "list" && catalogWidth < LIST_BREAK;
 
@@ -1150,8 +1382,9 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
             <TopBar
                 user={{
                     name: currentSponsor.name,
-                    title: currentSponsor.title,
+                    title: currentSponsor.company || currentSponsor.title,
                 }}
+                eventLogo={eventLogo}
                 actions={
                     <button
                         className={`requests-btn ${reqCount > 0 ? "has-items" : ""}`}
@@ -1165,7 +1398,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                 color: reqCountColor,
                             }}
                         >
-                            {reqCount}/{maxMeetings}
+                            {reqCount}
                         </span>
                     </button>
                 }
@@ -1227,9 +1460,6 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                                 <option value="budgetaryResponsibility">
                                     Budgetary Resp.
                                 </option>
-                                <option value="plannedSpend">
-                                    Planned Spend
-                                </option>
                                 <option value="companySize">
                                     Company Size
                                 </option>
@@ -1266,13 +1496,14 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                         </span>
                     </div>
 
-                    {atCap && (
-                        <div className="cap-banner">
-                            <span className="cap-banner-icon">⚠</span>
+                    {reachedPackage && (
+                        <div className="info-banner">
+                            <span className="info-banner-icon">✓</span>
                             <span>
-                                You&apos;ve reached your limit of {maxMeetings}{" "}
-                                meeting requests. Remove a request to add a new
-                                one.
+                                You&apos;ve made enough requests to meet your
+                                package amount. Keep adding requests so we can
+                                provide you the best match based on delegate
+                                availability.
                             </span>
                         </div>
                     )}
@@ -1340,11 +1571,16 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                 </div>
                 <div className="drawer-body">
                     <div className="pkg-bar">
-                        <span className="pkg-label">{pkgLabel} package</span>
                         <span
-                            className={`pkg-val ${drawerEntries.length >= maxMeetings ? "pkg-full" : "pkg-ok"}`}
+                            className={`pkg-label ${currentSponsor.sponsorTier === "diamond" ? "pkg-label-diamond" : ""}`}
                         >
-                            {drawerEntries.length} / {maxMeetings} meetings
+                            {pkgLabel} package
+                        </span>
+                        {/* The package amount is a reference, not a cap: show
+                            the contracted meeting count and make clear requests
+                            themselves are unlimited. */}
+                        <span className="pkg-val pkg-ok">
+                            {maxMeetings} meetings, unlimited requests
                         </span>
                     </div>
                     {drawerEntries.length === 0 ? (
@@ -1369,6 +1605,7 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                             <DrawerItem
                                 key={d.id}
                                 d={d}
+                                revenueClass={revenueClass(d)}
                                 rank={rank}
                                 onRank={saveRequest}
                                 onRemove={deleteRequest}
@@ -1377,6 +1614,30 @@ export default function SponsorCatalog({ delegates, currentSponsor }: Props) {
                     )}
                 </div>
             </div>
+
+            {/* Delegate "More details" modal (grid card + list row) */}
+            {detailsDelegate && (
+                <DetailsModal
+                    d={detailsDelegate}
+                    revClass={revenueClass(detailsDelegate)}
+                    interestAreaOrder={interestAreaOrder}
+                    activeInterestAreas={activeInterestAreas}
+                    onClose={() => setDetailsDelegate(null)}
+                >
+                    <RequestActions
+                        d={detailsDelegate}
+                        req={requestByTarget.get(detailsDelegate.salesforceId)}
+                        isPicking={pickingId === detailsDelegate.id}
+                        justRequested={justRequestedIds.has(
+                            detailsDelegate.salesforceId,
+                        )}
+                        onStartPick={(x) => setPickingId(x.id)}
+                        onCancelPick={() => setPickingId(null)}
+                        onSelectRank={handleSelectRank}
+                        onRemove={deleteRequest}
+                    />
+                </DetailsModal>
+            )}
         </>
     );
 }

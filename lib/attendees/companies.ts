@@ -136,3 +136,24 @@ export function resolvePartyName(
     if (attendee) return { name: attendee.name, company: attendee.company };
     return undefined;
 }
+
+/**
+ * Whether a party has cancelled its Cvent registration.
+ * A company counts as cancelled only when every one of its reps cancelled.
+ * Any rep still registered keeps the company in.
+ * Unknown ids are not cancelled.
+ *
+ * @param {string} id - The party id.
+ * @param {Map<string, SponsorCompany>} companies - Company map (by account id).
+ * @param {Map<string, Attendee>} bySalesforceId - Attendee map (by salesforceId).
+ * @returns {boolean} True when the party cancelled in Cvent.
+ */
+export function isPartyCancelled(
+    id: string,
+    companies: Map<string, SponsorCompany>,
+    bySalesforceId: Map<string, Attendee>,
+): boolean {
+    const company = companies.get(id);
+    if (company) return company.reps.every((r) => !!r.cventCancelled);
+    return !!bySalesforceId.get(id)?.cventCancelled;
+}

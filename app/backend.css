@@ -484,6 +484,11 @@
     color: var(--t3);
     border: 1px solid var(--border);
 }
+.adm-chip-cancelled {
+    background: var(--red-s);
+    color: var(--red);
+    border: 1px solid var(--red-b);
+}
 
 /* ── Mono table cells ── */
 .adm-mono {

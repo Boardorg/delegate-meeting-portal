@@ -290,6 +290,12 @@ function MeetingTableRow({
                 <div className="adm-party-name">{m.delegateName}</div>
                 <div className="adm-chip-mt">
                     <MatchKindChip kind={m.matchKind} />
+                    {m.delegateCancelled && (
+                        <>
+                            {" "}
+                            <span className="adm-chip adm-chip-cancelled">Cancelled in Cvent</span>
+                        </>
+                    )}
                 </div>
             </td>
 

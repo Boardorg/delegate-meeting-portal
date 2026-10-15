@@ -1,6 +1,7 @@
 import { Attendee, MeetingRequest, ScheduledMeeting } from "@/types";
 import { pairKey } from "./helpers";
 import {
+    isPartyCancelled,
     resolvePartyName,
     sponsorCompaniesByAccountId,
 } from "@/lib/attendees/companies";
@@ -148,19 +149,8 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         resolvePartyName(id, companies, attendeesBySalesforceId)?.name;
 
     // Parties the scheduler left out because they cancelled in Cvent.
-    // A delegate counts when their own registration is cancelled.
-    // A company counts only when every one of its reps cancelled.
-    const cancelledParties = new Set<string>();
-    for (const a of attendees) {
-        if (a.role === "delegate" && a.cventCancelled) {
-            cancelledParties.add(a.salesforceId);
-        }
-    }
-    for (const company of companies.values()) {
-        if (company.reps.every((r) => r.cventCancelled)) {
-            cancelledParties.add(company.accountId);
-        }
-    }
+    const isCancelled = (id: string): boolean =>
+        isPartyCancelled(id, companies, attendeesBySalesforceId);
 
     // The pairs that survived reconciliation — a request is "scheduled" iff its
     // canonical pair is among these.
@@ -198,7 +188,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
                 rank: req.rank,
                 reason: classifyUnscheduled(req, {
                     partyName,
-                    cancelledParties,
+                    isCancelled,
                     reconciledOutPairs,
                     skipReasons,
                     preexistingPairs,
@@ -251,7 +241,7 @@ function classifyUnscheduled(
     req: MeetingRequest,
     ctx: {
         partyName: (id: string) => string | undefined;
-        cancelledParties: Set<string>;
+        isCancelled: (id: string) => boolean;
         reconciledOutPairs: Set<string>;
         skipReasons: Map<string, SchedulerFailureReason>;
         preexistingPairs: Set<string>;
@@ -260,7 +250,7 @@ function classifyUnscheduled(
 ): SchedulerFailureReason {
     const {
         partyName,
-        cancelledParties,
+        isCancelled,
         reconciledOutPairs,
         skipReasons,
         preexistingPairs,
@@ -283,10 +273,7 @@ function classifyUnscheduled(
     if (!partyName(req.requesterId) || !partyName(req.targetId)) {
         return "not_an_attendee";
     }
-    if (
-        cancelledParties.has(req.requesterId) ||
-        cancelledParties.has(req.targetId)
-    ) {
+    if (isCancelled(req.requesterId) || isCancelled(req.targetId)) {
         return "attendee_cancelled";
     }
     if (req.requesterId === req.targetId) return "self_request";

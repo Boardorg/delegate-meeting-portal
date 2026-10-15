@@ -36,6 +36,8 @@ export type MeetingRow = {
     delegateSalesforceId: string;
     delegateName: string;
     delegateCompany: string;
+    /** True when the delegate cancelled their Cvent registration. Push skips these meetings. */
+    delegateCancelled: boolean;
     matchKind: MeetingMatchKind;
     /**
      * Whether both parties asked for this pairing — the sponsor through the
@@ -151,6 +153,7 @@ export async function getMeetingDetail(params: {
                 delegateSalesforceId: delegateId,
                 delegateName: delegate?.name ?? delegateId,
                 delegateCompany: delegate?.company ?? "",
+                delegateCancelled: !!delegate?.cventCancelled,
                 matchKind: m.matchKind as MeetingMatchKind,
                 mutual: m.mutual,
                 rank: m.rank,

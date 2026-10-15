@@ -8,7 +8,11 @@ import {
     sponsorCompaniesByAccountId,
     cventContactIdsOfCompany,
 } from "@/lib/attendees/companies";
-import { createAppointment, cancelAppointment } from "@/lib/cvent/client";
+import {
+    createAppointment,
+    updateAppointment,
+    cancelAppointment,
+} from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 import {
     classifyPushError,
@@ -249,10 +253,29 @@ export async function pushMeetingRows(
         };
 
         try {
-            const cventAppointmentId = await createAppointment(
-                eventCode,
-                input,
-            );
+            let cventAppointmentId: string;
+            // True when the old appointment was edited in place instead of replaced.
+            let updatedInPlace = false;
+            try {
+                cventAppointmentId = await createAppointment(eventCode, input);
+            } catch (createErr) {
+                // A replacement at the same time as the old appointment collides with it.
+                // Cvent sees the same people double-booked and rejects the create as unavailable.
+                // In that case we edit the old appointment in place instead.
+                // If the conflict is real, the update fails the same way and that error is reported.
+                if (
+                    !oldAppointmentId ||
+                    classifyPushError(createErr) !== "cvent_no_availability"
+                ) {
+                    throw createErr;
+                }
+                cventAppointmentId = await updateAppointment(
+                    eventCode,
+                    oldAppointmentId,
+                    input,
+                );
+                updatedInPlace = true;
+            }
 
             // Collect non-fatal notes for an otherwise-successful push.
             const notes: string[] = [];
@@ -262,7 +285,8 @@ export async function pushMeetingRows(
             // Only cancel the old appointment once the replacement exists.
             // This can't undo the create, so a failure here is reported as a
             // warning rather than failing a push that otherwise succeeded.
-            if (oldAppointmentId) {
+            // An in-place update has no old appointment left to cancel.
+            if (oldAppointmentId && !updatedInPlace) {
                 try {
                     await cancelAppointment(eventCode, oldAppointmentId);
                 } catch (cancelErr) {

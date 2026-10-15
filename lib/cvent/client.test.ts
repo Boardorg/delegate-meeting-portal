@@ -1,5 +1,9 @@
 import { describe, test, expect } from "vitest";
-import { buildCreateAppointmentRequest, toExistingAppointments } from "./client";
+import {
+    buildCreateAppointmentRequest,
+    buildUpdateAppointmentRequest,
+    toExistingAppointments,
+} from "./client";
 
 // ---------------------------------------------------------------------------
 // Cvent payload shaping (multi-host) + existing-appointment reader.
@@ -35,6 +39,29 @@ describe("buildCreateAppointmentRequest", () => {
         expect(req.hosts).toEqual([{ id: "h1" }]);
         expect("attendees" in req).toBe(false);
         expect("location" in req).toBe(false);
+        expect("code" in req).toBe(false);
+    });
+});
+
+describe("buildUpdateAppointmentRequest", () => {
+    test("carries the new location and participants, minus the create-only fields", () => {
+        const req = buildUpdateAppointmentRequest("appt-1", {
+            subject: "Acme & Globex",
+            startTime: new Date("2025-01-15T09:00:00Z"),
+            endTime: new Date("2025-01-15T09:30:00Z"),
+            appointmentTypeId: "type-1",
+            hostContactIds: ["h1", "h2"],
+            attendeeContactIds: ["d1"],
+            locationId: "loc-2",
+            code: "mtg-1",
+        });
+        expect(req.id).toBe("appt-1");
+        expect(req.location).toBe("loc-2");
+        expect(req.hosts).toEqual([{ id: "h1" }, { id: "h2" }]);
+        expect(req.attendees).toEqual([{ id: "d1" }]);
+        // Cvent's update endpoint doesn't accept these.
+        expect("appointmentTypeId" in req).toBe(false);
+        expect("autoAccept" in req).toBe(false);
         expect("code" in req).toBe(false);
     });
 });

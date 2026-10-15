@@ -668,6 +668,33 @@ export function buildCreateAppointmentRequest(input: CventAppointmentInput) {
 }
 
 /**
+ * Builds the Cvent `updateAppointmentRequest` payload from our input. Shaped
+ * like the create payload, minus the fields Cvent's update endpoint doesn't
+ * accept: appointmentTypeId, autoAccept and code. Exported so the shaping can
+ * be unit-tested without the SDK.
+ *
+ * @param {string} apptId - The existing Cvent appointment id being updated.
+ * @param {CventAppointmentInput} input - The appointment fields.
+ * @returns The SDK update-appointment request body.
+ */
+export function buildUpdateAppointmentRequest(
+    apptId: string,
+    input: CventAppointmentInput,
+) {
+    return {
+        id: apptId,
+        subject: input.subject,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        hosts: toUuidList(input.hostContactIds),
+        ...(input.locationId ? { location: input.locationId } : {}),
+        ...(input.attendeeContactIds?.length
+            ? { attendees: toUuidList(input.attendeeContactIds) }
+            : {}),
+    };
+}
+
+/**
  * Whether to suppress Cvent notifications (invite/update emails) when pushing
  * appointments. Controlled by CVENT_SUPPRESS_NOTIFICATIONS; defaults to false
  * (notifications sent as configured in Cvent).
@@ -746,6 +773,43 @@ export async function createAppointment(
             id,
             suppressNotifications: suppressNotifications(),
             createAppointmentRequest: buildCreateAppointmentRequest(input),
+        });
+        return res.id;
+    } catch (err) {
+        // Treat an over-strict response-validation failure on a real 2xx as success.
+        return recoverAppointmentId(err);
+    }
+}
+
+/**
+ * Updates an existing Cvent appointment in place and returns its id. Used when
+ * a re-push can't create a replacement because the old appointment still holds
+ * the same participants at the same time (see lib/cvent/push.ts). In mock mode
+ * is a no-op that returns the given apptId.
+ *
+ * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
+ * @param {string} apptId - The existing Cvent appointment id to update.
+ * @param {CventAppointmentInput} input - The updated appointment fields.
+ * @returns {Promise<string>} The appointment's Cvent id.
+ */
+export async function updateAppointment(
+    eventCode: string,
+    apptId: string,
+    input: CventAppointmentInput,
+): Promise<string> {
+    if (isMock()) return apptId;
+
+    const id = await getAppointmentEventId(eventCode);
+
+    try {
+        const res = await getClient().appointments.updateAppointment({
+            id,
+            apptId,
+            suppressNotifications: suppressNotifications(),
+            updateAppointmentRequest: buildUpdateAppointmentRequest(
+                apptId,
+                input,
+            ),
         });
         return res.id;
     } catch (err) {

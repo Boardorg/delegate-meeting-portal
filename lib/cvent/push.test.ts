@@ -11,12 +11,14 @@ import type { ScheduledMeetingRow } from "@/lib/db/schema";
 // ---------------------------------------------------------------------------
 
 const createAppointment = vi.fn();
+const updateAppointment = vi.fn();
 const cancelAppointment = vi.fn();
 const loadAttendees = vi.fn();
 const loadEventScheduleData = vi.fn();
 
 vi.mock("@/lib/cvent/client", () => ({
     createAppointment: (...a: unknown[]) => createAppointment(...a),
+    updateAppointment: (...a: unknown[]) => updateAppointment(...a),
     cancelAppointment: (...a: unknown[]) => cancelAppointment(...a),
 }));
 vi.mock("@/lib/attendees/loader", () => ({
@@ -157,5 +159,104 @@ describe("pushMeetingRows — multi-host", () => {
         expect(lastInput().hostContactIds).toEqual(["h1"]);
         expect(lastInput().attendeeContactIds).toEqual([]);
         expect(summary.results[0].warning).toBeTruthy();
+    });
+});
+
+/**
+ * Builds an error shaped like the Cvent SDK's API error, with an HTTP status
+ * and a JSON body carrying Cvent's error code.
+ *
+ * @param {number} statusCode - The HTTP status Cvent returned.
+ * @param {string} code - Cvent's error code from the response body.
+ * @returns {Error} The SDK-shaped error.
+ */
+function cventError(statusCode: number, code: string): Error {
+    return Object.assign(new Error(`API error occurred: Status ${statusCode}`), {
+        statusCode,
+        body: JSON.stringify({ message: `Cvent says ${code}`, code }),
+    });
+}
+
+describe("pushMeetingRows — re-push at the same time", () => {
+    beforeEach(() => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+        ]);
+    });
+
+    test("updates the old appointment in place when the replacement collides with it", async () => {
+        createAppointment.mockRejectedValue(
+            cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
+        );
+        updateAppointment.mockResolvedValue("appt-old");
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ cventAppointmentId: "appt-old", locationId: "loc-2" }),
+        ]);
+
+        expect(summary.pushed).toBe(1);
+        expect(summary.results[0].cventAppointmentId).toBe("appt-old");
+        expect(updateAppointment).toHaveBeenCalledWith(
+            "EVT",
+            "appt-old",
+            expect.objectContaining({ locationId: "loc-2" }),
+        );
+        // The appointment was edited, not replaced, so nothing is cancelled.
+        expect(cancelAppointment).not.toHaveBeenCalled();
+    });
+
+    test("reports the update's error when the in-place update also fails", async () => {
+        createAppointment.mockRejectedValue(
+            cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
+        );
+        updateAppointment.mockRejectedValue(
+            cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
+        );
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ cventAppointmentId: "appt-old" }),
+        ]);
+
+        expect(summary.pushed).toBe(0);
+        expect(summary.results[0].reason).toBe("cvent_no_availability");
+        expect(cancelAppointment).not.toHaveBeenCalled();
+    });
+
+    test("does not try an update for a meeting that was never pushed", async () => {
+        createAppointment.mockRejectedValue(
+            cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
+        );
+
+        const summary = await pushMeetingRows("EVT", [row()]);
+
+        expect(summary.pushed).toBe(0);
+        expect(updateAppointment).not.toHaveBeenCalled();
+    });
+
+    test("does not try an update for errors other than availability", async () => {
+        createAppointment.mockRejectedValue(
+            cventError(422, "ATTENDEE_NOT_FOUND"),
+        );
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ cventAppointmentId: "appt-old" }),
+        ]);
+
+        expect(summary.pushed).toBe(0);
+        expect(updateAppointment).not.toHaveBeenCalled();
+        expect(cancelAppointment).not.toHaveBeenCalled();
+    });
+
+    test("still creates then cancels when the replacement succeeds", async () => {
+        createAppointment.mockResolvedValue("appt-new");
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ cventAppointmentId: "appt-old" }),
+        ]);
+
+        expect(summary.results[0].cventAppointmentId).toBe("appt-new");
+        expect(updateAppointment).not.toHaveBeenCalled();
+        expect(cancelAppointment).toHaveBeenCalledWith("EVT", "appt-old");
     });
 });

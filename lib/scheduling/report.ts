@@ -35,6 +35,8 @@ import {
  * The engine never attempted the pair (rejected during candidate collection):
  * - self_request: the request targets the requester themselves.
  * - not_an_attendee: requester and/or target isn't in the attendee list.
+ * - attendee_cancelled: requester and/or target cancelled their Cvent registration.
+ *   The scheduler leaves cancelled attendees out, so the pair is never a candidate.
  * - already_scheduled: the pair already meets in Cvent, so the engine treated
  *   it as pre-booked and never considered it a candidate.
  * - no_pass_match: a valid pair that matched none of the scheduling passes'
@@ -51,6 +53,7 @@ export type SchedulerFailureReason =
     | "company_diversity"
     | "self_request"
     | "not_an_attendee"
+    | "attendee_cancelled"
     | "already_scheduled"
     | "no_pass_match"
     | "conflict_existing";
@@ -144,6 +147,21 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
     const partyName = (id: string): string | undefined =>
         resolvePartyName(id, companies, attendeesBySalesforceId)?.name;
 
+    // Parties the scheduler left out because they cancelled in Cvent.
+    // A delegate counts when their own registration is cancelled.
+    // A company counts only when every one of its reps cancelled.
+    const cancelledParties = new Set<string>();
+    for (const a of attendees) {
+        if (a.role === "delegate" && a.cventCancelled) {
+            cancelledParties.add(a.salesforceId);
+        }
+    }
+    for (const company of companies.values()) {
+        if (company.reps.every((r) => r.cventCancelled)) {
+            cancelledParties.add(company.accountId);
+        }
+    }
+
     // The pairs that survived reconciliation — a request is "scheduled" iff its
     // canonical pair is among these.
     const finalPairs = new Set(
@@ -180,6 +198,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
                 rank: req.rank,
                 reason: classifyUnscheduled(req, {
                     partyName,
+                    cancelledParties,
                     reconciledOutPairs,
                     skipReasons,
                     preexistingPairs,
@@ -232,13 +251,21 @@ function classifyUnscheduled(
     req: MeetingRequest,
     ctx: {
         partyName: (id: string) => string | undefined;
+        cancelledParties: Set<string>;
         reconciledOutPairs: Set<string>;
         skipReasons: Map<string, SchedulerFailureReason>;
         preexistingPairs: Set<string>;
         pair: string;
     },
 ): SchedulerFailureReason {
-    const { partyName, reconciledOutPairs, skipReasons, preexistingPairs, pair } = ctx;
+    const {
+        partyName,
+        cancelledParties,
+        reconciledOutPairs,
+        skipReasons,
+        preexistingPairs,
+        pair,
+    } = ctx;
 
     // Placed by the engine, then dropped for conflicting with a pushed meeting.
     if (reconciledOutPairs.has(pair)) return "conflict_existing";
@@ -255,6 +282,12 @@ function classifyUnscheduled(
     // scheduling passes.
     if (!partyName(req.requesterId) || !partyName(req.targetId)) {
         return "not_an_attendee";
+    }
+    if (
+        cancelledParties.has(req.requesterId) ||
+        cancelledParties.has(req.targetId)
+    ) {
+        return "attendee_cancelled";
     }
     if (req.requesterId === req.targetId) return "self_request";
     if (preexistingPairs.has(pair)) return "already_scheduled";

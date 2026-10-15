@@ -263,8 +263,14 @@ export async function runSchedulerForEvent(
     // requests above plus one delegate→sponsor request per entry in each
     // delegate's intake-form "sponsors I want to meet" answer. The report is
     // built from it so its tallies match the run.
+    //
+    // Attendees who cancelled in Cvent are left out, so no new meetings are made with them.
+    // Un-pushed meetings are rebuilt from scratch below, so cancelled attendees drop out of those.
+    // Meetings already pushed to Cvent are kept for an admin to reassign.
+    // The report below still gets everyone, so it can say why those requests went unscheduled.
+    const schedulable = attendees.filter((a) => !a.cventCancelled);
     const { schedule, skipReasons, effectiveRequests } = await runScheduler(
-        attendees,
+        schedulable,
         engineRequests,
         scheduleData.timeslots,
         scheduleData.locations,

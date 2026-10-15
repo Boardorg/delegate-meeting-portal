@@ -181,6 +181,14 @@ export interface Attendee {
     cventContactId: string;
 
     /**
+     * True when this attendee's Cvent registration is cancelled.
+     * They stay in the attendee list so admins can find and reassign their meetings.
+     * Sponsors don't see them in the catalog, the scheduler skips them, and push won't send them to Cvent.
+     * Absent or false for everyone else, including mock data.
+     */
+    cventCancelled?: boolean;
+
+    /**
      * Salesforce Contact/Attendee record ID.
      * Used by the Salesforce integration to query and update the correct record.
      */

@@ -371,20 +371,26 @@ export type CventEventAttendee = {
     contactId: string;
     /** Contact email — the key used to match against Salesforce attendees. */
     email: string;
+    /** True when the registration's Cvent status is Cancelled. */
+    cancelled: boolean;
 };
 
 /**
- * Reduces raw Cvent attendee records to `{ contactId, email }`, dropping any
- * record missing either field (both are required to match + push).
+ * Reduces raw Cvent attendee records to `{ contactId, email, cancelled }`, dropping any
+ * record missing either id field (both are required to match + push).
  */
 function toCventEventAttendees(
-    data: Array<{ contact?: { id?: string; email?: string } }>,
+    data: Array<{ contact?: { id?: string; email?: string }; status?: string }>,
 ): CventEventAttendee[] {
     const out: CventEventAttendee[] = [];
     for (const a of data) {
         const contactId = a.contact?.id;
         const email = a.contact?.email;
-        if (contactId && email) out.push({ contactId, email });
+        if (contactId && email) {
+            // Cvent drops cancelled registrants from the appointment roster.
+            // Pushing one as a participant fails with ATTENDEE_NOT_FOUND.
+            out.push({ contactId, email, cancelled: a.status === "Cancelled" });
+        }
     }
     return out;
 }

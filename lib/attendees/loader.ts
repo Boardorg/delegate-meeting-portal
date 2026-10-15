@@ -6,6 +6,7 @@ import { getMeetingDataByEvent } from "@/lib/salesforce/client";
 import { meetingDataToAttendees } from "@/lib/salesforce/attendeeMapper";
 import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventAttendees } from "@/lib/cvent/client";
+import { matchCventAttendees } from "@/lib/attendees/cventMatch";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 import { Attendee } from "@/types";
 
@@ -139,23 +140,13 @@ const loadAttendeesCached = cache(
             const cventAttendeesNormalized = cventAttendees.map((c) => ({
                 email: normalizeCventEmail(c.email),
                 contactId: c.contactId,
+                cancelled: c.cancelled,
             }));
 
-            attendees = attendees
-                .filter(
-                    (a) =>
-                        a.email &&
-                        cventAttendeesNormalized.find(
-                            (c) => c.email === a.email.toLowerCase(),
-                        ),
-                )
-                .map((a) => ({
-                    ...a,
-                    cventContactId:
-                        cventAttendeesNormalized.find(
-                            (c) => c.email === a.email.toLowerCase(),
-                        )?.contactId ?? "",
-                }));
+            attendees = matchCventAttendees(
+                attendees,
+                cventAttendeesNormalized,
+            );
         }
 
         // Apply display-layer formatting to the profile data for each attendee.

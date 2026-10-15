@@ -100,12 +100,15 @@ export function sponsorCompaniesByAccountId(
  * The Cvent contact ids of a company's reps (truthy only). These become the
  * appointment HOSTS when a company meeting is pushed to Cvent. Reps without a
  * Cvent contact id are excluded (they can't host).
+ * Reps whose Cvent registration is cancelled are excluded too.
+ * Cvent rejects a cancelled registrant as a participant.
  *
  * @param {SponsorCompany} company - The company.
  * @returns {string[]} Rep Cvent contact ids (deduped, truthy).
  */
 export function cventContactIdsOfCompany(company: SponsorCompany): string[] {
     const ids = company.reps
+        .filter((r) => !r.cventCancelled)
         .map((r) => r.cventContactId)
         .filter((id): id is string => !!id);
     return [...new Set(ids)];

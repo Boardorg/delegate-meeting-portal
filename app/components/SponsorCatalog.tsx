@@ -82,8 +82,19 @@ type ValueOrder = Record<ScalarProfileField, string[]>;
 /** How many interest-area pills a compact view shows before collapsing to "+N". */
 const PILL_LIMIT = 3;
 
+/**
+ * A delegate who cancelled their Cvent registration.
+ * Only what the request drawer needs to label and remove a request for them.
+ */
+export type CancelledDelegate = Pick<
+    Attendee,
+    "salesforceId" | "name" | "company"
+>;
+
 interface Props {
     delegates: Attendee[];
+    /** Delegates who cancelled in Cvent. They're not in the catalog, but their requests show in the drawer. */
+    cancelledDelegates: CancelledDelegate[];
     currentSponsor: Attendee;
     /** Current-event logo for the header, or null when the event has none. */
     eventLogo?: TopBarEventLogo | null;
@@ -215,6 +226,40 @@ function RequestActions({
         <button className="req-btn" onClick={() => onStartPick(d)}>
             + Request Meeting
         </button>
+    );
+}
+
+/**
+ * A drawer entry for a request whose delegate cancelled their Cvent registration.
+ * It can't be edited or scheduled, so the only action is removing it.
+ */
+function CancelledDrawerItem({
+    d,
+    onRemove,
+}: {
+    d: CancelledDelegate;
+    onRemove: (delegate: CancelledDelegate) => void;
+}) {
+    return (
+        <div className="d-item d-item-cancelled">
+            <div className="d-item-hero">
+                <div className="d-meta">
+                    <div className="d-company">{d.company}</div>
+                    <div className="d-name">{d.name}</div>
+                    <div className="d-cancelled-note">
+                        Cancelled their registration. This request won&apos;t
+                        be scheduled.
+                    </div>
+                </div>
+                <button
+                    className="d-remove"
+                    onClick={() => onRemove(d)}
+                    title="Remove"
+                >
+                    ✕
+                </button>
+            </div>
+        </div>
     );
 }
 
@@ -454,6 +499,7 @@ function FiltersPanel({
 
 export default function SponsorCatalog({
     delegates,
+    cancelledDelegates,
     currentSponsor,
     eventLogo,
 }: Props) {
@@ -501,7 +547,14 @@ export default function SponsorCatalog({
     // schedules up to the contracted amount). `reachedPackage` just drives an
     // informational nudge once they've filed enough to fill that amount.
     const maxMeetings = contractedMeetings(currentSponsor.sponsorTier);
-    const reqCount = requests.length;
+    // Requests for delegates who cancelled won't become meetings, so they don't count toward the package.
+    const cancelledBySf = useMemo(
+        () => new Map(cancelledDelegates.map((d) => [d.salesforceId, d])),
+        [cancelledDelegates],
+    );
+    const reqCount = requests.filter(
+        (r) => !cancelledBySf.has(r.targetId),
+    ).length;
     const reachedPackage = reqCount >= maxMeetings;
 
     // ── Filter config ──
@@ -770,7 +823,7 @@ export default function SponsorCatalog({
 
     // Remove a delegate's request: optimistically drop it, then tell the server.
     const deleteRequest = useCallback(
-        (target: Attendee) => {
+        (target: Pick<Attendee, "salesforceId">) => {
             if (!requestByTarget.has(target.salesforceId)) return;
             setRequests((prev) =>
                 prev.filter((r) => r.targetId !== target.salesforceId),
@@ -1365,6 +1418,11 @@ export default function SponsorCatalog({
         .filter((e): e is { d: Attendee; rank: number } => Boolean(e.d))
         .sort((a, b) => b.rank - a.rank);
 
+    // Requests for delegates who cancelled in Cvent, listed separately at the bottom of the drawer.
+    const cancelledEntries = requests
+        .map((req) => cancelledBySf.get(req.targetId))
+        .filter((d): d is CancelledDelegate => Boolean(d));
+
     const pkgLabel =
         currentSponsor.sponsorTier === "diamond" ? "◆ Diamond" : "● Standard";
     // Counter sits on the solid --blue-deep "My Requests" button, so this needs
@@ -1583,7 +1641,8 @@ export default function SponsorCatalog({
                             {maxMeetings} meetings, unlimited requests
                         </span>
                     </div>
-                    {drawerEntries.length === 0 ? (
+                    {drawerEntries.length === 0 &&
+                    cancelledEntries.length === 0 ? (
                         <div className="drawer-empty">
                             <div className="drawer-empty-icon">○</div>
                             <div
@@ -1601,16 +1660,30 @@ export default function SponsorCatalog({
                             </div>
                         </div>
                     ) : (
-                        drawerEntries.map(({ d, rank }) => (
-                            <DrawerItem
-                                key={d.id}
-                                d={d}
-                                revenueClass={revenueClass(d)}
-                                rank={rank}
-                                onRank={saveRequest}
-                                onRemove={deleteRequest}
-                            />
-                        ))
+                        <>
+                            {drawerEntries.map(({ d, rank }) => (
+                                <DrawerItem
+                                    key={d.id}
+                                    d={d}
+                                    revenueClass={revenueClass(d)}
+                                    rank={rank}
+                                    onRank={saveRequest}
+                                    onRemove={deleteRequest}
+                                />
+                            ))}
+                            {cancelledEntries.length > 0 && (
+                                <div className="drawer-section-label">
+                                    No longer attending
+                                </div>
+                            )}
+                            {cancelledEntries.map((d) => (
+                                <CancelledDrawerItem
+                                    key={d.salesforceId}
+                                    d={d}
+                                    onRemove={deleteRequest}
+                                />
+                            ))}
+                        </>
                     )}
                 </div>
             </div>

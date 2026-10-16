@@ -1,6 +1,7 @@
 import "@/app/frontend.css";
 import { redirect } from "next/navigation";
 import { loadAttendees } from "@/lib/attendees/loader";
+import { isSameAttendee } from "@/lib/attendees/self";
 import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventSettings } from "@/lib/events/settings";
@@ -19,7 +20,10 @@ export default async function Home() {
     if (identity.role === "admin") redirect("/admin");
 
     const attendees = await loadAttendees();
-    const allDelegates = attendees.filter((a) => a.role === "delegate");
+    // The logged-in person never sees themselves in the catalog.
+    const allDelegates = attendees.filter(
+        (a) => a.role === "delegate" && !isSameAttendee(a, identity.attendee),
+    );
 
     // Delegates who cancelled in Cvent aren't attending, so they're left out of the catalog.
     const delegates = allDelegates.filter((a) => !a.cventCancelled);

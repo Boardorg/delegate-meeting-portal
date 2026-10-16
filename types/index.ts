@@ -393,7 +393,8 @@ export interface ScheduledMeeting {
 
     /**
      * ISO 8601 timestamp of when this meeting was last pushed to Cvent.
-     * Null if never pushed. A meeting is "modified since push" when
+     * Null if never pushed. Kept after the meeting is unpushed, since the next push builds its Cvent code from it.
+     * A pushed meeting is "modified since push" when
      * lastModifiedAt !== null && lastModifiedAt > lastPushedAt.
      */
     lastPushedAt: string | null;

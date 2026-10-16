@@ -23,6 +23,7 @@ const REASON_LABEL: Record<SyncFailureReason, string> = {
     cvent_no_availability: "Host slot full",
     cvent_validation: "Rejected by Cvent",
     cvent_conflict: "Cvent conflict",
+    cvent_code_exists: "May already be in Cvent",
     cvent_not_found: "Not found in Cvent",
     cvent_auth: "Cvent auth failed",
     cvent_rate_limited: "Rate limited",
@@ -45,6 +46,8 @@ const REASON_HINT: Record<SyncFailureReason, string> = {
         "Cvent rejected the appointment data. Check the meeting's participants, location, and time.",
     cvent_conflict:
         "Cvent reports a conflicting or duplicate appointment. Check whether it already exists in Cvent.",
+    cvent_code_exists:
+        "An earlier push may have created this appointment without the portal saving it. Check Cvent for it before trying again.",
     cvent_not_found:
         "Cvent couldn't find a referenced record (host, location, or event). Verify the event's Cvent settings.",
     cvent_auth:

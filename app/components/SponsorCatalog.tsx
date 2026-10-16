@@ -497,6 +497,15 @@ function FiltersPanel({
 
 // ── Main component ─────────────────────────────────────────────────────────
 
+/**
+ * The catalog sponsors use to browse delegates and request meetings.
+ *
+ * @todo Support delegates as viewers once the portal opens to them.
+ * The package bar, tier label and meeting count assume the viewer is a sponsor.
+ * The filters and "Request Meeting" cards assume the catalog lists delegates.
+ * Delegates will need sponsor company cards instead.
+ * That could live here behind a role check, or in a separate component.
+ */
 export default function SponsorCatalog({
     delegates,
     cancelledDelegates,

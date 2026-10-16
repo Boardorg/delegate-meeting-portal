@@ -6,7 +6,10 @@ import { getMeetingDataByEvent } from "@/lib/salesforce/client";
 import { meetingDataToAttendees } from "@/lib/salesforce/attendeeMapper";
 import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventAttendees } from "@/lib/cvent/client";
-import { matchCventAttendees } from "@/lib/attendees/cventMatch";
+import {
+    dropSponsorDelegateRecords,
+    matchCventAttendees,
+} from "@/lib/attendees/cventMatch";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 import { Attendee } from "@/types";
 
@@ -143,9 +146,8 @@ const loadAttendeesCached = cache(
                 cancelled: c.cancelled,
             }));
 
-            attendees = matchCventAttendees(
-                attendees,
-                cventAttendeesNormalized,
+            attendees = dropSponsorDelegateRecords(
+                matchCventAttendees(attendees, cventAttendeesNormalized),
             );
         }
 

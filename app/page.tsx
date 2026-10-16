@@ -19,6 +19,10 @@ export default async function Home() {
     // Admins can't act on the frontend — send them to the admin portal.
     if (identity.role === "admin") redirect("/admin");
 
+    // TODO: Show delegates a catalog of sponsor companies once the portal opens to them.
+    // Today every viewer gets the delegate catalog, so a logged-in delegate only sees other delegates.
+    // Build one card per company with sponsorCompaniesByAccountId(), not one per rep.
+    // A delegate's request then targets the company's Account id, the same party id sponsors use.
     const attendees = await loadAttendees();
     // The logged-in person never sees themselves in the catalog.
     const allDelegates = attendees.filter(

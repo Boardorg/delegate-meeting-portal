@@ -47,6 +47,11 @@ function toMeetingRequest(row: MeetingRequestRow): MeetingRequest {
  *
  * @param {NextRequest} request - Incoming request carrying `{ targetId, rank, delete }`.
  * @returns {Promise<NextResponse>} `{ request: MeetingRequest }` on upsert, `{ ok, deleted }` on delete, 4xx on bad input/auth.
+ *
+ * @todo Accept sponsor targets from delegates once the portal opens to them.
+ * This handler already stores any target id, and the scheduler already handles delegate to sponsor requests.
+ * A delegate's target should be the sponsor company's Account id, not a rep's salesforceId.
+ * Validate that the target is a real party for the event before saving.
  */
 export async function POST(request: NextRequest) {
     const identity = await getCurrentIdentity();

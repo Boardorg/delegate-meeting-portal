@@ -291,7 +291,8 @@ export async function runSchedulerForEvent(
     // Drop any fresh meeting that duplicates a pushed pair or reuses a timeslot already
     // held by a pushed meeting for either attendee. Everything else is safe to insert.
     // The engine's own ids are timestamp-suffixed (see lib/scheduling/engine.ts), so
-    // they stay unique across runs and are safe to push to Cvent as-is.
+    // they stay unique across runs. A never-pushed id is safe to send to Cvent as its code
+    // (see appointmentCode() in lib/cvent/push.ts).
     //
     // Dropped pairs are also collected here as reconciledOutPairs: the report
     // attributes these to "conflict_existing" rather than an engine skip reason.
@@ -483,19 +484,19 @@ export async function clearUnsyncedForEvent(
 
 /**
  * Cancels the Cvent appointment behind every synced portal meeting for an
- * event, then clears that meeting's sync link (cventAppointmentId + lastPushedAt)
- * so it reads as un-synced again. The DB row itself is kept — this only unwinds
- * the push to Cvent, not the schedule.
+ * event, then clears that meeting's cventAppointmentId so it reads as
+ * un-synced again. The DB row itself is kept — this only unwinds the push to
+ * Cvent, not the schedule.
  *
  * The DB link is cleared only after the Cvent cancel succeeds, so a failed
  * cancel leaves the row pointing at a still-live appointment rather than
  * silently orphaning it. Per-meeting failures are collected and skipped so one
  * bad cancel doesn't abort the batch.
  *
- * Note: Cvent never frees a cancelled appointment's `code`, so re-pushing these
- * exact rows would collide (APPT_CODE_ALREADY_EXISTS). The normal reset flow
- * regenerates ids first — unpush, then clear/re-run the engine — so codes stay
- * fresh; see lib/cvent/push.ts.
+ * lastPushedAt is deliberately kept.
+ * Cvent never frees a cancelled appointment's `code`, and appointmentCode() in lib/cvent/push.ts builds the next code from lastPushedAt.
+ * Keeping it lets these same rows be pushed again without re-running the scheduler.
+ * Clearing it would make the next push reuse an old code and fail with APPT_CODE_ALREADY_EXISTS.
  *
  * @param {string} eventCode - The event whose synced meetings to unpush.
  * @returns {Promise<MaintenanceReport>} Counts plus per-meeting failure detail.
@@ -535,10 +536,11 @@ export async function unpushAllForEvent(
         }`;
 
         // Unlinks the meeting in the DB so it reads as un-synced (row kept).
+        // lastPushedAt stays so the next push gets a fresh code.
         const unlink = () =>
             db
                 .update(scheduledMeetings)
-                .set({ cventAppointmentId: null, lastPushedAt: null })
+                .set({ cventAppointmentId: null })
                 .where(eq(scheduledMeetings.id, row.id));
 
         try {

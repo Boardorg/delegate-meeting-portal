@@ -31,7 +31,7 @@ vi.mock("@/lib/db/client", () => ({
     db: { update: () => ({ set: () => ({ where: async () => undefined }) }) },
 }));
 
-import { pushMeetingRows } from "./push";
+import { appointmentCode, pushMeetingRows } from "./push";
 
 /** Minimal attendee builder. */
 function att(
@@ -302,5 +302,41 @@ describe("pushMeetingRows — cancelled Cvent registrations", () => {
         expect(summary.pushed).toBe(0);
         expect(summary.results[0].reason).toBe("attendee_cancelled");
         expect(createAppointment).not.toHaveBeenCalled();
+    });
+});
+
+describe("appointmentCode", () => {
+    test("uses the plain meeting id for a meeting never pushed", () => {
+        expect(appointmentCode(row({ lastPushedAt: null }))).toBe("mtg-1");
+    });
+
+    test("adds the last push time for a meeting pushed before", () => {
+        const lastPushedAt = new Date("2025-01-15T09:00:00Z");
+        expect(appointmentCode(row({ lastPushedAt }))).toBe(
+            `mtg-1-${lastPushedAt.getTime()}`,
+        );
+    });
+
+    test("gives an unpushed meeting a new code, since unpush keeps lastPushedAt", () => {
+        const lastPushedAt = new Date("2025-01-15T09:00:00Z");
+        const unpushed = row({ cventAppointmentId: null, lastPushedAt });
+        expect(appointmentCode(unpushed)).not.toBe("mtg-1");
+    });
+
+    test("repeats the same code on a retry, so Cvent can reject a duplicate", () => {
+        const pushed = row({ lastPushedAt: new Date("2025-01-15T09:00:00Z") });
+        expect(appointmentCode(pushed)).toBe(appointmentCode(pushed));
+    });
+
+    test("is sent as the appointment code on push", async () => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+        ]);
+        const lastPushedAt = new Date("2025-01-15T09:00:00Z");
+
+        await pushMeetingRows("EVT", [row({ lastPushedAt })]);
+
+        expect(lastInput().code).toBe(`mtg-1-${lastPushedAt.getTime()}`);
     });
 });

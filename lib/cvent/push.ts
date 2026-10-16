@@ -102,6 +102,28 @@ function describePushError(err: unknown): string {
 }
 
 /**
+ * The Cvent appointment `code` to send when pushing a meeting.
+ *
+ * Cvent never frees a code, even after its appointment is cancelled.
+ * So every successful push must use a code that no earlier push used.
+ * A never-pushed meeting uses its own id.
+ * A meeting pushed before, whether edited or unpushed since, adds the time of its last push.
+ * lastPushedAt only moves when a push succeeds and is saved, so each push cycle gets a new code.
+ *
+ * Within one cycle the code stays the same, which guards against duplicates.
+ * Say Cvent creates the appointment but the portal fails to save it.
+ * The retry sends the same code, and Cvent rejects it with APPT_CODE_ALREADY_EXISTS instead of booking it twice.
+ *
+ * @param {ScheduledMeetingRow} row - The meeting being pushed.
+ * @returns {string} The appointment code.
+ */
+export function appointmentCode(row: ScheduledMeetingRow): string {
+    return row.lastPushedAt
+        ? `${row.id}-${row.lastPushedAt.getTime()}`
+        : row.id;
+}
+
+/**
  * Whether a portal meeting still needs pushing to Cvent: it was never synced,
  * or it was modified since its last push. Used to partition an event's (or a
  * sponsor's) meetings into "to push" vs "already synced" for the sync report.
@@ -125,7 +147,7 @@ export function needsSync(row: ScheduledMeetingRow): boolean {
  * A row already synced and edited since gets a replacement appointment instead.
  * The new appointment is created first. The old one is only cancelled after that succeeds.
  * This way a failed push still leaves the meeting with a working appointment.
- * The replacement gets a timestamp-suffixed code, since Cvent keeps the old code reserved even after cancellation.
+ * Each push sends a code from appointmentCode(), since Cvent keeps old codes reserved even after cancellation.
  *
  * Resolves each meeting's time from its Cvent timeslot and maps participants
  * from Salesforce ids to Cvent contact ids. On success it writes back the
@@ -274,10 +296,7 @@ export async function pushMeetingRows(
             ? undefined
             : `${target?.name ?? row.attendeeB} isn't linked in Cvent, so the appointment was created without them as a participant.`;
 
-        // A never-pushed row can reuse its own id as the code, since it's unused.
-        // A repushed row needs a fresh code, since Cvent keeps the old one attached to the appointment being cancelled.
-        // A timestamp suffix is enough to make it fresh without a DB round trip.
-        const code = oldAppointmentId ? `${row.id}-${Date.now()}` : row.id;
+        const code = appointmentCode(row);
 
         const input = {
             subject: label,

@@ -62,6 +62,13 @@ describe("classifyPushError", () => {
             JSON.stringify({ code: "DUPLICATE_CODE" }),
         );
         expect(classifyPushError(conflict)).toBe("cvent_conflict");
+
+        const codeExists = cventError(
+            "code exists",
+            409,
+            JSON.stringify({ code: "APPT_CODE_ALREADY_EXISTS" }),
+        );
+        expect(classifyPushError(codeExists)).toBe("cvent_code_exists");
     });
 
     it("treats a status-less transport failure as a network error", () => {

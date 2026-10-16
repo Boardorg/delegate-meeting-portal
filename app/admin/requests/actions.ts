@@ -8,6 +8,7 @@ import { loadAttendees } from "@/lib/attendees/loader";
 import {
     sponsorCompaniesByAccountId,
     resolvePartyName,
+    isPartyCancelled,
 } from "@/lib/attendees/companies";
 import { loadMockRequests } from "@/lib/scheduling/loader";
 import { describeDbError } from "@/lib/db/errors";
@@ -73,6 +74,10 @@ export type RequestRow = {
     requesterCompany: string;
     targetName: string;
     targetCompany: string;
+    /** True when the requester cancelled in Cvent. A company counts only when all its reps cancelled. */
+    requesterCancelled: boolean;
+    /** True when the target cancelled their Cvent registration. */
+    targetCancelled: boolean;
     rank: number;
     createdAt: Date;
     updatedAt: Date;
@@ -173,6 +178,8 @@ export async function listRequestsPage(
             requesterCompany: requester?.company ?? "",
             targetName: target?.name || r.targetId,
             targetCompany: target?.company ?? "",
+            requesterCancelled: isPartyCancelled(r.requesterId, companies, bySalesforceId),
+            targetCancelled: !!target?.cventCancelled,
             rank: r.rank,
             createdAt: r.createdAt,
             updatedAt: r.updatedAt,

@@ -6,7 +6,9 @@ import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventSettings } from "@/lib/events/settings";
 import { eventThemeVars } from "@/lib/events/theme";
 import type { TopBarEventLogo } from "@/app/components/TopBar";
-import SponsorCatalog from "@/app/components/SponsorCatalog";
+import SponsorCatalog, {
+    type CancelledDelegate,
+} from "@/app/components/SponsorCatalog";
 
 export default async function Home() {
     // The session must resolve to a known identity to view the catalog; the
@@ -17,7 +19,20 @@ export default async function Home() {
     if (identity.role === "admin") redirect("/admin");
 
     const attendees = await loadAttendees();
-    const delegates = attendees.filter((a) => a.role === "delegate");
+    const allDelegates = attendees.filter((a) => a.role === "delegate");
+
+    // Delegates who cancelled in Cvent aren't attending, so they're left out of the catalog.
+    const delegates = allDelegates.filter((a) => !a.cventCancelled);
+
+    // The drawer still lists any requests the sponsor made for them, marked as no longer attending.
+    // It only needs enough to label and remove the request, so the full profile isn't sent.
+    const cancelledDelegates: CancelledDelegate[] = allDelegates
+        .filter((a) => a.cventCancelled)
+        .map((a) => ({
+            salesforceId: a.salesforceId,
+            name: a.name,
+            company: a.company,
+        }));
 
     // Resolve the active event's per-event Brand Color (drives the catalog's
     // --accent accent) and its header logo URL. Any failure to resolve an event
@@ -43,6 +58,7 @@ export default async function Home() {
         <div style={{ display: "contents", ...eventThemeVars(themeColor) }}>
             <SponsorCatalog
                 delegates={delegates}
+                cancelledDelegates={cancelledDelegates}
                 currentSponsor={identity.attendee}
                 eventLogo={eventLogo}
             />

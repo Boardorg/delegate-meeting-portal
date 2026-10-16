@@ -19,6 +19,7 @@ const REASON_LABEL: Record<SyncFailureReason, string> = {
     missing_timeslot: "Timeslot missing",
     missing_location: "No location",
     host_not_in_cvent: "Host not in Cvent",
+    attendee_cancelled: "Cancelled in Cvent",
     cvent_no_availability: "Host slot full",
     cvent_validation: "Rejected by Cvent",
     cvent_conflict: "Cvent conflict",
@@ -36,6 +37,8 @@ const REASON_HINT: Record<SyncFailureReason, string> = {
     missing_location: "Assign a location to the meeting before syncing.",
     host_not_in_cvent:
         "The requester (appointment host) isn't a Cvent attendee for this event. Add them in Cvent, then sync again.",
+    attendee_cancelled:
+        "A participant cancelled their Cvent registration, so Cvent won't accept them. Reassign or delete the meeting.",
     cvent_no_availability:
         "Cvent reports the host has no appointment slot free at this time. Move the meeting to another timeslot.",
     cvent_validation:

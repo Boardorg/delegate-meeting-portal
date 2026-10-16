@@ -100,12 +100,15 @@ export function sponsorCompaniesByAccountId(
  * The Cvent contact ids of a company's reps (truthy only). These become the
  * appointment HOSTS when a company meeting is pushed to Cvent. Reps without a
  * Cvent contact id are excluded (they can't host).
+ * Reps whose Cvent registration is cancelled are excluded too.
+ * Cvent rejects a cancelled registrant as a participant.
  *
  * @param {SponsorCompany} company - The company.
  * @returns {string[]} Rep Cvent contact ids (deduped, truthy).
  */
 export function cventContactIdsOfCompany(company: SponsorCompany): string[] {
     const ids = company.reps
+        .filter((r) => !r.cventCancelled)
         .map((r) => r.cventContactId)
         .filter((id): id is string => !!id);
     return [...new Set(ids)];
@@ -132,4 +135,25 @@ export function resolvePartyName(
     const attendee = bySalesforceId.get(id);
     if (attendee) return { name: attendee.name, company: attendee.company };
     return undefined;
+}
+
+/**
+ * Whether a party has cancelled its Cvent registration.
+ * A company counts as cancelled only when every one of its reps cancelled.
+ * Any rep still registered keeps the company in.
+ * Unknown ids are not cancelled.
+ *
+ * @param {string} id - The party id.
+ * @param {Map<string, SponsorCompany>} companies - Company map (by account id).
+ * @param {Map<string, Attendee>} bySalesforceId - Attendee map (by salesforceId).
+ * @returns {boolean} True when the party cancelled in Cvent.
+ */
+export function isPartyCancelled(
+    id: string,
+    companies: Map<string, SponsorCompany>,
+    bySalesforceId: Map<string, Attendee>,
+): boolean {
+    const company = companies.get(id);
+    if (company) return company.reps.every((r) => !!r.cventCancelled);
+    return !!bySalesforceId.get(id)?.cventCancelled;
 }

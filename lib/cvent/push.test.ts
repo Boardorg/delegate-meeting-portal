@@ -40,6 +40,7 @@ function att(
     return {
         id: partial.id,
         cventContactId: partial.cventContactId ?? "",
+        cventCancelled: partial.cventCancelled,
         salesforceId: partial.salesforceId ?? partial.id,
         accountId: partial.accountId ?? "",
         name: partial.name ?? partial.id,
@@ -258,5 +259,48 @@ describe("pushMeetingRows — re-push at the same time", () => {
         expect(summary.results[0].cventAppointmentId).toBe("appt-new");
         expect(updateAppointment).not.toHaveBeenCalled();
         expect(cancelAppointment).toHaveBeenCalledWith("EVT", "appt-old");
+    });
+});
+
+describe("pushMeetingRows — cancelled Cvent registrations", () => {
+    test("skips the meeting when the delegate cancelled in Cvent", async () => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", name: "Dee", cventContactId: "cd1", cventCancelled: true }),
+        ]);
+
+        const summary = await pushMeetingRows("EVT", [row()]);
+
+        expect(summary.pushed).toBe(0);
+        expect(summary.results[0].reason).toBe("attendee_cancelled");
+        expect(summary.results[0].error).toContain("Dee");
+        expect(createAppointment).not.toHaveBeenCalled();
+    });
+
+    test("leaves a cancelled rep off as a host and warns, but still pushes", async () => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "s2", role: "sponsor", company: "Acme", accountId: "acct-acme", name: "Sam", cventContactId: "h2", cventCancelled: true }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+        ]);
+
+        const summary = await pushMeetingRows("EVT", [row()]);
+
+        expect(summary.pushed).toBe(1);
+        expect(lastInput().hostContactIds).toEqual(["h1"]);
+        expect(summary.results[0].warning).toContain("Sam cancelled in Cvent");
+    });
+
+    test("skips the meeting when every rep of the company cancelled", async () => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1", cventCancelled: true }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+        ]);
+
+        const summary = await pushMeetingRows("EVT", [row()]);
+
+        expect(summary.pushed).toBe(0);
+        expect(summary.results[0].reason).toBe("attendee_cancelled");
+        expect(createAppointment).not.toHaveBeenCalled();
     });
 });

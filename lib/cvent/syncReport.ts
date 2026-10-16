@@ -17,6 +17,7 @@
  * - missing_timeslot: the meeting's timeslot no longer exists in Cvent.
  * - missing_location: the meeting has no location assigned to send.
  * - host_not_in_cvent: the requester (appointment host) has no Cvent contact id.
+ * - attendee_cancelled: the delegate, or every rep of the company, cancelled their Cvent registration.
  *
  * Returned by Cvent when the appointment was rejected:
  * - cvent_no_availability: host has no free appointment slot at that time (409).
@@ -35,6 +36,7 @@ export type SyncFailureReason =
     | "missing_timeslot"
     | "missing_location"
     | "host_not_in_cvent"
+    | "attendee_cancelled"
     | "cvent_no_availability"
     | "cvent_validation"
     | "cvent_conflict"

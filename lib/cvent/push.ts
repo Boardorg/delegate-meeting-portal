@@ -197,6 +197,34 @@ export async function pushMeetingRows(
             continue;
         }
 
+        // A delegate who cancelled their Cvent registration can't be an appointment participant.
+        // Cvent rejects them with ATTENDEE_NOT_FOUND, so skip the meeting and say why.
+        if (target?.cventCancelled) {
+            results.push({
+                meetingId: row.id,
+                label,
+                ok: false,
+                kind,
+                reason: "attendee_cancelled",
+                error: `${target.name} cancelled their Cvent registration. Reassign or delete this meeting.`,
+            });
+            continue;
+        }
+
+        // Same check for the host side, when every one of the company's reps has cancelled.
+        const reps = company?.reps ?? [];
+        if (reps.length > 0 && reps.every((r) => r.cventCancelled)) {
+            results.push({
+                meetingId: row.id,
+                label,
+                ok: false,
+                kind,
+                reason: "attendee_cancelled",
+                error: `Every rep of ${company?.name ?? row.attendeeA} cancelled their Cvent registration. Reassign or delete this meeting.`,
+            });
+            continue;
+        }
+
         // All of the company's reps host the appointment, so at least one must
         // have a Cvent contact id. This single guard covers both an unresolved
         // company (attendeeA not found) and a company whose reps are all missing
@@ -224,6 +252,16 @@ export async function pushMeetingRows(
         const hostWarning =
             missingHostReps.length > 0
                 ? `${missingHostReps.join(", ")} ${missingHostReps.length === 1 ? "isn't" : "aren't"} linked in Cvent, so ${missingHostReps.length === 1 ? "that rep was" : "those reps were"} not added as hosts.`
+                : undefined;
+
+        // Reps who cancelled in Cvent are left off as hosts too.
+        // The meeting still goes ahead with the company's remaining reps.
+        const cancelledHostReps = reps
+            .filter((r) => r.cventCancelled)
+            .map((r) => r.name);
+        const cancelledHostWarning =
+            cancelledHostReps.length > 0
+                ? `${cancelledHostReps.join(", ")} cancelled in Cvent, so ${cancelledHostReps.length === 1 ? "that rep was" : "those reps were"} not added as hosts.`
                 : undefined;
 
         // The single appointment attendee is the target delegate's contact id
@@ -280,6 +318,7 @@ export async function pushMeetingRows(
             // Collect non-fatal notes for an otherwise-successful push.
             const notes: string[] = [];
             if (hostWarning) notes.push(hostWarning);
+            if (cancelledHostWarning) notes.push(cancelledHostWarning);
             if (targetWarning) notes.push(targetWarning);
 
             // Only cancel the old appointment once the replacement exists.

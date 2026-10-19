@@ -1,7 +1,7 @@
 import "@/app/frontend.css";
 import { redirect } from "next/navigation";
 import { loadAttendees } from "@/lib/attendees/loader";
-import { isSameAttendee } from "@/lib/attendees/self";
+import { isOwnParty } from "@/lib/attendees/self";
 import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventSettings } from "@/lib/events/settings";
@@ -25,8 +25,9 @@ export default async function Home() {
     // A delegate's request then targets the company's Account id, the same party id sponsors use.
     const attendees = await loadAttendees();
     // The logged-in person never sees themselves in the catalog.
+    // A sponsor rep also doesn't see anyone from their own company.
     const allDelegates = attendees.filter(
-        (a) => a.role === "delegate" && !isSameAttendee(a, identity.attendee),
+        (a) => a.role === "delegate" && !isOwnParty(a, identity.attendee),
     );
 
     // Delegates who cancelled in Cvent aren't attending, so they're left out of the catalog.

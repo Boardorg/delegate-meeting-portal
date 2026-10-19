@@ -44,3 +44,26 @@ export function matchCventAttendees(
         ];
     });
 }
+
+/**
+ * Removes delegate records that are really sponsor reps.
+ * The delegate list is every Cvent registrant for the event.
+ * Sponsor reps must be Cvent registrants to host appointments, so they land on it too.
+ * Nobody is both a sponsor rep and a delegate, so a delegate sharing a rep's Cvent contact is that rep.
+ * Left in, the scheduler books the rep under both roles at the same time and Cvent rejects the second booking.
+ * Run this after matchCventAttendees, once every attendee has its Cvent contact id.
+ *
+ * @param {Attendee[]} attendees - Attendees with their Cvent contact ids filled in.
+ * @returns {Attendee[]} The same list without delegate copies of sponsor reps.
+ */
+export function dropSponsorDelegateRecords(attendees: Attendee[]): Attendee[] {
+    const sponsorContactIds = new Set(
+        attendees
+            .filter((a) => a.role === "sponsor" && a.cventContactId)
+            .map((a) => a.cventContactId),
+    );
+    return attendees.filter(
+        (a) =>
+            a.role !== "delegate" || !sponsorContactIds.has(a.cventContactId),
+    );
+}

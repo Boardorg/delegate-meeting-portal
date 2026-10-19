@@ -226,6 +226,10 @@ export interface PreexistingSchedule {
  * widened list comes back as `effectiveRequests` so the run report tallies
  * exactly what the engine considered.
  *
+ * @todo Update this note once delegates can request sponsors in the portal.
+ * Those requests will arrive in `requests` like any sponsor's.
+ * withDelegatePreferences() already skips an intake-form pick when the same portal request exists, so the portal rank wins.
+ *
  * @param {Attendee[]} attendees - All attendees to schedule meetings for.
  * @param {MeetingRequest[]} requests - Meeting requests submitted through the portal.
  * @param {Timeslot[]} timeslots - The event's global, Cvent-sourced timeslots.

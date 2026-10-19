@@ -636,7 +636,11 @@ export type CventAppointmentInput = {
     locationId?: string | null;
     /** Cvent contact ids of the appointment attendees (the requested delegate). */
     attendeeContactIds?: string[];
-    /** External reference code (we pass our meeting id) for traceability. */
+    /**
+     * External reference code, built by appointmentCode() in lib/cvent/push.ts.
+     * It starts with our meeting id for traceability.
+     * Cvent rejects a code it has seen before, even on a cancelled appointment.
+     */
     code?: string;
 };
 
@@ -831,8 +835,8 @@ export async function updateAppointment(
  *
  * Note: cancelling does not free the appointment's `code` for reuse — Cvent
  * keeps it reserved even after cancellation, so callers must mint a fresh
- * code rather than reusing a cancelled appointment's (see the timestamp
- * suffix in lib/cvent/push.ts and the engine's id generation).
+ * code rather than reusing a cancelled appointment's (see appointmentCode()
+ * in lib/cvent/push.ts and the engine's id generation).
  *
  * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
  * @param {string} apptId - The Cvent appointment id to cancel.

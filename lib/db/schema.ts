@@ -138,6 +138,9 @@ export type NewMeetingRequest = typeof meetingRequests.$inferInsert;
  *   - cventAppointmentId === null → not pushed
  *   - lastModifiedAt > lastPushedAt → modified since last push
  *   - otherwise → pushed/synced
+ *
+ * lastPushedAt is kept when a meeting is unpushed, so a not-pushed row can still have one.
+ * The push uses it to build a fresh Cvent appointment code (see appointmentCode() in lib/cvent/push.ts).
  */
 export const scheduledMeetings = pgTable("scheduled_meetings", {
     // Engine generates 'mtg-001' style ids; admin-created rows use a UUID.
@@ -182,7 +185,9 @@ export const scheduledMeetings = pgTable("scheduled_meetings", {
     // Null if never manually edited since creation or last push.
     lastModifiedAt: timestamp("last_modified_at", { withTimezone: true }),
 
-    // Null if never pushed. Modified = lastModifiedAt > lastPushedAt.
+    // Time of the last successful push. Null if never pushed.
+    // Kept when the meeting is unpushed, since the next push builds its Cvent code from it.
+    // Modified = lastModifiedAt > lastPushedAt, while the meeting is still pushed.
     lastPushedAt: timestamp("last_pushed_at", { withTimezone: true }),
 
     createdAt: timestamp("created_at", { withTimezone: true })

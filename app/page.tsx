@@ -1,6 +1,7 @@
 import "@/app/frontend.css";
 import { redirect } from "next/navigation";
 import { loadAttendees } from "@/lib/attendees/loader";
+import { isOwnParty } from "@/lib/attendees/self";
 import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventSettings } from "@/lib/events/settings";
@@ -18,8 +19,16 @@ export default async function Home() {
     // Admins can't act on the frontend — send them to the admin portal.
     if (identity.role === "admin") redirect("/admin");
 
+    // TODO: Show delegates a catalog of sponsor companies once the portal opens to them.
+    // Today every viewer gets the delegate catalog, so a logged-in delegate only sees other delegates.
+    // Build one card per company with sponsorCompaniesByAccountId(), not one per rep.
+    // A delegate's request then targets the company's Account id, the same party id sponsors use.
     const attendees = await loadAttendees();
-    const allDelegates = attendees.filter((a) => a.role === "delegate");
+    // The logged-in person never sees themselves in the catalog.
+    // A sponsor rep also doesn't see anyone from their own company.
+    const allDelegates = attendees.filter(
+        (a) => a.role === "delegate" && !isOwnParty(a, identity.attendee),
+    );
 
     // Delegates who cancelled in Cvent aren't attending, so they're left out of the catalog.
     const delegates = allDelegates.filter((a) => !a.cventCancelled);

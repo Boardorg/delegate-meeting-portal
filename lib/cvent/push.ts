@@ -273,7 +273,7 @@ export async function pushMeetingRows(
             .map((r) => r.name);
         const hostWarning =
             missingHostReps.length > 0
-                ? `${missingHostReps.join(", ")} ${missingHostReps.length === 1 ? "isn't" : "aren't"} linked in Cvent, so ${missingHostReps.length === 1 ? "that rep was" : "those reps were"} not added as hosts.`
+                ? `${missingHostReps.join(", ")} ${missingHostReps.length === 1 ? "isn't" : "aren't"} linked in Cvent, so ${missingHostReps.length === 1 ? "that rep was not added as a host" : "those reps were not added as hosts"}.`
                 : undefined;
 
         // Reps who cancelled in Cvent are left off as hosts too.
@@ -283,7 +283,7 @@ export async function pushMeetingRows(
             .map((r) => r.name);
         const cancelledHostWarning =
             cancelledHostReps.length > 0
-                ? `${cancelledHostReps.join(", ")} cancelled in Cvent, so ${cancelledHostReps.length === 1 ? "that rep was" : "those reps were"} not added as hosts.`
+                ? `${cancelledHostReps.join(", ")} cancelled in Cvent, so ${cancelledHostReps.length === 1 ? "that rep was not added as a host" : "those reps were not added as hosts"}.`
                 : undefined;
 
         // The single appointment attendee is the target delegate's contact id

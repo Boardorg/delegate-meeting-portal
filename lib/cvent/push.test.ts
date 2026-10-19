@@ -288,7 +288,9 @@ describe("pushMeetingRows — cancelled Cvent registrations", () => {
 
         expect(summary.pushed).toBe(1);
         expect(lastInput().hostContactIds).toEqual(["h1"]);
-        expect(summary.results[0].warning).toContain("Sam cancelled in Cvent");
+        expect(summary.results[0].warning).toBe(
+            "Sam cancelled in Cvent, so that rep was not added as a host.",
+        );
     });
 
     test("skips the meeting when every rep of the company cancelled", async () => {

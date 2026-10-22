@@ -1,6 +1,6 @@
 # Spec: Appointment-type mapping
 
-Status: **Draft, awaiting approval from Peter**
+Status: **Approved by Peter, 2026-10-22**
 Owner: Peter Wiley
 Branch: `feat/appointment-type-mapping`
 Process: [agent pipeline](../agent-pipeline.md)

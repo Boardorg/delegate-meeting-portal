@@ -661,9 +661,14 @@ export default function SponsorCatalog({
         ].filter((f) => f.options.length > 0);
     }, [collectTags, interestAreaOrder, valueOrder]);
 
-    useEffect(() => {
+    // Open the first two filter sections whenever the filter list changes.
+    // This adjusts state during render, React's pattern for resetting state when an input changes.
+    // It avoids the extra render a useEffect would cause.
+    const [accordionsFor, setAccordionsFor] = useState<FilterConfig[] | null>(null);
+    if (accordionsFor !== filterConfig) {
+        setAccordionsFor(filterConfig);
         setOpenAccordions(new Set(filterConfig.slice(0, 2).map((f) => f.id)));
-    }, [filterConfig]);
+    }
 
     // ── Resize observer ──
 

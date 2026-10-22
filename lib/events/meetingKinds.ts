@@ -127,12 +127,12 @@ export type AppointmentTypeRow = {
  * Every appointment type Cvent returns gets a row, and every row offers all four kinds.
  *
  * @param {AppointmentType[]} types - The event's appointment types from Cvent.
- * @param {AppointmentTypeKinds | null | undefined} kinds - The saved mapping.
+ * @param {Record<string, string> | null | undefined} kinds - The saved or edited mapping. Values that aren't kinds show as blank.
  * @returns {AppointmentTypeRow[]} One row per appointment type, in Cvent's order.
  */
 export function appointmentTypeRows(
     types: AppointmentType[],
-    kinds: AppointmentTypeKinds | null | undefined,
+    kinds: Record<string, string> | null | undefined,
 ): AppointmentTypeRow[] {
     return types.map((t) => {
         const saved = kinds?.[t.id];

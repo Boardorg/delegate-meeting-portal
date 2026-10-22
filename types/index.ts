@@ -16,7 +16,7 @@ export type AttendeeRecordSF = {
 /**
  * Attendee role. Determines scheduling rules, day eligibility, and meeting caps.
  * - `delegate`: Event attendee; eligible for sponsor meetings on Day 1 and peer meetings on Day 2.
- * - `sponsor`: Paying sponsor; eligible for delegate meetings on Day 1 only.
+ * - `sponsor`: Paying sponsor. Eligible for delegate meetings on Day 1, and on Day 2 for diamond sponsors when Day 1 is full.
  */
 export type AttendeeRole = "delegate" | "sponsor";
 
@@ -42,7 +42,12 @@ export interface Timeslot {
     /** Cvent available-time id. Stored on ScheduledMeeting.timeslotId. */
     id: string;
 
-    /** The event day this timeslot belongs to. Day 1 = sponsor/delegate; Day 2 = delegate/delegate. */
+    /**
+     * The event day this timeslot belongs to, from date order. Day 1 is the earliest date.
+     * Used for display and for the day rules.
+     * Sponsor meetings use Day 1, and diamond sponsors may spill into Day 2.
+     * Which meetings a slot can hold comes from `kind`, not from the day.
+     */
     day: 1 | 2;
 
     /** ISO 8601 UTC start time, sourced from Cvent. */

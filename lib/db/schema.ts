@@ -158,7 +158,8 @@ export const scheduledMeetings = pgTable("scheduled_meetings", {
     attendeeA: text("attendee_a").notNull(),
     attendeeB: text("attendee_b").notNull(),
 
-    // 1 = Day 1 (sponsor/delegate), 2 = Day 2 (delegate/delegate).
+    // 1 = Day 1, 2 = Day 2, from the booked timeslot's date.
+    // Sponsor meetings are on Day 1, or Day 2 for a diamond sponsor's spillover.
     day: integer("day").notNull(),
 
     // Cvent timeslot id (Timeslot.id). Shared by both attendees; start/end times

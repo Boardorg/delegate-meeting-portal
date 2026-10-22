@@ -115,36 +115,49 @@ describe('findAvailableTimeslot', () => {
     const empty = new Set<string>();
 
     test('returns null when there are no timeslots', () => {
-        expect(findAvailableTimeslot([], 1, empty, empty, new Map())).toBeNull();
+        expect(findAvailableTimeslot([], 1, empty, empty, new Map(), 'sponsor_delegate')).toBeNull();
     });
 
     test('returns null when the only timeslot is on a different day', () => {
-        const timeslots = [makeTimeslot('ts-1', 2, '09:00')];
-        expect(findAvailableTimeslot(timeslots, 1, new Set(), new Set(), remainingOf(timeslots))).toBeNull();
+        const timeslots = [makeTimeslot('ts-1', 2, '09:00', 1, 'sponsor_delegate')];
+        expect(findAvailableTimeslot(timeslots, 1, new Set(), new Set(), remainingOf(timeslots), 'sponsor_delegate')).toBeNull();
     });
 
     test('returns null when the timeslot has no remaining capacity', () => {
         const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
         const remaining = new Map([['ts-1', 0]]);
-        expect(findAvailableTimeslot(timeslots, 1, new Set(), new Set(), remaining)).toBeNull();
+        expect(findAvailableTimeslot(timeslots, 1, new Set(), new Set(), remaining, 'sponsor_delegate')).toBeNull();
     });
 
     test('returns null when one attendee is already busy at that start time', () => {
         const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
         const busyA = new Set(['09:00']);
-        expect(findAvailableTimeslot(timeslots, 1, busyA, new Set(), remainingOf(timeslots))).toBeNull();
+        expect(findAvailableTimeslot(timeslots, 1, busyA, new Set(), remainingOf(timeslots), 'sponsor_delegate')).toBeNull();
     });
 
     test('returns the timeslot when both attendees are free and capacity remains', () => {
         const ts = makeTimeslot('ts-1', 1, '09:00');
-        expect(findAvailableTimeslot([ts], 1, new Set(), new Set(), remainingOf([ts]))).toEqual(ts);
+        expect(findAvailableTimeslot([ts], 1, new Set(), new Set(), remainingOf([ts]), 'sponsor_delegate')).toEqual(ts);
     });
 
     test('returns the first usable timeslot when several exist', () => {
         const busy = new Set(['09:00']); // both busy at 09:00, so the 10:00 slot wins
         const ts1 = makeTimeslot('ts-1', 1, '09:00');
         const ts2 = makeTimeslot('ts-2', 1, '10:00');
-        expect(findAvailableTimeslot([ts1, ts2], 1, busy, busy, remainingOf([ts1, ts2]))).toEqual(ts2);
+        expect(findAvailableTimeslot([ts1, ts2], 1, busy, busy, remainingOf([ts1, ts2]), 'sponsor_delegate')).toEqual(ts2);
+    });
+
+    test('skips a free, earlier timeslot of another meeting kind', () => {
+        const group = makeTimeslot('ts-group', 1, '09:00', 1, 'delegate_group');
+        const ignored = makeTimeslot('ts-ignore', 1, '09:30', 1, 'ignore');
+        const sponsor = makeTimeslot('ts-s2d', 1, '10:00', 1, 'sponsor_delegate');
+        const all = [group, ignored, sponsor];
+        expect(findAvailableTimeslot(all, 1, new Set(), new Set(), remainingOf(all), 'sponsor_delegate')).toEqual(sponsor);
+    });
+
+    test('returns null when only slots of another kind are free', () => {
+        const group = makeTimeslot('ts-group', 1, '09:00', 1, 'delegate_group');
+        expect(findAvailableTimeslot([group], 1, new Set(), new Set(), remainingOf([group]), 'sponsor_delegate')).toBeNull();
     });
 });
 

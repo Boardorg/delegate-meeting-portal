@@ -80,6 +80,18 @@ export default function SchedulerReportPanel({
                 </button>
             </div>
 
+            {/* Appointment types with no meeting kind. Their slots were not used this run. */}
+            {report.unmappedAppointmentTypes.length > 0 && (
+                <div className="adm-modal-warn-at" style={{ marginTop: 12 }}>
+                    {report.unmappedAppointmentTypes.length === 1
+                        ? "This Cvent appointment type isn't mapped to a meeting kind, so its slots weren't used: "
+                        : "These Cvent appointment types aren't mapped to a meeting kind, so their slots weren't used: "}
+                    {report.unmappedAppointmentTypes.join(", ")}. Map them
+                    in Event settings to use them, or set them to Ignore to
+                    hide this warning.
+                </div>
+            )}
+
             <div className="adm-card-row">
                 <StatChip
                     label="Sponsors considered"

@@ -91,6 +91,11 @@ export interface SchedulerReport {
     /** Meetings scheduled per engine pass, keyed by pass number. */
     meetingsByPass: Record<number, number>;
     unscheduledRequests: UnscheduledRequest[];
+    /**
+     * Names of the Cvent appointment types with no meeting kind in Event settings.
+     * Their slots were ignored this run. The panel shows them as a warning.
+     */
+    unmappedAppointmentTypes: string[];
 }
 
 /** Inputs for {@link buildSchedulerReport}. */
@@ -108,6 +113,8 @@ export interface BuildReportArgs {
     reconciledOutPairs: Set<string>;
     /** Pairs that already meet in Cvent, keyed by pairKey (see PreexistingSchedule.pairs). */
     preexistingPairs: Set<string>;
+    /** Names of appointment types with no mapping, whose slots the run ignored. Defaults to none. */
+    unmappedAppointmentTypes?: string[];
 }
 
 // Interest levels the chart always shows a bar for, lowest to highest.
@@ -133,6 +140,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         skipReasons,
         reconciledOutPairs,
         preexistingPairs,
+        unmappedAppointmentTypes = [],
     } = args;
 
     // Name lookup for rendering the unscheduled list without extra queries.
@@ -222,6 +230,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         byInterestLevel: INTEREST_LEVELS.map((level) => levelTally.get(level)!),
         meetingsByPass,
         unscheduledRequests,
+        unmappedAppointmentTypes: [...unmappedAppointmentTypes],
     };
 }
 

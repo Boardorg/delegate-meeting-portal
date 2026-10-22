@@ -32,6 +32,7 @@ import { pairKey } from "@/lib/scheduling/helpers";
 import { loadMockRequests } from "@/lib/scheduling/loader";
 import { paginate, type Page } from "@/lib/admin/pagination";
 import { contractedMeetings } from "@/lib/attendees/caps";
+import { checkAppointmentTypeMapping } from "@/lib/events/meetingKinds";
 import type { Attendee, MeetingRequest } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -202,6 +203,15 @@ async function buildPreexistingFromCvent(
 }
 
 /**
+ * Result of a scheduler run.
+ * A run that stops before changing anything returns a message instead of a report.
+ * It is a return value rather than a thrown error, so the message reaches the admin in production builds too.
+ */
+export type RunSchedulerResult =
+    | { ok: true; report: SchedulerReport }
+    | { ok: false; error: string };
+
+/**
  * Runs the scheduling engine for an event and replaces all un-pushed portal meetings
  * with the fresh engine output. Meetings already pushed to Cvent are preserved via
  * post-reconciliation: the engine runs freely, then any fresh meeting that duplicates
@@ -211,13 +221,18 @@ async function buildPreexistingFromCvent(
  * the sponsor side, a delegate salesforceId on the other), so no id translation
  * is needed here in either mock or production mode.
  *
+ * The run stops before changing anything when no appointment type is mapped to `sponsor_delegate`.
+ * Otherwise it would delete every un-pushed meeting and create none.
+ * Types with no mapping are listed in the report as a warning.
+ *
  * @param {string} eventCode - The event to schedule meetings for.
- * @returns {Promise<SchedulerReport>} A DB-friendly summary of the run: counts,
+ * @returns {Promise<RunSchedulerResult>} A DB-friendly summary of the run: counts,
  *   per-interest-level breakdown, and unscheduled requests with reasons.
+ *   Or a message saying why the run stopped.
  */
 export async function runSchedulerForEvent(
     eventCode: string,
-): Promise<SchedulerReport> {
+): Promise<RunSchedulerResult> {
     const isMock = process.env.USE_MOCK === "true";
     const mockRequestsPath = `${process.cwd()}/data/mock/requests.json`;
 
@@ -242,6 +257,15 @@ export async function runSchedulerForEvent(
                     ),
                 ),
         ]);
+
+    // Stop before changing anything when sponsor meetings have no slots to use.
+    // The engine only books sponsor meetings into sponsor_delegate slots.
+    const mapping = checkAppointmentTypeMapping(
+        scheduleData.appointmentTypes,
+        scheduleData.appointmentTypeKinds,
+        scheduleData.timeslots.map((t) => t.appointmentTypeId),
+    );
+    if (!mapping.ok) return { ok: false, error: mapping.message };
 
     const engineRequests: MeetingRequest[] = requestRows.map((r) => ({
         id: String(r.id),
@@ -346,16 +370,20 @@ export async function runSchedulerForEvent(
     // Revalidate the admin meetings page to reflect the new schedule.
     revalidatePath("/admin/meetings");
 
-    return buildSchedulerReport({
-        eventCode,
-        generatedAt: new Date().toISOString(),
-        attendees,
-        requests: effectiveRequests,
-        reconciled: reconciledSchedule,
-        skipReasons,
-        reconciledOutPairs,
-        preexistingPairs: preexisting.pairs ?? new Set(),
-    });
+    return {
+        ok: true,
+        report: buildSchedulerReport({
+            eventCode,
+            generatedAt: new Date().toISOString(),
+            attendees,
+            requests: effectiveRequests,
+            reconciled: reconciledSchedule,
+            skipReasons,
+            reconciledOutPairs,
+            preexistingPairs: preexisting.pairs ?? new Set(),
+            unmappedAppointmentTypes: mapping.unmappedTypeNames,
+        }),
+    };
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { User, MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
+import type { MeetingKind } from "@/lib/events/meetingKinds";
 
 export type CachedAuth = {
     accessToken: string;
@@ -61,6 +62,19 @@ export interface Timeslot {
 
     /** Cvent appointment-type id this timeslot belongs to (e.g. a specific networking break). */
     appointmentTypeId: string;
+
+    /**
+     * Cvent's name for the appointment type, e.g. "Sponsor to Delegate Meetings".
+     * Null when the type list couldn't be loaded from Cvent.
+     */
+    appointmentTypeName: string | null;
+
+    /**
+     * The meeting kind the event maps this slot's appointment type to, in Event settings.
+     * Unmapped types are `ignore`.
+     * The scheduler only books sponsor meetings into `sponsor_delegate` slots.
+     */
+    kind: MeetingKind;
 }
 
 /**

@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { pairKey, computeMutualPairs, findAvailableTimeslot, withDelegatePreferences, wouldViolateCompanyDiversity, DELEGATE_PREFERENCE_RANK } from './helpers';
 import { emptyProfile } from '@/lib/attendees/formatProfile';
 import type { Attendee, MeetingRequest, Timeslot, ScheduledMeeting } from '@/types';
+import type { MeetingKind } from '@/lib/events/meetingKinds';
 
 // ---------------------------------------------------------------------------
 // Helpers for generating test data
@@ -25,10 +26,17 @@ function makeRequest(requesterId: string, targetId: string): MeetingRequest {
  * @param {1 | 2} day - The event day this timeslot belongs to.
  * @param {string} startTime - Start time string (treated opaquely).
  * @param {number} [capacity=1] - How many meetings may book this timeslot.
+ * @param {MeetingKind} [kind] - The slot's meeting kind. Defaults to sponsor_delegate on Day 1 and delegate_delegate on Day 2.
  * @returns {Timeslot} A timeslot object with the specified properties.
  */
-function makeTimeslot(id: string, day: 1 | 2, startTime: string, capacity = 1): Timeslot {
-    return { id, day, startTime, endTime: startTime, capacity, locationId: null, appointmentTypeId: 'type-1' };
+function makeTimeslot(
+    id: string,
+    day: 1 | 2,
+    startTime: string,
+    capacity = 1,
+    kind: MeetingKind = day === 1 ? 'sponsor_delegate' : 'delegate_delegate',
+): Timeslot {
+    return { id, day, startTime, endTime: startTime, capacity, locationId: null, appointmentTypeId: `type-${kind}`, appointmentTypeName: null, kind };
 }
 
 /** Builds the remaining-capacity map findAvailableTimeslot expects. */

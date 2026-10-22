@@ -1,7 +1,11 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, vi } from "vitest";
 import {
     buildCreateAppointmentRequest,
     buildUpdateAppointmentRequest,
+    getAppointmentTypes,
+    getTimeslotsByEvent,
+    toAppointmentTypes,
+    toAppointmentTypesPage,
     toExistingAppointments,
 } from "./client";
 
@@ -110,5 +114,74 @@ describe("toExistingAppointments", () => {
             },
         ]);
         expect(out[0].participantContactIds).toEqual(["reg-only", "d1"]);
+    });
+});
+
+describe("toAppointmentTypes", () => {
+    test("keeps id and name, and drops records with no id", () => {
+        expect(
+            toAppointmentTypes([
+                { id: "t-1", name: "Sponsor to Delegate Meetings" },
+                { name: "No id" },
+            ]),
+        ).toEqual([{ id: "t-1", name: "Sponsor to Delegate Meetings" }]);
+    });
+
+    test("falls back to the id when a type has no name", () => {
+        expect(toAppointmentTypes([{ id: "t-1", name: " " }])).toEqual([
+            { id: "t-1", name: "t-1" },
+        ]);
+    });
+});
+
+describe("toAppointmentTypesPage", () => {
+    test("reads a raw body that failed SDK validation, including the next token", () => {
+        // Cvent can omit fields the SDK requires, such as category.
+        const page = toAppointmentTypesPage({
+            data: [{ id: "t-1", name: "Delegate Group Meetings" }],
+            paging: { nextToken: "next-1" },
+        });
+        expect(page).toEqual({
+            data: [{ id: "t-1", name: "Delegate Group Meetings" }],
+            nextToken: "next-1",
+        });
+    });
+});
+
+describe("getAppointmentTypes — mock mode", () => {
+    test("reads the four NALES-style types from the fixture", async () => {
+        vi.stubEnv("USE_MOCK", "true");
+        try {
+            const types = await getAppointmentTypes("MOCK");
+            expect(types.map((t) => t.name)).toEqual([
+                "Sponsor to Delegate Meetings",
+                "Delegate Group Meetings",
+                "Delegate to Delegate Meetings",
+                "Themed Lunches (Round Tables)",
+            ]);
+        } finally {
+            vi.unstubAllEnvs();
+        }
+    });
+
+    test("the timeslot fixture has sponsor slots on both days", async () => {
+        vi.stubEnv("USE_MOCK", "true");
+        try {
+            const [types, times] = await Promise.all([
+                getAppointmentTypes("MOCK"),
+                getTimeslotsByEvent("MOCK"),
+            ]);
+            const sponsorType = types.find(
+                (t) => t.name === "Sponsor to Delegate Meetings",
+            );
+            const sponsorDates = new Set(
+                times
+                    .filter((t) => t.appointmentType.id === sponsorType?.id)
+                    .map((t) => t.startTime.toISOString().slice(0, 10)),
+            );
+            expect(sponsorDates.size).toBe(2);
+        } finally {
+            vi.unstubAllEnvs();
+        }
     });
 });

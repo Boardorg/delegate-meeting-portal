@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { runScheduler } from './engine';
 import { pairKey } from './helpers';
 import type { Attendee, Location, MeetingRequest, Timeslot } from '@/types';
+import type { MeetingKind } from '@/lib/events/meetingKinds';
 import { emptyProfile } from '@/lib/attendees/formatProfile';
 
 // ---------------------------------------------------------------------------
@@ -46,10 +47,17 @@ function makeAttendee(
  * @param {1 | 2} day - The event day this timeslot belongs to.
  * @param {string} startTime - Start time string (any distinct value; treated opaquely).
  * @param {number} [capacity=1] - How many meetings may book this timeslot.
+ * @param {MeetingKind} [kind] - The slot's meeting kind. Defaults to sponsor_delegate on Day 1 and delegate_delegate on Day 2.
  * @returns {Timeslot} The timeslot.
  */
-function makeTimeslot(id: string, day: 1 | 2, startTime: string, capacity = 1): Timeslot {
-    return { id, day, startTime, endTime: startTime, capacity, locationId: null, appointmentTypeId: 'type-1' };
+function makeTimeslot(
+    id: string,
+    day: 1 | 2,
+    startTime: string,
+    capacity = 1,
+    kind: MeetingKind = day === 1 ? 'sponsor_delegate' : 'delegate_delegate',
+): Timeslot {
+    return { id, day, startTime, endTime: startTime, capacity, locationId: null, appointmentTypeId: `type-${kind}`, appointmentTypeName: null, kind };
 }
 
 /**

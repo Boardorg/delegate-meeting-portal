@@ -28,15 +28,15 @@ The first event goes live **for sponsors only**. This spec fixes sponsor meeting
 
 1. **Each event maps its Cvent appointment types to a meeting kind.** The kinds are `sponsor_delegate`, `delegate_delegate`, `delegate_group` and `ignore`. Unmapped types behave as `ignore`. Event settings lists every appointment type Cvent returns, with all four kinds available. Only the `sponsor_delegate` mapping is required for now. Nothing uses `delegate_group` yet, since group meetings are delegates plus one staff member.
 2. **The meeting kind comes from who is meeting, never from an admin.** A sponsor company with a delegate is `sponsor_delegate`. Two delegates is `delegate_delegate`. Admins never choose a type.
-3. **Sponsor meetings only ever use `sponsor_delegate` slots**, in the scheduler, in the admin Edit and Create Meeting windows, and on push.
+3. **The scheduler only puts sponsor meetings in `sponsor_delegate` slots.** Admins can override this by hand (decision 9).
 4. **Day 2 spillover for diamond sponsors.** The scheduler fills sponsor meetings into Day 1 `sponsor_delegate` slots first. A pair whose sponsor company is **diamond** may use a Day 2 `sponsor_delegate` slot when no Day 1 slot works. Standard sponsors stay on Day 1. (Event team: "S2D usually take place on day 1 and we add additional on day 2 for those with larger meeting packages.")
 5. **Sponsor meeting limits count across both days.** Once a diamond sponsor can have Day 2 sponsor meetings, the per-pass sponsor and delegate caps for sponsor meetings must count that party's sponsor meetings on **every** day, not just the pass's day. Otherwise a diamond sponsor could exceed their package.
 6. **Missing mappings are handled without losing work.** A scheduler run replaces every meeting that hasn't been pushed yet.
    - If no type is mapped to `sponsor_delegate`, the run would delete those meetings and create none. So the scheduler stops before changing anything and shows a message telling the admin to set the mapping in Event settings.
    - If `sponsor_delegate` is mapped but other types are not, the run goes ahead. It ignores the unmapped types' slots and lists them as a warning in the run report.
-7. **Push skips a mis-typed slot and carries on.** As a safety net, push skips any meeting whose slot is not `sponsor_delegate`, with a new failure reason `wrong_appointment_type`, and still pushes every other meeting in the batch. The sync report lists the skipped meetings. This catches rows created before this fix.
+7. **Push respects the slot and flags overrides.** Push sends every meeting with its slot's appointment type, as it does today. When a sponsor meeting is in a slot that isn't `sponsor_delegate`, the push still goes ahead and the sync report adds a warning such as "Pushed as Delegate Group Meetings". Nothing is skipped for its type. The scheduler never creates these once mapped, so the warning only appears for admin overrides and for meetings created before this fix.
 8. **Delegate-to-delegate passes (6 and 7) use only `delegate_delegate` slots.** Their day rule is unchanged for now. Delegate scheduling is out of scope (see below).
-9. **Admins can still pick any `sponsor_delegate` slot on either day** in the Edit and Create Meeting windows, whatever the sponsor's tier. Admins are the override.
+9. **Admins can pick any slot.** The Edit and Create Meeting windows list every slot on both days, grouped by Cvent appointment type, with `sponsor_delegate` slots first. Choosing a slot of another type shows a warning in the window, for example "This meeting will appear in Cvent as a Delegate Group Meeting." Tier rules don't apply to admin choices.
 
 ## Scope
 
@@ -68,11 +68,11 @@ The first event goes live **for sponsors only**. This spec fixes sponsor meeting
 
 ### Admin meeting editor (`app/admin/meetings/[sponsorId]/actions.ts`)
 
-- Slot options for Edit and Create Meeting list only `sponsor_delegate` slots, on both days (decision 9).
+- Slot options for Edit and Create Meeting list every slot on both days, grouped by appointment type with `sponsor_delegate` first. Each option carries its type name and kind. Choosing a non-`sponsor_delegate` slot shows a warning before saving (decision 9).
 
 ### Push (`lib/cvent/push.ts`, `lib/cvent/syncReport.ts`, `SyncReportPanel.tsx`)
 
-- Skip meetings whose slot kind isn't `sponsor_delegate`, with reason `wrong_appointment_type`, a label and a hint, and keep pushing the rest (decision 7).
+- When a sponsor meeting's slot kind isn't `sponsor_delegate`, push it as normal and add a warning naming the appointment type it was pushed as (decision 7).
 
 ## Out of scope
 
@@ -103,16 +103,17 @@ Each one must be covered by a unit test unless marked otherwise.
 
 **Admin editor**
 
-12. Edit and Create Meeting slot options include `sponsor_delegate` slots from both days and nothing else.
+12. Edit and Create Meeting slot options include every slot from both days, grouped by appointment type, with `sponsor_delegate` slots first. Each option says which appointment type it is.
+13. Choosing a slot that isn't `sponsor_delegate` in Edit or Create Meeting shows the type warning. Choosing a `sponsor_delegate` slot shows no warning.
 
 **Push**
 
-13. Push skips a meeting on a non-`sponsor_delegate` slot with reason `wrong_appointment_type`, makes no Cvent call for it, and still pushes the other meetings in the batch.
+14. Push sends a sponsor meeting on a non-`sponsor_delegate` slot with that slot's appointment type, and its result carries a warning naming the type. A meeting on a `sponsor_delegate` slot gets no such warning.
 
 **Overall**
 
-14. All existing tests still pass. `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` pass, as in CI.
-15. *(Manual, by Peter)* The preview checks in "Manual check" below all pass.
+15. All existing tests still pass. `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` pass, as in CI.
+16. *(Manual, by Peter)* The preview checks in "Manual check" below all pass.
 
 ## Manual check (Peter, on a Vercel preview)
 
@@ -122,7 +123,7 @@ Use a preview deployment pointed at the staging database, with NALES mapped in E
 2. **Safety stop:** on a copy of the event with no mapping, click "Run Scheduling Engine". It stops with the message, and the meeting list is unchanged.
 3. **Scheduler:** with NALES mapped, run the scheduler. Open a few sponsor companies. Every meeting time is a "Sponsor to Delegate" slot. Standard sponsors have Wednesday meetings only. Any Thursday meetings belong to diamond sponsors.
 4. **Limits:** no standard company shows more than 5 scheduled meetings, and no diamond company more than 8.
-5. **Admin editor:** open Edit on a meeting. The Time Slot list only shows sponsor booths and times, on both days.
+5. **Admin editor:** open Edit on a meeting. The Time Slot list shows every slot grouped by type, sponsor slots first. Pick a Delegate Group slot and check the warning appears. Cancel without saving.
 6. **Push:** push all. In Cvent, every new appointment's type is "Sponsor to Delegate Meetings".
 
 ## Constraints for whoever builds this
@@ -138,5 +139,5 @@ Use a preview deployment pointed at the staging database, with NALES mapped in E
 1. Apply the migration to production by hand.
 2. Deploy.
 3. In Event settings for NALES, map "Sponsor to Delegate Meetings" to `sponsor_delegate`. Mapping the other types is optional for now.
-4. Clean up the mis-typed test appointments. Cvent can't change an appointment's type, so use **Unpush All Synced**, then re-run the scheduler, then **Push All to Cvent**. Re-run the scheduler before pushing. Otherwise push skips the meetings still on wrong-type slots (decision 7).
+4. Clean up the mis-typed test appointments. Cvent can't change an appointment's type, so use **Unpush All Synced**, then re-run the scheduler, then **Push All to Cvent**. Re-run the scheduler before pushing. Otherwise the old meetings still on wrong-type slots get pushed with those types again (decision 7).
 5. Check the result in Cvent (manual check step 6).

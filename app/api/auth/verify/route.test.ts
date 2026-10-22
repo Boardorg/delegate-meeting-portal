@@ -49,7 +49,7 @@ function mockUpdateReturning(rows: object[]) {
     const returningMock = vi.fn().mockResolvedValue(rows);
     const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
     const setMock = vi.fn().mockReturnValue({ where: whereMock });
-    vi.mocked(db.update).mockReturnValue({ set: setMock } as any);
+    vi.mocked(db.update).mockReturnValue({ set: setMock } as never);
     return { setMock };
 }
 

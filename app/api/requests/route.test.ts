@@ -243,8 +243,8 @@ describe('POST /api/requests — DB operations', () => {
         // vi.mocked() gives TypeScript type info so you can call .mockReturnValue on an already-mocked function.
         // db.delete() is synchronous (it just starts the builder), so mockReturnValue is correct here.
         // The fake only needs { where: whereMock } because that is the only method the route chains next.
-        // The `as any` cast bypasses drizzle's generic return type so our minimal fake compiles without error.
-        vi.mocked(db.delete).mockReturnValue({ where: whereMock } as any);
+        // The `as never` cast bypasses drizzle's generic return type so our minimal fake compiles without error.
+        vi.mocked(db.delete).mockReturnValue({ where: whereMock } as never);
 
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', delete: true }));
 
@@ -270,8 +270,8 @@ describe('POST /api/requests — DB operations', () => {
         // valuesMock is a replacement for the real DB .values() method.
         const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
         // db.insert() starts the chain. It is synchronous, so mockReturnValue is correct.
-        // The `as any` cast bypasses drizzle's generic return type so our minimal fake compiles without error.
-        vi.mocked(db.insert).mockReturnValue({ values: valuesMock } as any);
+        // The `as never` cast bypasses drizzle's generic return type so our minimal fake compiles without error.
+        vi.mocked(db.insert).mockReturnValue({ values: valuesMock } as never);
 
         const res = await POST(makePostRequest({ targetId: 'sf-target-001', rank: 3 }));
         const json = await res.json();
@@ -333,8 +333,8 @@ describe('GET /api/requests', () => {
         // It returns an object with .where so the chain can continue to the terminal step.
         const fromMock = vi.fn().mockReturnValue({ where: whereMock });
         // db.select() starts the chain. It is synchronous, so mockReturnValue is correct.
-        // The `as any` cast bypasses drizzle's generic return type so our minimal fake compiles without error.
-        vi.mocked(db.select).mockReturnValue({ from: fromMock } as any);
+        // The `as never` cast bypasses drizzle's generic return type so our minimal fake compiles without error.
+        vi.mocked(db.select).mockReturnValue({ from: fromMock } as never);
 
         const res = await GET();
         const json = await res.json();
@@ -356,7 +356,7 @@ describe('GET /api/requests', () => {
             from: vi.fn().mockReturnValue({
                 where: vi.fn().mockResolvedValue([]),
             }),
-        } as any);
+        } as never);
 
         const res = await GET();
         const json = await res.json();

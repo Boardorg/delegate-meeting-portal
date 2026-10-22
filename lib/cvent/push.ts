@@ -14,6 +14,7 @@ import {
     cancelAppointment,
 } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
+import type { Timeslot } from "@/types";
 import {
     classifyPushError,
     parseCventError,
@@ -121,6 +122,21 @@ export function appointmentCode(row: ScheduledMeetingRow): string {
     return row.lastPushedAt
         ? `${row.id}-${row.lastPushedAt.getTime()}`
         : row.id;
+}
+
+/**
+ * The warning for a sponsor meeting pushed from a slot that isn't `sponsor_delegate`.
+ * Push still sends it with the slot's appointment type, so Cvent files it under that type.
+ * This happens after an admin override, or for a meeting made before the mapping existed.
+ *
+ * @param {Pick<Timeslot, "kind" | "appointmentTypeId" | "appointmentTypeName">} timeslot - The meeting's slot.
+ * @returns {string | undefined} The warning, or undefined for a sponsor_delegate slot.
+ */
+export function appointmentTypeWarning(
+    timeslot: Pick<Timeslot, "kind" | "appointmentTypeId" | "appointmentTypeName">,
+): string | undefined {
+    if (timeslot.kind === "sponsor_delegate") return undefined;
+    return `Pushed as ${timeslot.appointmentTypeName ?? timeslot.appointmentTypeId}.`;
 }
 
 /**
@@ -286,6 +302,10 @@ export async function pushMeetingRows(
                 ? `${cancelledHostReps.join(", ")} cancelled in Cvent, so ${cancelledHostReps.length === 1 ? "that rep was not added as a host" : "those reps were not added as hosts"}.`
                 : undefined;
 
+        // A sponsor meeting in a slot that isn't sponsor_delegate still goes ahead.
+        // It is sent with the slot's appointment type, so say which type Cvent got.
+        const typeWarning = appointmentTypeWarning(timeslot);
+
         // The single appointment attendee is the target delegate's contact id
         // when known. A missing target contact id isn't fatal (the appointment
         // is created without an attendee) but is worth flagging.
@@ -336,6 +356,7 @@ export async function pushMeetingRows(
 
             // Collect non-fatal notes for an otherwise-successful push.
             const notes: string[] = [];
+            if (typeWarning) notes.push(typeWarning);
             if (hostWarning) notes.push(hostWarning);
             if (cancelledHostWarning) notes.push(cancelledHostWarning);
             if (targetWarning) notes.push(targetWarning);

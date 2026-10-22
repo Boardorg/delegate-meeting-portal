@@ -31,7 +31,7 @@ vi.mock("@/lib/db/client", () => ({
     db: { update: () => ({ set: () => ({ where: async () => undefined }) }) },
 }));
 
-import { appointmentCode, pushMeetingRows } from "./push";
+import { appointmentCode, appointmentTypeWarning, pushMeetingRows } from "./push";
 
 /** Minimal attendee builder. */
 function att(
@@ -92,6 +92,18 @@ beforeEach(() => {
                     startTime: "2025-01-15T09:00:00Z",
                     endTime: "2025-01-15T09:30:00Z",
                     appointmentTypeId: "type-1",
+                    appointmentTypeName: "Sponsor to Delegate Meetings",
+                    kind: "sponsor_delegate",
+                },
+            ],
+            [
+                "ts-group",
+                {
+                    startTime: "2025-01-15T10:00:00Z",
+                    endTime: "2025-01-15T10:30:00Z",
+                    appointmentTypeId: "type-group",
+                    appointmentTypeName: "Delegate Group Meetings",
+                    kind: "ignore",
                 },
             ],
         ]),
@@ -304,6 +316,43 @@ describe("pushMeetingRows — cancelled Cvent registrations", () => {
         expect(summary.pushed).toBe(0);
         expect(summary.results[0].reason).toBe("attendee_cancelled");
         expect(createAppointment).not.toHaveBeenCalled();
+    });
+});
+
+describe("pushMeetingRows — appointment type", () => {
+    beforeEach(() => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+        ]);
+    });
+
+    test("pushes a meeting on a non-sponsor slot with that slot's type, and warns naming the type", async () => {
+        const summary = await pushMeetingRows("EVT", [row({ timeslotId: "ts-group" })]);
+
+        expect(summary.pushed).toBe(1);
+        expect(lastInput().appointmentTypeId).toBe("type-group");
+        expect(summary.results[0].warning).toBe("Pushed as Delegate Group Meetings.");
+    });
+
+    test("gives a meeting on a sponsor_delegate slot no type warning", async () => {
+        const summary = await pushMeetingRows("EVT", [row()]);
+
+        expect(summary.pushed).toBe(1);
+        expect(lastInput().appointmentTypeId).toBe("type-1");
+        expect(summary.results[0].warning).toBeUndefined();
+    });
+});
+
+describe("appointmentTypeWarning", () => {
+    test("falls back to the type id when Cvent didn't name the type", () => {
+        expect(
+            appointmentTypeWarning({
+                kind: "delegate_delegate",
+                appointmentTypeId: "type-d2d",
+                appointmentTypeName: null,
+            }),
+        ).toBe("Pushed as type-d2d.");
     });
 });
 

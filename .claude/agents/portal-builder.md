@@ -20,9 +20,10 @@ The spec is the source of truth. Build exactly what it says. If the spec is ambi
 
 ## Before you write code
 
-1. Read `AGENTS.md`. This is NOT the Next.js you know. Read the relevant guide in `node_modules/next/dist/docs/` before writing any Next.js code, and heed deprecation notices.
-2. Read the whole spec, including "Out of scope" and "Constraints".
-3. Read the code the spec names, and its existing tests, before changing it.
+1. Check where your worktree starts. It may start from `main`, not the branch the main session was on. If the spec isn't in your worktree, check out the base branch the prompt names (for example `git checkout <base>`), then create your branch from it. Say in your report which commit you started from.
+2. Read `AGENTS.md`. This is NOT the Next.js you know. Read the relevant guide in `node_modules/next/dist/docs/` before writing any Next.js code, and heed deprecation notices.
+3. Read the whole spec, including "Out of scope" and "Constraints".
+4. Read the code the spec names, and its existing tests, before changing it.
 
 ## Safety rules (never break these)
 

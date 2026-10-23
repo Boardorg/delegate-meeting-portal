@@ -875,6 +875,57 @@ function recoverAppointmentId(err: unknown): string {
     throw err;
 }
 
+/** An existing appointment's type as Cvent reports it. Either field may be missing. */
+export type CventAppointmentTypeRef = { id: string | null; name: string | null };
+
+/**
+ * Reads the `type` of a Cvent appointment body.
+ * Cvent always sends a name and may also send an id.
+ * The SDK only declares the name, so the id is read when present.
+ *
+ * @param {unknown} body - An SDK-parsed appointment or a JSON-parsed raw body.
+ * @returns {CventAppointmentTypeRef | null} The type, or null when the body has none.
+ */
+export function toAppointmentTypeRef(body: unknown): CventAppointmentTypeRef | null {
+    const type = (body as { type?: { id?: unknown; name?: unknown } } | null)?.type;
+    if (!type) return null;
+    const id = typeof type.id === "string" && type.id ? type.id : null;
+    const name =
+        typeof type.name === "string" && type.name.trim() ? type.name.trim() : null;
+    return id || name ? { id, name } : null;
+}
+
+/**
+ * Looks up an existing appointment's type in Cvent.
+ * Push uses it before editing an appointment in place, since Cvent can't change an appointment's type.
+ * A response that fails the SDK's validation on a 2xx is read from the raw body.
+ * Mock mode has no real appointments, so it returns null and push treats the type as unknown.
+ *
+ * @param {string} apptId - The Cvent appointment id.
+ * @returns {Promise<CventAppointmentTypeRef | null>} The type, or null when Cvent didn't say.
+ * @throws {unknown} When Cvent can't be reached or rejects the request.
+ */
+export async function getAppointmentTypeOf(
+    apptId: string,
+): Promise<CventAppointmentTypeRef | null> {
+    if (isMock()) return null;
+
+    try {
+        const appt = await getClient().appointments.getAppointmentById({ id: apptId });
+        return toAppointmentTypeRef(appt);
+    } catch (err) {
+        const body = recoverableResponseBody(err);
+        if (body) {
+            try {
+                return toAppointmentTypeRef(JSON.parse(body));
+            } catch {
+                // The body wasn't parseable JSON, so fall through and re-throw.
+            }
+        }
+        throw err;
+    }
+}
+
 /**
  * Creates a Cvent appointment for a scheduled meeting and returns its Cvent
  * appointment id. In mock mode returns a synthetic id without any network call.

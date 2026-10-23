@@ -20,6 +20,7 @@ const REASON_LABEL: Record<SyncFailureReason, string> = {
     missing_location: "No location",
     host_not_in_cvent: "Host not in Cvent",
     attendee_cancelled: "Cancelled in Cvent",
+    cvent_type_change: "Can't change type",
     cvent_no_availability: "Host slot full",
     cvent_validation: "Rejected by Cvent",
     cvent_conflict: "Cvent conflict",
@@ -40,6 +41,8 @@ const REASON_HINT: Record<SyncFailureReason, string> = {
         "The requester (appointment host) isn't a Cvent attendee for this event. Add them in Cvent, then sync again.",
     attendee_cancelled:
         "A participant cancelled their Cvent registration, so Cvent won't accept them. Reassign or delete the meeting.",
+    cvent_type_change:
+        "Cvent can't change a meeting's appointment type, so the meeting is still in Cvent under its old type. Remove the meeting and create it again in the new slot, or use Unpush All Synced and push again.",
     cvent_no_availability:
         "Cvent reports the host has no appointment slot free at this time. Move the meeting to another timeslot.",
     cvent_validation:

@@ -12,6 +12,8 @@ import {
     createAppointment,
     updateAppointment,
     cancelAppointment,
+    getAppointmentTypeOf,
+    type CventAppointmentTypeRef,
 } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 import type { Timeslot } from "@/types";
@@ -137,6 +139,75 @@ export function appointmentTypeWarning(
 ): string | undefined {
     if (timeslot.kind === "sponsor_delegate") return undefined;
     return `Pushed as ${timeslot.appointmentTypeName ?? timeslot.appointmentTypeId}.`;
+}
+
+/**
+ * Looks up an existing appointment's type, treating any failure as unknown.
+ * The failure is logged, and the caller then refuses to edit the appointment in place.
+ *
+ * @param {string} apptId - The existing Cvent appointment id.
+ * @returns {Promise<CventAppointmentTypeRef | null>} The type, or null when it can't be found.
+ */
+async function lookupAppointmentType(
+    apptId: string,
+): Promise<CventAppointmentTypeRef | null> {
+    try {
+        return await getAppointmentTypeOf(apptId);
+    } catch (err) {
+        console.warn(
+            `pushMeetingRows: could not read the type of Cvent appointment ${apptId}. ` +
+                `${err instanceof Error ? err.message : String(err)}`,
+        );
+        return null;
+    }
+}
+
+/**
+ * Whether an existing Cvent appointment already has a slot's appointment type.
+ * Matches by id when Cvent sent one, otherwise by name.
+ * An unknown type never matches, so the caller fails safe.
+ *
+ * @param {CventAppointmentTypeRef | null} existing - The existing appointment's type.
+ * @param {Pick<Timeslot, "appointmentTypeId" | "appointmentTypeName">} timeslot - The new slot.
+ * @returns {boolean} True when the types are known to be the same.
+ */
+export function sameAppointmentType(
+    existing: CventAppointmentTypeRef | null,
+    timeslot: Pick<Timeslot, "appointmentTypeId" | "appointmentTypeName">,
+): boolean {
+    if (!existing) return false;
+    if (existing.id) return existing.id === timeslot.appointmentTypeId;
+    if (existing.name && timeslot.appointmentTypeName) {
+        return existing.name === timeslot.appointmentTypeName.trim();
+    }
+    return false;
+}
+
+/**
+ * The failure message when a re-push would have to change an appointment's type.
+ *
+ * @param {CventAppointmentTypeRef | null} existing - The existing appointment's type, or null when unknown.
+ * @param {Pick<Timeslot, "appointmentTypeId" | "appointmentTypeName">} timeslot - The new slot.
+ * @returns {string} A plain explanation and what to do next.
+ */
+export function typeChangeMessage(
+    existing: CventAppointmentTypeRef | null,
+    timeslot: Pick<Timeslot, "appointmentTypeId" | "appointmentTypeName">,
+): string {
+    const newType = timeslot.appointmentTypeName ?? timeslot.appointmentTypeId;
+    const fix =
+        "Remove the meeting and create it again in the new slot, or use Unpush All Synced and push again.";
+    const oldType = existing?.name ?? existing?.id;
+    if (!oldType) {
+        return (
+            `The portal couldn't check this meeting's appointment type in Cvent, and Cvent can't change a meeting's type. ` +
+            `So nothing was changed, and the meeting is still in Cvent as it was. The new slot is "${newType}". ${fix}`
+        );
+    }
+    return (
+        `Cvent can't change a meeting's appointment type. ` +
+        `This meeting is still in Cvent as "${oldType}", and the new slot is "${newType}". ${fix}`
+    );
 }
 
 /**
@@ -346,6 +417,24 @@ export async function pushMeetingRows(
                 ) {
                     throw createErr;
                 }
+
+                // Cvent's update can't change an appointment's type.
+                // Only edit in place when the old appointment already has the new slot's type.
+                // Otherwise, or when the type can't be checked, change nothing and say why.
+                // The row stays linked to its old appointment, and the old appointment is not cancelled.
+                const existingType = await lookupAppointmentType(oldAppointmentId);
+                if (!sameAppointmentType(existingType, timeslot)) {
+                    results.push({
+                        meetingId: row.id,
+                        label,
+                        ok: false,
+                        kind,
+                        reason: "cvent_type_change",
+                        error: typeChangeMessage(existingType, timeslot),
+                    });
+                    continue;
+                }
+
                 cventAppointmentId = await updateAppointment(
                     eventCode,
                     oldAppointmentId,

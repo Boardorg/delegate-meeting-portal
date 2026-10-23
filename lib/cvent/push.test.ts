@@ -16,10 +16,14 @@ const cancelAppointment = vi.fn();
 const loadAttendees = vi.fn();
 const loadEventScheduleData = vi.fn();
 
+const getAppointmentTypeOf = vi.fn();
+const dbUpdate = vi.fn();
+
 vi.mock("@/lib/cvent/client", () => ({
     createAppointment: (...a: unknown[]) => createAppointment(...a),
     updateAppointment: (...a: unknown[]) => updateAppointment(...a),
     cancelAppointment: (...a: unknown[]) => cancelAppointment(...a),
+    getAppointmentTypeOf: (...a: unknown[]) => getAppointmentTypeOf(...a),
 }));
 vi.mock("@/lib/attendees/loader", () => ({
     loadAttendees: (...a: unknown[]) => loadAttendees(...a),
@@ -28,10 +32,20 @@ vi.mock("@/lib/cvent/mapper", () => ({
     loadEventScheduleData: (...a: unknown[]) => loadEventScheduleData(...a),
 }));
 vi.mock("@/lib/db/client", () => ({
-    db: { update: () => ({ set: () => ({ where: async () => undefined }) }) },
+    db: {
+        update: (...a: unknown[]) => {
+            dbUpdate(...a);
+            return { set: () => ({ where: async () => undefined }) };
+        },
+    },
 }));
 
-import { appointmentCode, appointmentTypeWarning, pushMeetingRows } from "./push";
+import {
+    appointmentCode,
+    appointmentTypeWarning,
+    pushMeetingRows,
+    sameAppointmentType,
+} from "./push";
 
 /** Minimal attendee builder. */
 function att(
@@ -84,6 +98,8 @@ function row(overrides: Partial<ScheduledMeetingRow> = {}): ScheduledMeetingRow 
 beforeEach(() => {
     vi.clearAllMocks();
     createAppointment.mockResolvedValue("appt-123");
+    // By default the old appointment already has the ts-1 slot's type, as Cvent names it.
+    getAppointmentTypeOf.mockResolvedValue({ id: null, name: "Sponsor to Delegate Meetings" });
     loadEventScheduleData.mockResolvedValue({
         timeslotById: new Map([
             [
@@ -271,6 +287,99 @@ describe("pushMeetingRows — re-push at the same time", () => {
         expect(summary.results[0].cventAppointmentId).toBe("appt-new");
         expect(updateAppointment).not.toHaveBeenCalled();
         expect(cancelAppointment).toHaveBeenCalledWith("EVT", "appt-old");
+    });
+
+    test("updates in place when the old appointment has the same type, matched by id", async () => {
+        createAppointment.mockRejectedValue(
+            cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
+        );
+        updateAppointment.mockResolvedValue("appt-old");
+        getAppointmentTypeOf.mockResolvedValue({ id: "type-1", name: "Renamed in Cvent" });
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ cventAppointmentId: "appt-old" }),
+        ]);
+
+        expect(getAppointmentTypeOf).toHaveBeenCalledWith("appt-old");
+        expect(summary.pushed).toBe(1);
+        expect(updateAppointment).toHaveBeenCalled();
+        expect(dbUpdate).toHaveBeenCalled();
+    });
+
+    test("does not update, cancel or save when the new slot has another type", async () => {
+        // The meeting was pushed as Delegate Group and now moves to the same-time sponsor slot.
+        createAppointment.mockRejectedValue(
+            cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
+        );
+        getAppointmentTypeOf.mockResolvedValue({ id: null, name: "Delegate Group Meetings" });
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ cventAppointmentId: "appt-old" }),
+        ]);
+
+        expect(summary.pushed).toBe(0);
+        expect(summary.results[0].reason).toBe("cvent_type_change");
+        expect(summary.results[0].error).toContain('still in Cvent as "Delegate Group Meetings"');
+        expect(summary.results[0].error).toContain("Unpush All Synced");
+        expect(updateAppointment).not.toHaveBeenCalled();
+        expect(cancelAppointment).not.toHaveBeenCalled();
+        expect(dbUpdate).not.toHaveBeenCalled();
+    });
+
+    test("fails the same safe way when the old appointment's type can't be looked up", async () => {
+        createAppointment.mockRejectedValue(
+            cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
+        );
+        getAppointmentTypeOf.mockRejectedValue(new Error("fetch failed"));
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ cventAppointmentId: "appt-old" }),
+        ]);
+
+        expect(summary.results[0].reason).toBe("cvent_type_change");
+        expect(summary.results[0].error).toContain("couldn't check");
+        expect(updateAppointment).not.toHaveBeenCalled();
+        expect(cancelAppointment).not.toHaveBeenCalled();
+        expect(dbUpdate).not.toHaveBeenCalled();
+    });
+
+    test("fails safe when Cvent returns no type for the old appointment", async () => {
+        createAppointment.mockRejectedValue(
+            cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
+        );
+        getAppointmentTypeOf.mockResolvedValue(null);
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ cventAppointmentId: "appt-old" }),
+        ]);
+
+        expect(summary.results[0].reason).toBe("cvent_type_change");
+        expect(updateAppointment).not.toHaveBeenCalled();
+        expect(dbUpdate).not.toHaveBeenCalled();
+    });
+});
+
+describe("sameAppointmentType", () => {
+    const slot = { appointmentTypeId: "type-1", appointmentTypeName: "Sponsor to Delegate Meetings" };
+
+    test("matches by id when Cvent sent one, even if the name differs", () => {
+        expect(sameAppointmentType({ id: "type-1", name: "Other" }, slot)).toBe(true);
+        expect(sameAppointmentType({ id: "type-2", name: "Sponsor to Delegate Meetings" }, slot)).toBe(false);
+    });
+
+    test("matches by name when there is no id", () => {
+        expect(sameAppointmentType({ id: null, name: "Sponsor to Delegate Meetings" }, slot)).toBe(true);
+        expect(sameAppointmentType({ id: null, name: "Delegate Group Meetings" }, slot)).toBe(false);
+    });
+
+    test("never matches an unknown type", () => {
+        expect(sameAppointmentType(null, slot)).toBe(false);
+        expect(
+            sameAppointmentType({ id: null, name: "Sponsor to Delegate Meetings" }, {
+                appointmentTypeId: "type-1",
+                appointmentTypeName: null,
+            }),
+        ).toBe(false);
     });
 });
 

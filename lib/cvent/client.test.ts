@@ -4,6 +4,7 @@ import {
     buildUpdateAppointmentRequest,
     getAppointmentTypes,
     getTimeslotsByEvent,
+    toAppointmentTypeRef,
     toAppointmentTypes,
     toAppointmentTypesPage,
     toExistingAppointments,
@@ -114,6 +115,27 @@ describe("toExistingAppointments", () => {
             },
         ]);
         expect(out[0].participantContactIds).toEqual(["reg-only", "d1"]);
+    });
+});
+
+describe("toAppointmentTypeRef", () => {
+    test("reads the id and name when Cvent sends both", () => {
+        expect(
+            toAppointmentTypeRef({ type: { id: "t-1", name: " Delegate Group Meetings " } }),
+        ).toEqual({ id: "t-1", name: "Delegate Group Meetings" });
+    });
+
+    test("reads the name alone, as the SDK declares it", () => {
+        expect(toAppointmentTypeRef({ type: { name: "Sponsor to Delegate Meetings" } })).toEqual({
+            id: null,
+            name: "Sponsor to Delegate Meetings",
+        });
+    });
+
+    test("returns null when the body has no usable type", () => {
+        expect(toAppointmentTypeRef({})).toBeNull();
+        expect(toAppointmentTypeRef({ type: { name: "" } })).toBeNull();
+        expect(toAppointmentTypeRef(null)).toBeNull();
     });
 });
 

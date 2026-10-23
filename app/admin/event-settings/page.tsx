@@ -28,6 +28,11 @@ async function loadAppointmentTypes(
     try {
         return { ok: true, types: await getAppointmentTypes(event.code) };
     } catch (err) {
+        // The detail goes to the server log. The admin sees a plain message.
+        console.warn(
+            `EventSettingsPage: could not list appointment types for "${event.code}". ` +
+                `${err instanceof Error ? err.message : String(err)}`,
+        );
         if (!event.cventAppointmentEventId) {
             return {
                 ok: false,
@@ -40,8 +45,7 @@ async function loadAppointmentTypes(
             ok: false,
             reason:
                 "Cvent couldn't be reached, so this event's appointment types can't be loaded right now. " +
-                "The mapping is unchanged, and the other settings still save. " +
-                `(${err instanceof Error ? err.message : String(err)})`,
+                "The mapping is unchanged, and the other settings still save.",
         };
     }
 }

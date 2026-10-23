@@ -86,9 +86,9 @@ export default function SchedulerReportPanel({
                     {report.unmappedAppointmentTypes.length === 1
                         ? "This Cvent appointment type isn't mapped to a meeting kind, so its slots weren't used: "
                         : "These Cvent appointment types aren't mapped to a meeting kind, so their slots weren't used: "}
-                    {report.unmappedAppointmentTypes.join(", ")}. Map them
-                    in Event settings to use them, or set them to Ignore to
-                    hide this warning.
+                    {report.unmappedAppointmentTypes.join(", ")}. Choose a
+                    meeting kind for each one in Event settings, or set it to
+                    Ignore.
                 </div>
             )}
 

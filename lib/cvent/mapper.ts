@@ -56,7 +56,6 @@ export function toTimeslots(
 ): Timeslot[] {
     const nameById = new Map(types.map((t) => [t.id, t.name]));
 
-
     // ISO date (YYYY-MM-DD) → 1-based day index, in chronological order.
     const dates = [...new Set(times.map((t) => t.startTime.toISOString().slice(0, 10)))].sort();
     const dayByDate = new Map(dates.map((d, i) => [d, i + 1]));

@@ -330,8 +330,14 @@ export default function EventSettingsForm({
                                 Map each Cvent appointment type to a meeting
                                 kind. The scheduler only books sponsor meetings
                                 into types mapped to “Sponsor to delegate”. That
-                                is the only mapping needed for now. Unmapped
-                                types are ignored.
+                                is the only mapping needed for now.
+                            </span>
+                            <span className="adm-field-hint adm-field-mb">
+                                The scheduler won’t use slots of a type set to
+                                “Not mapped” or “Ignore”. “Not mapped” also
+                                makes the run report remind you about the type.
+                                “Ignore” means you’ve decided it isn’t used, and
+                                hides that reminder.
                             </span>
                             {!appointmentTypes.ok ? (
                                 <div className="adm-modal-warn-at">

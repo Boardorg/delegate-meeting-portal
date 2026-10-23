@@ -10,8 +10,9 @@ How features get built with Claude Code agents in this repo. People own the two 
 4. **Review** with three `portal-reviewer` agents in parallel, one per lens: `correctness`, `data-safety` and `conventions`. They see only the spec and the code, not the builder's reasoning.
 5. **Verify** with `portal-verifier`. It tries to disprove every finding and keeps only the real ones.
 6. **Fix** with `portal-builder`, on the same branch, for confirmed findings only. Then review and verify again. **At most two fix rounds.** Anything still open goes to Peter.
-7. **Brief** from `portal-feedback`: a short summary of what's ready, what's not, and what only Peter can decide.
-8. **Merge (Peter and Mark).** Peter checks it on a Vercel preview, opens the PR, and Mark reviews it. CI must pass: lint, type check, unit tests and build.
+7. **Check against live data (main session).** Agents have no credentials, so they can't see how Cvent or the database really behave. Before the brief, the main session runs read-only checks for any assumption the tests can't prove, and feeds what it finds back to the builder or the brief. On the first run this caught three things no agent could: every NALES start time is shared across appointment types, Cvent's single-appointment lookup always returns 404, and the appointment list spans several pages. These checks only read. They never write to Cvent or the database.
+8. **Brief** from `portal-feedback`: a short summary of what's ready, what's not, and what only Peter can decide.
+9. **Merge (Peter and Mark).** Peter checks it on a Vercel preview, opens the PR, and Mark reviews it. CI must pass: lint, type check, unit tests and build.
 
 ## Ground rules
 

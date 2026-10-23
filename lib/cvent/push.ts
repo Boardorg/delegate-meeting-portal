@@ -12,8 +12,7 @@ import {
     createAppointment,
     updateAppointment,
     cancelAppointment,
-    getAppointmentTypeOf,
-    type CventAppointmentTypeRef,
+    getAppointmentsByEvent,
 } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 import type { Timeslot } from "@/types";
@@ -142,62 +141,65 @@ export function appointmentTypeWarning(
 }
 
 /**
- * Looks up an existing appointment's type, treating any failure as unknown.
- * The failure is logged, and the caller then refuses to edit the appointment in place.
+ * Builds a lookup from an existing Cvent appointment id to its appointment type's name.
+ * The event's appointment list is read once, on first use, and shared by the whole push batch.
+ * Cvent's get-appointment call returns 404 for real appointments, so the list is used instead.
+ * A failed list is logged, and every lookup then returns null so the caller fails safe.
  *
- * @param {string} apptId - The existing Cvent appointment id.
- * @returns {Promise<CventAppointmentTypeRef | null>} The type, or null when it can't be found.
+ * @param {string} eventCode - The event the meetings belong to.
+ * @returns {(apptId: string) => Promise<string | null>} The lookup. Null means the type is unknown.
  */
-async function lookupAppointmentType(
-    apptId: string,
-): Promise<CventAppointmentTypeRef | null> {
-    try {
-        return await getAppointmentTypeOf(apptId);
-    } catch (err) {
-        console.warn(
-            `pushMeetingRows: could not read the type of Cvent appointment ${apptId}. ` +
-                `${err instanceof Error ? err.message : String(err)}`,
+export function appointmentTypeLookup(
+    eventCode: string,
+): (apptId: string) => Promise<string | null> {
+    let typeById: Promise<Map<string, string | null>> | null = null;
+    return async (apptId) => {
+        typeById ??= getAppointmentsByEvent(eventCode).then(
+            (appts) => new Map(appts.map((a) => [a.id, a.typeName])),
+            (err) => {
+                console.warn(
+                    `pushMeetingRows: could not list Cvent appointments for "${eventCode}" to check their types. ` +
+                        `${err instanceof Error ? err.message : String(err)}`,
+                );
+                return new Map<string, string | null>();
+            },
         );
-        return null;
-    }
+        return (await typeById).get(apptId) ?? null;
+    };
 }
 
 /**
  * Whether an existing Cvent appointment already has a slot's appointment type.
- * Matches by id when Cvent sent one, otherwise by name.
+ * Cvent's appointment list only names the type, so the match is by name.
  * An unknown type never matches, so the caller fails safe.
  *
- * @param {CventAppointmentTypeRef | null} existing - The existing appointment's type.
- * @param {Pick<Timeslot, "appointmentTypeId" | "appointmentTypeName">} timeslot - The new slot.
+ * @param {string | null} existingTypeName - The existing appointment's type name, or null when unknown.
+ * @param {Pick<Timeslot, "appointmentTypeName">} timeslot - The new slot.
  * @returns {boolean} True when the types are known to be the same.
  */
 export function sameAppointmentType(
-    existing: CventAppointmentTypeRef | null,
-    timeslot: Pick<Timeslot, "appointmentTypeId" | "appointmentTypeName">,
+    existingTypeName: string | null,
+    timeslot: Pick<Timeslot, "appointmentTypeName">,
 ): boolean {
-    if (!existing) return false;
-    if (existing.id) return existing.id === timeslot.appointmentTypeId;
-    if (existing.name && timeslot.appointmentTypeName) {
-        return existing.name === timeslot.appointmentTypeName.trim();
-    }
-    return false;
+    if (!existingTypeName || !timeslot.appointmentTypeName) return false;
+    return existingTypeName.trim() === timeslot.appointmentTypeName.trim();
 }
 
 /**
  * The failure message when a re-push would have to change an appointment's type.
  *
- * @param {CventAppointmentTypeRef | null} existing - The existing appointment's type, or null when unknown.
+ * @param {string | null} existingTypeName - The existing appointment's type name, or null when unknown.
  * @param {Pick<Timeslot, "appointmentTypeId" | "appointmentTypeName">} timeslot - The new slot.
  * @returns {string} A plain explanation and what to do next.
  */
 export function typeChangeMessage(
-    existing: CventAppointmentTypeRef | null,
+    existingTypeName: string | null,
     timeslot: Pick<Timeslot, "appointmentTypeId" | "appointmentTypeName">,
 ): string {
     const newType = timeslot.appointmentTypeName ?? timeslot.appointmentTypeId;
     const fix =
         "Remove the meeting and create it again in the new slot, or use Unpush All Synced and push again.";
-    const oldType = existing?.name ?? existing?.id;
+    const oldType = existingTypeName;
     if (!oldType) {
         return (
             `The portal couldn't check this meeting's appointment type in Cvent, and Cvent can't change a meeting's type. ` +
@@ -263,6 +265,9 @@ export async function pushMeetingRows(
     // reps all become hosts.
     const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
     const companiesByAccountId = sponsorCompaniesByAccountId(attendees);
+
+    // Existing appointments' types, read from Cvent only if an in-place update needs one.
+    const typeNameOf = appointmentTypeLookup(eventCode);
 
     const results: PushResult[] = [];
     for (const row of rows) {
@@ -422,7 +427,7 @@ export async function pushMeetingRows(
                 // Only edit in place when the old appointment already has the new slot's type.
                 // Otherwise, or when the type can't be checked, change nothing and say why.
                 // The row stays linked to its old appointment, and the old appointment is not cancelled.
-                const existingType = await lookupAppointmentType(oldAppointmentId);
+                const existingType = await typeNameOf(oldAppointmentId);
                 if (!sameAppointmentType(existingType, timeslot)) {
                     results.push({
                         meetingId: row.id,

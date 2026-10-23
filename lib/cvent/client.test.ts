@@ -4,7 +4,7 @@ import {
     buildUpdateAppointmentRequest,
     getAppointmentTypes,
     getTimeslotsByEvent,
-    toAppointmentTypeRef,
+    toAppointmentsPage,
     toAppointmentTypes,
     toAppointmentTypesPage,
     toExistingAppointments,
@@ -118,24 +118,31 @@ describe("toExistingAppointments", () => {
     });
 });
 
-describe("toAppointmentTypeRef", () => {
-    test("reads the id and name when Cvent sends both", () => {
-        expect(
-            toAppointmentTypeRef({ type: { id: "t-1", name: " Delegate Group Meetings " } }),
-        ).toEqual({ id: "t-1", name: "Delegate Group Meetings" });
-    });
-
-    test("reads the name alone, as the SDK declares it", () => {
-        expect(toAppointmentTypeRef({ type: { name: "Sponsor to Delegate Meetings" } })).toEqual({
-            id: null,
-            name: "Sponsor to Delegate Meetings",
+describe("toAppointmentsPage — appointment type", () => {
+    test("reads the type name Cvent lists, as { name } only", () => {
+        const page = toAppointmentsPage({
+            data: [
+                {
+                    id: "1da91f20-8f37-4f23-91d8-574406e1c8bf",
+                    start: "2026-01-20T10:00:00Z",
+                    end: "2026-01-20T10:20:00Z",
+                    type: { name: " Delegate Group Meetings " },
+                },
+            ],
+            paging: { nextToken: "next-1" },
         });
+        expect(page.data[0].typeName).toBe("Delegate Group Meetings");
+        expect(page.nextToken).toBe("next-1");
     });
 
-    test("returns null when the body has no usable type", () => {
-        expect(toAppointmentTypeRef({})).toBeNull();
-        expect(toAppointmentTypeRef({ type: { name: "" } })).toBeNull();
-        expect(toAppointmentTypeRef(null)).toBeNull();
+    test("gives null when an appointment has no type name", () => {
+        const page = toAppointmentsPage({
+            data: [
+                { id: "a", start: "2026-01-20T10:00:00Z", end: "2026-01-20T10:20:00Z" },
+                { id: "b", start: "2026-01-20T10:00:00Z", end: "2026-01-20T10:20:00Z", type: { name: "" } },
+            ],
+        });
+        expect(page.data.map((a) => a.typeName)).toEqual([null, null]);
     });
 });
 

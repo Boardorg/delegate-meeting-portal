@@ -343,7 +343,22 @@ export type CventAppointmentSummary = {
     startTime: Date;
     endTime: Date;
     locationName: string | null;
+    /**
+     * The appointment type's name, e.g. "Delegate Group Meetings". Null when Cvent omits it.
+     * Cvent's list sends the type as `{ name }` only, with no id.
+     */
+    typeName: string | null;
 };
+
+/**
+ * Reads an appointment type's name from a listed appointment, trimmed. Blank becomes null.
+ *
+ * @param {{ name?: unknown } | undefined} type - The appointment's `type` field.
+ * @returns {string | null} The name, or null.
+ */
+function typeNameOf(type: { name?: unknown } | undefined): string | null {
+    return typeof type?.name === "string" && type.name.trim() ? type.name.trim() : null;
+}
 
 /** One page of raw listAppointments data, reduced to what we need plus the next page token. */
 type AppointmentsPage = { data: CventAppointmentSummary[]; nextToken?: string };
@@ -357,13 +372,14 @@ type AppointmentsPage = { data: CventAppointmentSummary[]; nextToken?: string };
  * @param {unknown} parsed - The JSON-parsed response body.
  * @returns {AppointmentsPage} The page's appointments and next token, if any.
  */
-function toAppointmentsPage(parsed: unknown): AppointmentsPage {
+export function toAppointmentsPage(parsed: unknown): AppointmentsPage {
     const body = parsed as {
         data?: Array<{
             id: string;
             start: string | Date;
             end: string | Date;
             location?: { name?: string };
+            type?: { name?: unknown };
         }>;
         paging?: { nextToken?: string };
     };
@@ -373,6 +389,7 @@ function toAppointmentsPage(parsed: unknown): AppointmentsPage {
             startTime: new Date(a.start),
             endTime: new Date(a.end),
             locationName: a.location?.name ?? null,
+            typeName: typeNameOf(a.type),
         })),
         nextToken: body.paging?.nextToken,
     };
@@ -405,6 +422,7 @@ async function fetchAppointmentsPage(
                 startTime: a.start,
                 endTime: a.end,
                 locationName: a.location?.name ?? null,
+                typeName: typeNameOf(a.type),
             })),
             nextToken: page.result.paging.nextToken,
         };
@@ -426,6 +444,10 @@ async function fetchAppointmentsPage(
  * Used to resolve a synced meeting's display time and location from the
  * appointment itself, since listAvailableTimes/listLocations only reflect
  * currently open capacity and stop including a slot once it's fully booked.
+ *
+ * Push also uses it to read an existing appointment's type before editing it in place.
+ * Cvent's get-appointment call returns 404 for appointments that do exist, so the list is the only reliable source.
+ * Every page is read, even when a page fails the SDK's validation, since each page carries its own next token.
  *
  * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
  * @returns {Promise<CventAppointmentSummary[]>} All appointments across all pages.
@@ -873,57 +895,6 @@ function recoverAppointmentId(err: unknown): string {
         }
     }
     throw err;
-}
-
-/** An existing appointment's type as Cvent reports it. Either field may be missing. */
-export type CventAppointmentTypeRef = { id: string | null; name: string | null };
-
-/**
- * Reads the `type` of a Cvent appointment body.
- * Cvent always sends a name and may also send an id.
- * The SDK only declares the name, so the id is read when present.
- *
- * @param {unknown} body - An SDK-parsed appointment or a JSON-parsed raw body.
- * @returns {CventAppointmentTypeRef | null} The type, or null when the body has none.
- */
-export function toAppointmentTypeRef(body: unknown): CventAppointmentTypeRef | null {
-    const type = (body as { type?: { id?: unknown; name?: unknown } } | null)?.type;
-    if (!type) return null;
-    const id = typeof type.id === "string" && type.id ? type.id : null;
-    const name =
-        typeof type.name === "string" && type.name.trim() ? type.name.trim() : null;
-    return id || name ? { id, name } : null;
-}
-
-/**
- * Looks up an existing appointment's type in Cvent.
- * Push uses it before editing an appointment in place, since Cvent can't change an appointment's type.
- * A response that fails the SDK's validation on a 2xx is read from the raw body.
- * Mock mode has no real appointments, so it returns null and push treats the type as unknown.
- *
- * @param {string} apptId - The Cvent appointment id.
- * @returns {Promise<CventAppointmentTypeRef | null>} The type, or null when Cvent didn't say.
- * @throws {unknown} When Cvent can't be reached or rejects the request.
- */
-export async function getAppointmentTypeOf(
-    apptId: string,
-): Promise<CventAppointmentTypeRef | null> {
-    if (isMock()) return null;
-
-    try {
-        const appt = await getClient().appointments.getAppointmentById({ id: apptId });
-        return toAppointmentTypeRef(appt);
-    } catch (err) {
-        const body = recoverableResponseBody(err);
-        if (body) {
-            try {
-                return toAppointmentTypeRef(JSON.parse(body));
-            } catch {
-                // The body wasn't parseable JSON, so fall through and re-throw.
-            }
-        }
-        throw err;
-    }
 }
 
 /**

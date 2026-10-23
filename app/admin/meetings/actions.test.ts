@@ -44,7 +44,10 @@ vi.mock("@/lib/cvent/push", () => ({
 
 import { runSchedulerForEvent } from "./actions";
 import { meetingRequests } from "@/lib/db/schema";
-import { NO_SPONSOR_MAPPING_MESSAGE } from "@/lib/events/meetingKinds";
+import {
+    NO_SPONSOR_MAPPING_MESSAGE,
+    NO_SPONSOR_SLOTS_MESSAGE,
+} from "@/lib/events/meetingKinds";
 
 /**
  * Returns the meeting_requests table object, read lazily since vi.mock is hoisted above the imports.
@@ -128,9 +131,10 @@ function slot(
  * The Delegate Group slot comes first, so it would win if kinds were ignored.
  *
  * @param {AppointmentTypeKinds | null} kinds - The event's mapping.
+ * @param {Timeslot[]} [slots] - Loaded timeslots to use instead, for example none when Cvent failed.
  */
-function scheduleWith(kinds: AppointmentTypeKinds | null) {
-    const timeslots = [
+function scheduleWith(kinds: AppointmentTypeKinds | null, slots?: Timeslot[]) {
+    const timeslots = slots ?? [
         slot("ts-group", "2026-01-20T09:00:00Z", "t-group", kinds),
         slot("ts-s2d", "2026-01-20T10:00:00Z", "t-s2d", kinds),
     ];
@@ -174,6 +178,27 @@ describe("runSchedulerForEvent — appointment-type mapping", () => {
         const result = await runSchedulerForEvent("EVT");
 
         expect(result.ok).toBe(false);
+        expect(dbDelete).not.toHaveBeenCalled();
+        expect(dbInsert).not.toHaveBeenCalled();
+    });
+
+    test("stops and changes nothing when sponsor_delegate is mapped to an id no loaded slot has", async () => {
+        // A stale mapping, for example kept from another Cvent appointment event.
+        scheduleWith({ "t-old-event": "sponsor_delegate" });
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result).toEqual({ ok: false, error: NO_SPONSOR_SLOTS_MESSAGE });
+        expect(dbDelete).not.toHaveBeenCalled();
+        expect(dbInsert).not.toHaveBeenCalled();
+    });
+
+    test("stops and changes nothing when Cvent returned no timeslots", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" }, []);
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result).toEqual({ ok: false, error: NO_SPONSOR_SLOTS_MESSAGE });
         expect(dbDelete).not.toHaveBeenCalled();
         expect(dbInsert).not.toHaveBeenCalled();
     });

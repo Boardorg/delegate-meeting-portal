@@ -2,6 +2,7 @@ import { describe, test, expect } from "vitest";
 import {
     MEETING_KINDS,
     NO_SPONSOR_MAPPING_MESSAGE,
+    NO_SPONSOR_SLOTS_MESSAGE,
     appointmentTypeRows,
     checkAppointmentTypeMapping,
     kindForAppointmentType,
@@ -88,16 +89,35 @@ describe("parseAppointmentTypeKinds", () => {
 });
 
 describe("checkAppointmentTypeMapping", () => {
+    // One loaded sponsor slot, as the mapper tags it when t-s2d is mapped.
+    const SPONSOR_SLOT = [{ appointmentTypeId: "t-s2d", kind: "sponsor_delegate" as const }];
+
     test("stops when no type is mapped to sponsor_delegate", () => {
         expect(
-            checkAppointmentTypeMapping(TYPES, { "t-d2d": "delegate_delegate" }),
+            checkAppointmentTypeMapping(TYPES, { "t-d2d": "delegate_delegate" }, []),
         ).toEqual({ ok: false, message: NO_SPONSOR_MAPPING_MESSAGE });
-        expect(checkAppointmentTypeMapping(TYPES, null).ok).toBe(false);
+        expect(checkAppointmentTypeMapping(TYPES, null, []).ok).toBe(false);
+    });
+
+    test("stops when sponsor_delegate is mapped to an id no loaded slot has", () => {
+        // A stale mapping, for example saved against another Cvent event.
+        const result = checkAppointmentTypeMapping(
+            TYPES,
+            { "t-old-event": "sponsor_delegate" },
+            [{ appointmentTypeId: "t-s2d", kind: "ignore" }],
+        );
+        expect(result).toEqual({ ok: false, message: NO_SPONSOR_SLOTS_MESSAGE });
+    });
+
+    test("stops when no timeslots were loaded", () => {
+        expect(
+            checkAppointmentTypeMapping(TYPES, { "t-s2d": "sponsor_delegate" }, []),
+        ).toEqual({ ok: false, message: NO_SPONSOR_SLOTS_MESSAGE });
     });
 
     test("goes ahead and names each unmapped type", () => {
         expect(
-            checkAppointmentTypeMapping(TYPES, { "t-s2d": "sponsor_delegate" }),
+            checkAppointmentTypeMapping(TYPES, { "t-s2d": "sponsor_delegate" }, SPONSOR_SLOT),
         ).toEqual({
             ok: true,
             unmappedTypeNames: [
@@ -114,7 +134,7 @@ describe("checkAppointmentTypeMapping", () => {
             "t-d2d": "ignore",
             "t-group": "ignore",
             "t-lunch": "ignore",
-        });
+        }, SPONSOR_SLOT);
         expect(result).toEqual({ ok: true, unmappedTypeNames: [] });
     });
 
@@ -122,7 +142,7 @@ describe("checkAppointmentTypeMapping", () => {
         const result = checkAppointmentTypeMapping(
             [],
             { "t-s2d": "sponsor_delegate" },
-            ["t-s2d", "t-mystery"],
+            [...SPONSOR_SLOT, { appointmentTypeId: "t-mystery", kind: "ignore" }],
         );
         expect(result).toEqual({ ok: true, unmappedTypeNames: ["t-mystery"] });
     });

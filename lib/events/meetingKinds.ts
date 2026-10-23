@@ -155,27 +155,40 @@ export const NO_SPONSOR_MAPPING_MESSAGE =
     "No Cvent appointment type is mapped to sponsor to delegate meetings for this event. " +
     "Set the mapping in Event settings, then run the scheduler again. No meetings were changed.";
 
+/** Shown when a scheduler run stops because no loaded slot is a sponsor_delegate slot. */
+export const NO_SPONSOR_SLOTS_MESSAGE =
+    "No Sponsor to Delegate slots were found for this event, so nothing was changed. " +
+    "Check the appointment type mapping in Event settings and that Cvent is reachable.";
+
+/** The parts of a loaded timeslot the pre-run check reads. */
+export type SlotKindRef = { appointmentTypeId: string; kind: MeetingKind };
+
 /**
- * Checks an event's mapping before a scheduler run.
+ * Checks an event's mapping and loaded slots before a scheduler run.
  * The run must stop when no type is mapped to `sponsor_delegate`.
- * Otherwise it would delete every un-pushed meeting and create none.
+ * It must also stop when no loaded slot is a `sponsor_delegate` slot, whatever the reason.
+ * The mapping may point at type ids the event no longer has, or Cvent may have returned no slots.
+ * Otherwise the run would delete every un-pushed meeting and create none.
  * When it can go ahead, it lists the names of types with no mapping, so the run report can warn about them.
  * A type the admin set to `ignore` counts as mapped.
  *
  * @param {AppointmentType[]} types - The event's appointment types from Cvent.
  * @param {AppointmentTypeKinds | null | undefined} kinds - The saved mapping.
- * @param {string[]} [slotTypeIds=[]] - Appointment-type ids seen on the event's timeslots.
+ * @param {SlotKindRef[]} slots - The event's loaded timeslots.
  *   A type with slots that Cvent didn't list is still warned about, by id.
  * @returns {MappingCheck} Whether the run may go ahead, and which types are unmapped.
  */
 export function checkAppointmentTypeMapping(
     types: AppointmentType[],
     kinds: AppointmentTypeKinds | null | undefined,
-    slotTypeIds: string[] = [],
+    slots: SlotKindRef[],
 ): MappingCheck {
     const mapped = kinds ?? {};
     if (!Object.values(mapped).includes("sponsor_delegate")) {
         return { ok: false, message: NO_SPONSOR_MAPPING_MESSAGE };
+    }
+    if (!slots.some((s) => s.kind === "sponsor_delegate")) {
+        return { ok: false, message: NO_SPONSOR_SLOTS_MESSAGE };
     }
 
     // Types Cvent lists come first, by name.
@@ -186,7 +199,7 @@ export function checkAppointmentTypeMapping(
         seen.add(t.id);
         if (!isMeetingKind(mapped[t.id])) names.push(t.name);
     }
-    for (const id of slotTypeIds) {
+    for (const { appointmentTypeId: id } of slots) {
         if (seen.has(id)) continue;
         seen.add(id);
         if (!isMeetingKind(mapped[id])) names.push(id);

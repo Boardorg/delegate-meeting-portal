@@ -260,10 +260,11 @@ export async function runSchedulerForEvent(
 
     // Stop before changing anything when sponsor meetings have no slots to use.
     // The engine only books sponsor meetings into sponsor_delegate slots.
+    // This also covers a stale mapping and an empty slot list from Cvent.
     const mapping = checkAppointmentTypeMapping(
         scheduleData.appointmentTypes,
         scheduleData.appointmentTypeKinds,
-        scheduleData.timeslots.map((t) => t.appointmentTypeId),
+        scheduleData.timeslots,
     );
     if (!mapping.ok) return { ok: false, error: mapping.message };
 

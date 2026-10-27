@@ -28,7 +28,11 @@ import {
     buildSchedulerReport,
     type SchedulerReport,
 } from "@/lib/scheduling/report";
-import { pairKey } from "@/lib/scheduling/helpers";
+import {
+    NO_ATTENDEES_MESSAGE,
+    hasSponsorsAndDelegates,
+    pairKey,
+} from "@/lib/scheduling/helpers";
 import { loadMockRequests } from "@/lib/scheduling/loader";
 import { paginate, type Page } from "@/lib/admin/pagination";
 import { contractedMeetings } from "@/lib/attendees/caps";
@@ -223,6 +227,7 @@ export type RunSchedulerResult =
  *
  * The run stops before changing anything when no appointment type is mapped to `sponsor_delegate`.
  * Otherwise it would delete every un-pushed meeting and create none.
+ * It also stops when the attendees it would use have no sponsors or no delegates, for the same reason.
  * Types with no mapping are listed in the report as a warning.
  *
  * @param {string} eventCode - The event to schedule meetings for.
@@ -258,6 +263,18 @@ export async function runSchedulerForEvent(
                 ),
         ]);
 
+    // Attendees who cancelled in Cvent are left out, so no new meetings are made with them.
+    // Un-pushed meetings are rebuilt from scratch below, so cancelled attendees drop out of those.
+    // Meetings already pushed to Cvent are kept for an admin to reassign.
+    // The report below still gets everyone, so it can say why those requests went unscheduled.
+    const schedulable = attendees.filter((a) => !a.cventCancelled);
+
+    // Stop before changing anything when the scheduler would have no sponsors or no delegates.
+    // loadAttendees returns no one when Cvent's attendee lookup fails, while timeslots load separately.
+    if (!hasSponsorsAndDelegates(schedulable)) {
+        return { ok: false, error: NO_ATTENDEES_MESSAGE };
+    }
+
     // Stop before changing anything when sponsor meetings have no slots to use.
     // The engine only books sponsor meetings into sponsor_delegate slots.
     // This also covers a stale mapping and an empty slot list from Cvent.
@@ -289,11 +306,7 @@ export async function runSchedulerForEvent(
     // delegate's intake-form "sponsors I want to meet" answer. The report is
     // built from it so its tallies match the run.
     //
-    // Attendees who cancelled in Cvent are left out, so no new meetings are made with them.
-    // Un-pushed meetings are rebuilt from scratch below, so cancelled attendees drop out of those.
-    // Meetings already pushed to Cvent are kept for an admin to reassign.
-    // The report below still gets everyone, so it can say why those requests went unscheduled.
-    const schedulable = attendees.filter((a) => !a.cventCancelled);
+    // The engine only gets `schedulable`, the attendees who haven't cancelled (see above).
     const { schedule, skipReasons, effectiveRequests } = await runScheduler(
         schedulable,
         engineRequests,

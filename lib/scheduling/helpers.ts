@@ -74,6 +74,26 @@ export function withDelegatePreferences(
 	return derived.length > 0 ? [...requests, ...derived] : requests;
 }
 
+/** Shown when a scheduler run stops because no sponsors or no delegates were loaded. */
+export const NO_ATTENDEES_MESSAGE =
+	'No sponsors or delegates were found for this event, so nothing was changed. ' +
+	'Cvent may be unreachable. Try again in a few minutes.';
+
+/**
+ * Whether the attendees a scheduler run would use include at least one sponsor rep and one delegate.
+ * The attendee loader returns no one when Cvent's attendee lookup fails.
+ * A run without both sides would delete every un-pushed meeting and create none.
+ *
+ * @param {Attendee[]} attendees - The attendees the scheduler would use, with cancelled ones already left out.
+ * @returns {boolean} True when there is at least one sponsor and one delegate.
+ */
+export function hasSponsorsAndDelegates(attendees: Attendee[]): boolean {
+	return (
+		attendees.some(a => a.role === 'sponsor') &&
+		attendees.some(a => a.role === 'delegate')
+	);
+}
+
 /**
  * Produces a canonical, order-independent key for a pair of attendee IDs (e.g. `"d1|s2"`).
  *

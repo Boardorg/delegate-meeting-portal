@@ -43,6 +43,7 @@ vi.mock("@/lib/cvent/push", () => ({
 }));
 
 import { runSchedulerForEvent } from "./actions";
+import { NO_ATTENDEES_MESSAGE } from "@/lib/scheduling/helpers";
 import { meetingRequests } from "@/lib/db/schema";
 import {
     NO_SPONSOR_MAPPING_MESSAGE,
@@ -75,6 +76,7 @@ function att(
     return {
         id: partial.salesforceId,
         cventContactId: "",
+        cventCancelled: partial.cventCancelled,
         salesforceId: partial.salesforceId,
         accountId: partial.accountId ?? "",
         name: partial.name ?? partial.salesforceId,
@@ -220,5 +222,56 @@ describe("runSchedulerForEvent — appointment-type mapping", () => {
         // The meeting went into the sponsor slot, not the earlier Delegate Group slot.
         const inserted = insertValues.mock.calls[0][0] as { timeslotId: string }[];
         expect(inserted.map((m) => m.timeslotId)).toEqual(["ts-s2d"]);
+    });
+});
+
+describe("runSchedulerForEvent — attendees didn't load", () => {
+    const SPONSOR = att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme" });
+    const DELEGATE = att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" });
+
+    /**
+     * Runs the scheduler with a valid mapping and the given attendees, and checks it stopped without touching the DB.
+     *
+     * @param {Attendee[]} attendees - What loadAttendees returns.
+     */
+    async function expectStopped(attendees: Attendee[]) {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        loadAttendees.mockResolvedValue(attendees);
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result).toEqual({ ok: false, error: NO_ATTENDEES_MESSAGE });
+        expect(dbDelete).not.toHaveBeenCalled();
+        expect(dbInsert).not.toHaveBeenCalled();
+    }
+
+    test("stops and changes nothing when there are no sponsors", async () => {
+        await expectStopped([DELEGATE]);
+    });
+
+    test("stops and changes nothing when there are no delegates", async () => {
+        await expectStopped([SPONSOR]);
+    });
+
+    test("stops and changes nothing when no one loaded, as when Cvent's attendee lookup fails", async () => {
+        await expectStopped([]);
+    });
+
+    test("stops when every delegate cancelled in Cvent, since the scheduler leaves them out", async () => {
+        await expectStopped([
+            SPONSOR,
+            att({ salesforceId: "d1", role: "delegate", cventCancelled: true }),
+        ]);
+    });
+
+    test("still runs normally with a sponsor and a delegate", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        loadAttendees.mockResolvedValue([SPONSOR, DELEGATE]);
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        expect(dbDelete).toHaveBeenCalledTimes(1);
+        expect(insertValues).toHaveBeenCalledTimes(1);
     });
 });

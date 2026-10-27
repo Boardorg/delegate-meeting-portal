@@ -31,13 +31,14 @@ vi.mock("@/lib/cvent/client", () => ({
  *
  * @param {string} id - The appointment id.
  * @param {string | null} typeName - The type name Cvent lists for it.
+ * @param {string} [start] - Its start time. Defaults to the ts-1 slot's start, so it reads as a same-time move.
  * @returns The appointment summaries.
  */
-function listed(id: string, typeName: string | null) {
+function listed(id: string, typeName: string | null, start = "2025-01-15T09:00:00Z") {
     return [
         {
             id,
-            startTime: new Date("2025-01-15T09:00:00Z"),
+            startTime: new Date(start),
             endTime: new Date("2025-01-15T09:30:00Z"),
             locationName: "Booth 1",
             typeName,
@@ -64,6 +65,7 @@ import {
     appointmentTypeWarning,
     pushMeetingRows,
     sameAppointmentType,
+    sameStartTime,
 } from "./push";
 
 /** Minimal attendee builder. */
@@ -367,7 +369,27 @@ describe("pushMeetingRows — re-push at the same time", () => {
         expect(dbUpdate).not.toHaveBeenCalled();
     });
 
-    test("fails safe when the old appointment is missing from the event's appointment list", async () => {
+    test("reports a busy host for a move to another time, with no update, cancel or save", async () => {
+        // The old appointment is at 08:00, and the meeting moved to the 09:00 ts-1 slot.
+        createAppointment.mockRejectedValue(
+            cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
+        );
+        getAppointmentsByEvent.mockResolvedValue(
+            listed("appt-old", "Sponsor to Delegate Meetings", "2025-01-15T08:00:00Z"),
+        );
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ cventAppointmentId: "appt-old" }),
+        ]);
+
+        expect(summary.pushed).toBe(0);
+        expect(summary.results[0].reason).toBe("cvent_no_availability");
+        expect(updateAppointment).not.toHaveBeenCalled();
+        expect(cancelAppointment).not.toHaveBeenCalled();
+        expect(dbUpdate).not.toHaveBeenCalled();
+    });
+
+    test("reports a busy host when the old appointment is missing from the event's appointment list", async () => {
         createAppointment.mockRejectedValue(
             cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
         );
@@ -377,14 +399,13 @@ describe("pushMeetingRows — re-push at the same time", () => {
             row({ cventAppointmentId: "appt-old" }),
         ]);
 
-        expect(summary.results[0].reason).toBe("cvent_type_change");
-        expect(summary.results[0].error).toContain("couldn't check");
+        expect(summary.results[0].reason).toBe("cvent_no_availability");
         expect(updateAppointment).not.toHaveBeenCalled();
         expect(cancelAppointment).not.toHaveBeenCalled();
         expect(dbUpdate).not.toHaveBeenCalled();
     });
 
-    test("fails safe when the appointment list can't be read", async () => {
+    test("reports a busy host when the appointment list can't be read", async () => {
         createAppointment.mockRejectedValue(
             cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
         );
@@ -394,14 +415,13 @@ describe("pushMeetingRows — re-push at the same time", () => {
             row({ cventAppointmentId: "appt-old" }),
         ]);
 
-        expect(summary.results[0].reason).toBe("cvent_type_change");
-        expect(summary.results[0].error).toContain("couldn't check");
+        expect(summary.results[0].reason).toBe("cvent_no_availability");
         expect(updateAppointment).not.toHaveBeenCalled();
         expect(cancelAppointment).not.toHaveBeenCalled();
         expect(dbUpdate).not.toHaveBeenCalled();
     });
 
-    test("fails safe when Cvent lists the old appointment with no type name", async () => {
+    test("fails safe at the same time when Cvent lists the old appointment with no type name", async () => {
         createAppointment.mockRejectedValue(
             cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
         );
@@ -412,8 +432,42 @@ describe("pushMeetingRows — re-push at the same time", () => {
         ]);
 
         expect(summary.results[0].reason).toBe("cvent_type_change");
+        expect(summary.results[0].error).toContain("couldn't check");
         expect(updateAppointment).not.toHaveBeenCalled();
+        expect(cancelAppointment).not.toHaveBeenCalled();
         expect(dbUpdate).not.toHaveBeenCalled();
+    });
+
+    test("treats differently formatted ISO strings for the same moment as the same time", async () => {
+        createAppointment.mockRejectedValue(
+            cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
+        );
+        updateAppointment.mockResolvedValue("appt-old");
+        // ts-1 starts at "2025-01-15T09:00:00Z". This is the same moment, written with an offset.
+        getAppointmentsByEvent.mockResolvedValue(
+            listed("appt-old", "Sponsor to Delegate Meetings", "2025-01-15T04:00:00.000-05:00"),
+        );
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ cventAppointmentId: "appt-old" }),
+        ]);
+
+        expect(summary.pushed).toBe(1);
+        expect(updateAppointment).toHaveBeenCalled();
+    });
+});
+
+describe("sameStartTime", () => {
+    test("compares moments, not strings", () => {
+        expect(sameStartTime(new Date("2025-01-15T09:00:00Z"), "2025-01-15T09:00:00.000Z")).toBe(true);
+        expect(sameStartTime("2025-01-15T04:00:00-05:00", "2025-01-15T09:00:00Z")).toBe(true);
+        expect(sameStartTime(new Date("2025-01-15T08:00:00Z"), "2025-01-15T09:00:00Z")).toBe(false);
+    });
+
+    test("never matches an unknown or unparseable time", () => {
+        expect(sameStartTime(null, "2025-01-15T09:00:00Z")).toBe(false);
+        expect(sameStartTime(new Date("nonsense"), "2025-01-15T09:00:00Z")).toBe(false);
+        expect(sameStartTime(new Date("2025-01-15T09:00:00Z"), "")).toBe(false);
     });
 });
 

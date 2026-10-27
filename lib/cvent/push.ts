@@ -141,31 +141,61 @@ export function appointmentTypeWarning(
 }
 
 /**
- * Builds a lookup from an existing Cvent appointment id to its appointment type's name.
+ * An existing Cvent appointment's start time and type name, from the event's appointment list.
+ */
+export type ExistingAppointment = { startTime: Date; typeName: string | null };
+
+/**
+ * Builds a lookup from an existing Cvent appointment id to its start time and type name.
  * The event's appointment list is read once, on first use, and shared by the whole push batch.
  * Cvent's get-appointment call returns 404 for real appointments, so the list is used instead.
  * A failed list is logged, and every lookup then returns null so the caller fails safe.
  *
  * @param {string} eventCode - The event the meetings belong to.
- * @returns {(apptId: string) => Promise<string | null>} The lookup. Null means the type is unknown.
+ * @returns {(apptId: string) => Promise<ExistingAppointment | null>} The lookup. Null means the appointment wasn't found.
  */
-export function appointmentTypeLookup(
+export function existingAppointmentLookup(
     eventCode: string,
-): (apptId: string) => Promise<string | null> {
-    let typeById: Promise<Map<string, string | null>> | null = null;
+): (apptId: string) => Promise<ExistingAppointment | null> {
+    let byId: Promise<Map<string, ExistingAppointment>> | null = null;
     return async (apptId) => {
-        typeById ??= getAppointmentsByEvent(eventCode).then(
-            (appts) => new Map(appts.map((a) => [a.id, a.typeName])),
+        byId ??= getAppointmentsByEvent(eventCode).then(
+            (appts) =>
+                new Map(
+                    appts.map((a) => [
+                        a.id,
+                        { startTime: a.startTime, typeName: a.typeName },
+                    ]),
+                ),
             (err) => {
                 console.warn(
-                    `pushMeetingRows: could not list Cvent appointments for "${eventCode}" to check their types. ` +
+                    `pushMeetingRows: could not list Cvent appointments for "${eventCode}" to check their times and types. ` +
                         `${err instanceof Error ? err.message : String(err)}`,
                 );
-                return new Map<string, string | null>();
+                return new Map<string, ExistingAppointment>();
             },
         );
-        return (await typeById).get(apptId) ?? null;
+        return (await byId).get(apptId) ?? null;
     };
+}
+
+/**
+ * Whether an existing appointment starts at the same moment as a slot.
+ * Both are parsed to timestamps, so differently formatted ISO strings still compare correctly.
+ * An unknown or unparseable time never matches.
+ *
+ * @param {Date | string | null | undefined} existingStart - The existing appointment's start.
+ * @param {string} slotStart - The new slot's ISO start time.
+ * @returns {boolean} True when both are valid and equal.
+ */
+export function sameStartTime(
+    existingStart: Date | string | null | undefined,
+    slotStart: string,
+): boolean {
+    if (!existingStart) return false;
+    const a = new Date(existingStart).getTime();
+    const b = new Date(slotStart).getTime();
+    return !Number.isNaN(a) && !Number.isNaN(b) && a === b;
 }
 
 /**
@@ -266,8 +296,8 @@ export async function pushMeetingRows(
     const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
     const companiesByAccountId = sponsorCompaniesByAccountId(attendees);
 
-    // Existing appointments' types, read from Cvent only if an in-place update needs one.
-    const typeNameOf = appointmentTypeLookup(eventCode);
+    // Existing appointments' times and types, read from Cvent only if an in-place update needs one.
+    const existingAppointmentOf = existingAppointmentLookup(eventCode);
 
     const results: PushResult[] = [];
     for (const row of rows) {
@@ -423,11 +453,20 @@ export async function pushMeetingRows(
                     throw createErr;
                 }
 
+                // The collision only comes from the old appointment when the meeting stays at the same time.
+                // For a move to another time, or when the old appointment's time can't be found,
+                // the host really is busy, so report the create failure as before.
+                // That means no update, no cancel and no DB write for this row.
+                const existing = await existingAppointmentOf(oldAppointmentId);
+                if (!existing || !sameStartTime(existing.startTime, timeslot.startTime)) {
+                    throw createErr;
+                }
+
                 // Cvent's update can't change an appointment's type.
                 // Only edit in place when the old appointment already has the new slot's type.
                 // Otherwise, or when the type can't be checked, change nothing and say why.
                 // The row stays linked to its old appointment, and the old appointment is not cancelled.
-                const existingType = await typeNameOf(oldAppointmentId);
+                const existingType = existing.typeName;
                 if (!sameAppointmentType(existingType, timeslot)) {
                     results.push({
                         meetingId: row.id,

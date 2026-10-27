@@ -20,7 +20,7 @@ vi.mock("@/lib/events/settings", () => ({
 }));
 
 import { getAppointmentsByEvent } from "./client";
-import { appointmentTypeLookup } from "./push";
+import { existingAppointmentLookup } from "./push";
 
 /**
  * Builds one raw listed appointment, as Cvent sends it.
@@ -98,7 +98,7 @@ describe("appointment list paging when a page fails SDK validation", () => {
         );
     });
 
-    test("push's type lookup finds an appointment on the second page when both pages fail validation", async () => {
+    test("push's lookup finds an appointment's type and time on the second page when both pages fail validation", async () => {
         listAppointments.mockImplementation(async (req: { token?: string }) => {
             if (!req.token) {
                 throw validationError({ data: PAGE_ONE, paging: { nextToken: "tok-2" } });
@@ -109,11 +109,14 @@ describe("appointment list paging when a page fails SDK validation", () => {
             });
         });
 
-        const typeNameOf = appointmentTypeLookup("NALES");
+        const existingAppointmentOf = existingAppointmentLookup("NALES");
 
-        expect(await typeNameOf("target")).toBe("Sponsor to Delegate Meetings");
-        expect(await typeNameOf("appt-1")).toBe("Delegate Group Meetings");
-        expect(await typeNameOf("not-listed")).toBeNull();
+        expect(await existingAppointmentOf("target")).toEqual({
+            startTime: new Date("2026-01-20T10:00:00Z"),
+            typeName: "Sponsor to Delegate Meetings",
+        });
+        expect((await existingAppointmentOf("appt-1"))?.typeName).toBe("Delegate Group Meetings");
+        expect(await existingAppointmentOf("not-listed")).toBeNull();
         // The list is read once and shared by every lookup.
         expect(listAppointments).toHaveBeenCalledTimes(2);
     });

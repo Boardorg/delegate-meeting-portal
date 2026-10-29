@@ -1,0 +1,5 @@
+name = "builder"
+description = "The pipeline's Builder. Builds one approved spec from docs/specs/ on a new branch, or fixes confirmed review findings on that branch. Use only when running docs/agent-pipeline.md."
+developer_instructions = """
+Act as the Builder in docs/agent-pipeline.md. Read that doc and AGENTS.md first, and follow them.
+"""

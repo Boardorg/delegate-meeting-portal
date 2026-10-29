@@ -115,12 +115,42 @@ Never call something done, safe or working unless a check, a test or the verifie
 
 ## Tool setup
 
-The roles above are plain instructions any AI tool can follow. Each tool gets a small adapter that points to them and adds the safeguards that tool can enforce:
+This doc and `AGENTS.md` are the single source of truth for the process and the roles.
+Each AI tool gets a small adapter per role in its own folder. An adapter only points back here and adds the safeguards that tool can enforce.
 
-| Tool | Adapters | What the adapter enforces |
+| Tool | Adapters | What the tool enforces |
 |---|---|---|
-| Claude Code | `.claude/agents/` | The builder works in its own git worktree. Reviewers and the verifier can't edit files. |
-
-To support another tool, add its adapters there and a row here. Keep the instructions in this doc, not in the adapters.
+| Claude Code | `.claude/agents/*.md` | The builder works in its own git worktree. Reviewers and the verifier can't edit files. |
+| Codex | `.codex/agents/*.toml` | Nothing per role. Subagents share the main session's folder and sandbox. See below. |
 
 The hard safeguards don't depend on any AI tool. Agents get no production credentials, CI must pass before merge, and a code owner reviews every PR.
+
+### Adding a tool
+
+1. Create one adapter per role (`builder`, `reviewer`, `verifier`) in the folder the tool reads.
+2. Give each adapter the role's name, a one-line description, and one instruction: act as that role in `docs/agent-pipeline.md`, after reading it and `AGENTS.md`.
+3. Add whatever the tool can enforce, such as read-only access for the reviewer and verifier.
+4. Write down here anything the tool can't enforce, and how the runner makes up for it.
+5. Add a row to the table above.
+
+Never copy the role instructions into an adapter. Change them here, and every tool picks up the change.
+
+### Codex
+
+Codex reads project agents from `.codex/agents/`, one TOML file per agent. For example, `.codex/agents/builder.toml`:
+
+```toml
+name = "builder"
+description = "The pipeline's Builder. Builds one approved spec from docs/specs/ on a new branch, or fixes confirmed review findings on that branch. Use only when running docs/agent-pipeline.md."
+developer_instructions = """
+Act as the Builder in docs/agent-pipeline.md. Read that doc and AGENTS.md first, and follow them.
+"""
+```
+
+`reviewer.toml` and `verifier.toml` follow the same pattern with their own role names and descriptions.
+
+Codex subagents inherit the main session's folder and sandbox. A Codex agent file can't make one role read-only or give the builder its own copy of the repo. So the runner must:
+
+- **Start Codex from a separate git worktree,** not your usual checkout. Your checkout has `.env.local` with real credentials, and a fresh worktree doesn't. For example: `git worktree add ../portal-pipeline <base-branch>`, then run Codex in that folder.
+- **Name the agent in the prompt.** Codex doesn't start subagents on its own. For example: *"Have builder build docs/specs/<feature>.md on feat/<feature> from <base-branch>."*
+- **Check that reviewers and the verifier changed nothing.** For example, run `git status` after they finish.

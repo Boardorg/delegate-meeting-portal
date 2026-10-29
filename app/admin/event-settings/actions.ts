@@ -6,6 +6,10 @@ import { db } from "@/lib/db/client";
 import { eventSettings, type EventSettingsRow } from "@/lib/db/schema";
 import { describeDbError } from "@/lib/db/errors";
 import { setActiveEvent } from "@/app/admin/actions";
+import {
+    parseAppointmentTypeKinds,
+    type AppointmentTypeKinds,
+} from "@/lib/events/meetingKinds";
 
 // ---------------------------------------------------------------------------
 // Server actions for /admin/event-settings.
@@ -59,7 +63,32 @@ export type EventSettingsInput = {
     logoUrl?: string | null;
     cventEventId?: string | null;
     cventAppointmentEventId?: string | null;
+    /**
+     * Cvent appointment-type id to meeting kind.
+     * Left out when the form couldn't load the event's types, so a save keeps the stored mapping.
+     * Typed loosely because it arrives from the client and is validated here.
+     */
+    appointmentTypeKinds?: Record<string, string> | null;
 };
+
+/**
+ * Validates the appointment-type mapping in a save, if the save includes one.
+ * Every kind must be one of the four allowed values.
+ *
+ * @param {EventSettingsInput} input - The submitted fields.
+ * @returns {{ ok: true; patch: { appointmentTypeKinds?: AppointmentTypeKinds | null } } | { ok: false; error: string }}
+ *   A column patch to merge into the save, or an error message.
+ */
+function kindsPatch(
+    input: EventSettingsInput,
+):
+    | { ok: true; patch: { appointmentTypeKinds?: AppointmentTypeKinds | null } }
+    | { ok: false; error: string } {
+    if (input.appointmentTypeKinds === undefined) return { ok: true, patch: {} };
+    const parsed = parseAppointmentTypeKinds(input.appointmentTypeKinds);
+    if (!parsed.ok) return parsed;
+    return { ok: true, patch: { appointmentTypeKinds: parsed.kinds } };
+}
 
 /** Maps input fields to a normalized (trimmed → null) column patch. */
 function toPatch(input: EventSettingsInput) {
@@ -84,11 +113,13 @@ export async function createEvent(
 ): Promise<ActionResult> {
     const code = input.code.trim();
     if (!code) return { ok: false, error: "Error: event code is required" };
+    const kinds = kindsPatch(input);
+    if (!kinds.ok) return { ok: false, error: kinds.error };
 
     try {
         const [event] = await db
             .insert(eventSettings)
-            .values({ code, ...toPatch(input) })
+            .values({ code, ...toPatch(input), ...kinds.patch })
             .returning();
         await setActiveEvent(code);
         revalidatePath("/admin", "layout");
@@ -110,10 +141,14 @@ export async function updateEvent(
     code: string,
     input: EventSettingsInput,
 ): Promise<ActionResult> {
+    // Reject an unknown meeting kind before touching the row.
+    const kinds = kindsPatch(input);
+    if (!kinds.ok) return { ok: false, error: kinds.error };
+
     try {
         const [event] = await db
             .update(eventSettings)
-            .set({ ...toPatch(input), updatedAt: new Date() })
+            .set({ ...toPatch(input), ...kinds.patch, updatedAt: new Date() })
             .where(eq(eventSettings.code, code))
             .returning();
         if (!event) return { ok: false, error: "Error: event not found" };

@@ -16,7 +16,14 @@ import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import { cancelAppointment, getAppointmentsByEvent } from "@/lib/cvent/client";
 import { contractedMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
-import type { SponsorDetail, Timeslot, Location } from "@/types";
+import {
+    bookedIntervals,
+    buildSlotOptions,
+    slotOptionFromTimeslot,
+    sortSlotOptions,
+    type SlotOption,
+} from "@/lib/scheduling/slotOptions";
+import type { SponsorDetail } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Server actions for /admin/meetings/[sponsorId] — the per-sponsor meeting
@@ -199,97 +206,6 @@ export async function getMeetingDetail(params: {
     };
 }
 
-/** One option in the timeslot picker inside the edit/create meeting modals. */
-export type SlotOption = {
-    timeslotId: string;
-    day: 1 | 2;
-    startTime: string;
-    endTime: string;
-    /** The timeslot's native Cvent location, used as the default when booking. */
-    locationId: string | null;
-    locationName: string | null;
-};
-
-/** A booked time span (epoch ms) an attendee is already committed to. */
-type BookedInterval = { start: number; end: number };
-
-/**
- * Builds the list of time intervals an attendee is already booked into, from a
- * list of meetings (the meeting being edited having been excluded upstream).
- * Meetings whose timeslot can't be resolved are skipped.
- *
- * @param {{ attendeeA: string; attendeeB: string; timeslotId: string }[]} meetings - Meetings to scan.
- * @param {string} attendeeId - The attendee (party id) to collect bookings for.
- * @param {Map<string, Timeslot>} timeslotById - Timeslot lookup for resolving times.
- * @returns {BookedInterval[]} The attendee's booked time spans.
- */
-function bookedIntervals(
-    meetings: { attendeeA: string; attendeeB: string; timeslotId: string }[],
-    attendeeId: string,
-    timeslotById: Map<string, Timeslot>,
-): BookedInterval[] {
-    const intervals: BookedInterval[] = [];
-    for (const m of meetings) {
-        if (m.attendeeA !== attendeeId && m.attendeeB !== attendeeId) continue;
-        const ts = timeslotById.get(m.timeslotId);
-        if (!ts) continue;
-        intervals.push({
-            start: new Date(ts.startTime).getTime(),
-            end: new Date(ts.endTime).getTime(),
-        });
-    }
-    return intervals;
-}
-
-/**
- * Whether a timeslot's time span overlaps any of the given booked intervals.
- * Two spans overlap when each starts before the other ends.
- *
- * @param {Timeslot} t - The candidate timeslot.
- * @param {BookedInterval[]} intervals - Already-booked spans to test against.
- * @returns {boolean} True when the timeslot collides with a booked span.
- */
-function overlapsBooked(t: Timeslot, intervals: BookedInterval[]): boolean {
-    const start = new Date(t.startTime).getTime();
-    const end = new Date(t.endTime).getTime();
-    return intervals.some((i) => start < i.end && i.start < end);
-}
-
-/**
- * Builds the list of timeslot options available to BOTH attendees: timeslots
- * whose time overlaps no existing booking for either attendee. (Capacity is
- * enforced by the engine; the admin picker keeps it simple by treating a time
- * as taken once either attendee holds any meeting then.) Sorted by day then
- * start time.
- */
-function buildSlotOptions(
-    timeslots: Timeslot[],
-    locationById: Map<string, Location>,
-    bookedA: BookedInterval[],
-    bookedB: BookedInterval[],
-): SlotOption[] {
-    return timeslots
-        .filter(
-            (t) =>
-                (t.day === 1 || t.day === 2) &&
-                !overlapsBooked(t, bookedA) &&
-                !overlapsBooked(t, bookedB),
-        )
-        .map((t) => ({
-            timeslotId: t.id,
-            day: t.day,
-            startTime: t.startTime,
-            endTime: t.endTime,
-            locationId: t.locationId,
-            locationName: t.locationId
-                ? (locationById.get(t.locationId)?.name ?? null)
-                : null,
-        }))
-        .sort(
-            (a, b) => a.day - b.day || a.startTime.localeCompare(b.startTime),
-        );
-}
-
 /**
  * Returns the available timeslot options for a meeting edit and the meeting's
  * current assignment. Used to populate the Time Slot dropdown in the edit
@@ -349,7 +265,11 @@ export async function getSlotOptions(params: {
 
     // The current timeslot, resolved for display. Always included so the admin
     // can save without changing the time even if it's otherwise filtered out.
+    // Its appointment type is unknown when Cvent no longer lists the slot.
     const currentTs = timeslotById.get(meeting.timeslotId);
+    const currentType = currentTs
+        ? slotOptionFromTimeslot(currentTs, locationById)
+        : null;
     const current: SlotOption = {
         timeslotId: meeting.timeslotId,
         day: currentTs?.day ?? (meeting.day as 1 | 2),
@@ -359,10 +279,14 @@ export async function getSlotOptions(params: {
         locationName: meeting.locationId
             ? (locationById.get(meeting.locationId)?.name ?? null)
             : null,
+        appointmentTypeId: currentType?.appointmentTypeId ?? null,
+        appointmentTypeName: currentType?.appointmentTypeName ?? null,
+        kind: currentType?.kind ?? null,
     };
 
+    // Re-sort after adding the current slot, so it lands in its type's group.
     if (!options.some((o) => o.timeslotId === current.timeslotId)) {
-        options.unshift(current);
+        return { current, options: sortSlotOptions([...options, current]) };
     }
 
     return { current, options };

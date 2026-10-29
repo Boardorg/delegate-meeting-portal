@@ -81,7 +81,12 @@ export default function SponsorsTable({
             try {
                 setRunError(null);
                 const result = await runSchedulerForEvent(selectedEvent);
-                setReport(result);
+                // A stopped run changed nothing. Keep the modal open with its message.
+                if (!result.ok) {
+                    setRunError(result.error);
+                    return;
+                }
+                setReport(result.report);
                 setShowRunModal(false);
                 router.refresh();
             } catch (e) {

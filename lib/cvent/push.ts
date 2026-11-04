@@ -7,7 +7,12 @@ import { loadAttendees } from "@/lib/attendees/loader";
 import {
     sponsorCompaniesByAccountId,
     cventContactIdsOfCompany,
+    hostingReps,
 } from "@/lib/attendees/companies";
+import {
+    hostContactIdsForMeeting,
+    sameTimeMeetingIds,
+} from "@/lib/cvent/hostSplit";
 import {
     createAppointment,
     updateAppointment,
@@ -273,13 +278,20 @@ export function needsSync(row: ScheduledMeetingRow): boolean {
  * appointment id + push time; failures are captured per row so one bad
  * meeting doesn't abort the batch.
  *
+ * A company with one meeting at a start time has every rep who can host as a host.
+ * A company with more than one splits its reps across them, so no rep hosts two at once (see lib/cvent/hostSplit.ts).
+ * The split counts every meeting in `companyMeetings` at that time, pushed or not.
+ *
  * @param {string} eventCode - The event the meetings belong to.
  * @param {ScheduledMeetingRow[]} rows - The meeting rows to push.
+ * @param {ScheduledMeetingRow[]} [companyMeetings] - The portal meetings of every company being pushed, pushed or not.
+ *   Defaults to `rows`. Callers pass all of them, so the host split doesn't depend on which rows are pushed.
  * @returns {Promise<PushSummary>} Aggregate counts plus per-meeting results.
  */
 export async function pushMeetingRows(
     eventCode: string,
     rows: ScheduledMeetingRow[],
+    companyMeetings: ScheduledMeetingRow[] = rows,
 ): Promise<PushSummary> {
     if (rows.length === 0) {
         return { total: 0, pushed: 0, failed: 0, results: [] };
@@ -373,10 +385,10 @@ export async function pushMeetingRows(
         // have a Cvent contact id. This single guard covers both an unresolved
         // company (attendeeA not found) and a company whose reps are all missing
         // Cvent links.
-        const hostContactIds = company
+        const allHostContactIds = company
             ? cventContactIdsOfCompany(company)
             : [];
-        if (hostContactIds.length === 0) {
+        if (allHostContactIds.length === 0) {
             results.push({
                 meetingId: row.id,
                 label,
@@ -387,6 +399,36 @@ export async function pushMeetingRows(
             });
             continue;
         }
+
+        // When the company has more than one meeting at this time, each rep hosts only one of them.
+        // Cvent rejects a host who is already in another appointment at that time.
+        const meetingIdsAtTime = sameTimeMeetingIds(
+            row,
+            companyMeetings,
+            scheduleData.timeslotById,
+        );
+        const hostContactIds = company
+            ? hostContactIdsForMeeting(
+                  hostingReps(company),
+                  row.id,
+                  meetingIdsAtTime,
+              )
+            : [];
+        if (hostContactIds.length === 0) {
+            results.push({
+                meetingId: row.id,
+                label,
+                ok: false,
+                kind,
+                reason: "host_not_in_cvent",
+                error: `${company?.name ?? row.attendeeA} has ${meetingIdsAtTime.length} meetings at this time but only ${allHostContactIds.length} ${allHostContactIds.length === 1 ? "rep" : "reps"} who can host, so this one has no host. Move a meeting to another time.`,
+            });
+            continue;
+        }
+        const splitWarning =
+            meetingIdsAtTime.length > 1
+                ? `${company?.name ?? row.attendeeA} has ${meetingIdsAtTime.length} meetings at this time, so its reps were split across them.`
+                : undefined;
 
         // Non-fatal note when some — but not all — reps are missing a Cvent
         // link, so they're absent as hosts on the created appointment.
@@ -490,6 +532,7 @@ export async function pushMeetingRows(
             // Collect non-fatal notes for an otherwise-successful push.
             const notes: string[] = [];
             if (typeWarning) notes.push(typeWarning);
+            if (splitWarning) notes.push(splitWarning);
             if (hostWarning) notes.push(hostWarning);
             if (cancelledHostWarning) notes.push(cancelledHostWarning);
             if (targetWarning) notes.push(targetWarning);

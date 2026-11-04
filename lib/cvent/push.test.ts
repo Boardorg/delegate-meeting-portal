@@ -331,6 +331,12 @@ describe("pushMeetingRows — re-push at the same time", () => {
     });
 
     test("lists the event's appointments once for a whole batch", async () => {
+        // Both meetings are at the same time, so the company needs a rep to host each one.
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "s2", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h2" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+        ]);
         createAppointment.mockRejectedValue(
             cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"),
         );

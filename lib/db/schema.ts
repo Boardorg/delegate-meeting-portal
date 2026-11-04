@@ -1,6 +1,7 @@
 import {
     boolean,
     integer,
+    jsonb,
     pgEnum,
     pgTable,
     serial,
@@ -8,6 +9,7 @@ import {
     timestamp,
     unique,
 } from "drizzle-orm/pg-core";
+import type { AppointmentTypeKinds } from "@/lib/events/meetingKinds";
 
 // ---------------------------------------------------------------------------
 // Drizzle schema
@@ -156,7 +158,8 @@ export const scheduledMeetings = pgTable("scheduled_meetings", {
     attendeeA: text("attendee_a").notNull(),
     attendeeB: text("attendee_b").notNull(),
 
-    // 1 = Day 1 (sponsor/delegate), 2 = Day 2 (delegate/delegate).
+    // 1 = Day 1, 2 = Day 2, from the booked timeslot's date.
+    // Sponsor meetings are on Day 1, or Day 2 for a diamond sponsor's spillover.
     day: integer("day").notNull(),
 
     // Cvent timeslot id (Timeslot.id). Shared by both attendees; start/end times
@@ -230,6 +233,14 @@ export const eventSettings = pgTable("event_settings", {
     // Cvent appointment-event id — the `{id}` in /ea/appointment-events/{id}/...
     // that every appointment API call uses.
     cventAppointmentEventId: text("cvent_appointment_event_id"),
+
+    // Maps each Cvent appointment-type id to a meeting kind, set in Event settings.
+    // For example { "fc560dc7-...": "sponsor_delegate" }.
+    // A type with no entry behaves as "ignore". Null when nothing is mapped yet.
+    // See lib/events/meetingKinds.ts.
+    appointmentTypeKinds: jsonb(
+        "appointment_type_kinds",
+    ).$type<AppointmentTypeKinds>(),
 
     createdAt: timestamp("created_at", { withTimezone: true })
         .notNull()

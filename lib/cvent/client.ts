@@ -9,6 +9,7 @@ import {
     availableTimesPaginatedResponseFromJSON,
     attendeePaginatedResponseFromJSON,
     appointmentEventFromJSON,
+    appointmentTypesPaginatedResponseFromJSON,
 } from "@cvent/sdk/models/components";
 import type {
     CventLocation,
@@ -16,6 +17,7 @@ import type {
     CventAppointmentEvent,
 } from "@/lib/cvent/types";
 import { getEventSettings } from "@/lib/events/settings";
+import type { AppointmentType } from "@/lib/events/meetingKinds";
 
 /**
  * Client for the Cvent Appointments API, built on the official `@cvent/sdk`.
@@ -23,6 +25,8 @@ import { getEventSettings } from "@/lib/events/settings";
  * Two read operations are exposed today:
  *   - getLocationsByEvent → appointments.listLocations
  *   - getTimeslotsByEvent → appointments.listAvailableTimes
+ *
+ * getAppointmentTypes wraps appointments.listAppointmentTypes.
  *
  * Both walk the SDK's paginated async-iterator to completion and return the
  * full, flattened result set across all pages.
@@ -223,13 +227,138 @@ export async function getTimeslotsByEvent(
     return out;
 }
 
+/** One page of appointment types, reduced to what we need plus the next page token. */
+type AppointmentTypesPage = { data: AppointmentType[]; nextToken?: string };
+
+/**
+ * Reduces raw Cvent appointment-type records to `{ id, name }`.
+ * Records without an id are dropped.
+ * A record without a name falls back to its id, so the admin still sees something to map.
+ *
+ * @param {Array<{ id?: string; name?: string }>} data - Records from the SDK or a recovered body.
+ * @returns {AppointmentType[]} The reduced appointment types.
+ */
+export function toAppointmentTypes(
+    data: Array<{ id?: string; name?: string }>,
+): AppointmentType[] {
+    const out: AppointmentType[] = [];
+    for (const t of data) {
+        if (!t.id) continue;
+        out.push({ id: t.id, name: t.name?.trim() || t.id });
+    }
+    return out;
+}
+
+/**
+ * Parses a raw listAppointmentTypes response body into one page of appointment types.
+ * Used when the SDK rejects a successful response, as fetchAppointmentsPage does for appointments.
+ *
+ * @param {unknown} parsed - The JSON-parsed response body.
+ * @returns {AppointmentTypesPage} The page's appointment types and next token, if any.
+ */
+export function toAppointmentTypesPage(parsed: unknown): AppointmentTypesPage {
+    const body = parsed as {
+        data?: Array<{ id?: string; name?: string }>;
+        paging?: { nextToken?: string };
+    };
+    return {
+        data: toAppointmentTypes(body.data ?? []),
+        nextToken: body.paging?.nextToken,
+    };
+}
+
+/**
+ * Fetches one page of an event's appointment types for a given pagination token.
+ * Driven manually, one token per call, for the same reason as fetchAppointmentsPage.
+ * A page that fails the SDK's response validation on a 2xx is read from the raw body instead.
+ *
+ * @param {string} id - The Cvent appointment-event id.
+ * @param {string | undefined} token - The page token, or undefined for the first page.
+ * @returns {Promise<AppointmentTypesPage>} That page's appointment types and next token, if any.
+ */
+async function fetchAppointmentTypesPage(
+    id: string,
+    token: string | undefined,
+): Promise<AppointmentTypesPage> {
+    try {
+        const page = await getClient().appointments.listAppointmentTypes({
+            id,
+            ...(token ? { token } : {}),
+        });
+        return {
+            data: toAppointmentTypes(page.result.data ?? []),
+            nextToken: page.result.paging?.nextToken,
+        };
+    } catch (err) {
+        const body = recoverableResponseBody(err);
+        if (body) {
+            try {
+                return toAppointmentTypesPage(JSON.parse(body));
+            } catch {
+                // The body wasn't parseable JSON, so fall through and re-throw.
+            }
+        }
+        throw err;
+    }
+}
+
+/**
+ * Lists every appointment type for an event, following pagination to the end.
+ * Event settings uses it to map each type to a meeting kind.
+ * The schedule loader uses it to name each timeslot's type.
+ * Mock mode reads data/mock/cvent/appointment-types.json.
+ * Request-memoized like getAppointmentEvent.
+ *
+ * @param {string} eventCode - Internal event code, translated to the Cvent appointment-event id.
+ * @returns {Promise<AppointmentType[]>} All appointment types across all pages.
+ * @throws {Error} When the event has no Cvent Appointment Event ID, or Cvent can't be reached.
+ */
+export const getAppointmentTypes = cache(
+    async (eventCode: string): Promise<AppointmentType[]> => {
+        if (isMock()) {
+            const data = await readMock(
+                "appointment-types.json",
+                appointmentTypesPaginatedResponseFromJSON,
+            );
+            return toAppointmentTypes(data);
+        }
+
+        const id = await getAppointmentEventId(eventCode);
+        const out: AppointmentType[] = [];
+        let token: string | undefined;
+
+        do {
+            const page = await fetchAppointmentTypesPage(id, token);
+            out.push(...page.data);
+            token = page.nextToken;
+        } while (token);
+
+        return out;
+    },
+);
+
 /** Minimal appointment fields needed to resolve a synced meeting's display time and location. */
 export type CventAppointmentSummary = {
     id: string;
     startTime: Date;
     endTime: Date;
     locationName: string | null;
+    /**
+     * The appointment type's name, e.g. "Delegate Group Meetings". Null when Cvent omits it.
+     * Cvent's list sends the type as `{ name }` only, with no id.
+     */
+    typeName: string | null;
 };
+
+/**
+ * Reads an appointment type's name from a listed appointment, trimmed. Blank becomes null.
+ *
+ * @param {{ name?: unknown } | undefined} type - The appointment's `type` field.
+ * @returns {string | null} The name, or null.
+ */
+function typeNameOf(type: { name?: unknown } | undefined): string | null {
+    return typeof type?.name === "string" && type.name.trim() ? type.name.trim() : null;
+}
 
 /** One page of raw listAppointments data, reduced to what we need plus the next page token. */
 type AppointmentsPage = { data: CventAppointmentSummary[]; nextToken?: string };
@@ -243,13 +372,14 @@ type AppointmentsPage = { data: CventAppointmentSummary[]; nextToken?: string };
  * @param {unknown} parsed - The JSON-parsed response body.
  * @returns {AppointmentsPage} The page's appointments and next token, if any.
  */
-function toAppointmentsPage(parsed: unknown): AppointmentsPage {
+export function toAppointmentsPage(parsed: unknown): AppointmentsPage {
     const body = parsed as {
         data?: Array<{
             id: string;
             start: string | Date;
             end: string | Date;
             location?: { name?: string };
+            type?: { name?: unknown };
         }>;
         paging?: { nextToken?: string };
     };
@@ -259,6 +389,7 @@ function toAppointmentsPage(parsed: unknown): AppointmentsPage {
             startTime: new Date(a.start),
             endTime: new Date(a.end),
             locationName: a.location?.name ?? null,
+            typeName: typeNameOf(a.type),
         })),
         nextToken: body.paging?.nextToken,
     };
@@ -291,6 +422,7 @@ async function fetchAppointmentsPage(
                 startTime: a.start,
                 endTime: a.end,
                 locationName: a.location?.name ?? null,
+                typeName: typeNameOf(a.type),
             })),
             nextToken: page.result.paging.nextToken,
         };
@@ -312,6 +444,10 @@ async function fetchAppointmentsPage(
  * Used to resolve a synced meeting's display time and location from the
  * appointment itself, since listAvailableTimes/listLocations only reflect
  * currently open capacity and stop including a slot once it's fully booked.
+ *
+ * Push also uses it to read an existing appointment's type before editing it in place.
+ * Cvent's get-appointment call returns 404 for appointments that do exist, so the list is the only reliable source.
+ * Every page is read, even when a page fails the SDK's validation, since each page carries its own next token.
  *
  * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
  * @returns {Promise<CventAppointmentSummary[]>} All appointments across all pages.

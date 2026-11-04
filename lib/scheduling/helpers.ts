@@ -1,5 +1,6 @@
 import { Attendee, Timeslot, MeetingRequest, ScheduledMeeting } from '@/types';
 import { sponsorCompaniesByAccountId } from '@/lib/attendees/companies';
+import type { MeetingKind } from '@/lib/events/meetingKinds';
 
 /**
  * Interest level given to a delegate's intake-form request.
@@ -73,6 +74,26 @@ export function withDelegatePreferences(
 	return derived.length > 0 ? [...requests, ...derived] : requests;
 }
 
+/** Shown when a scheduler run stops because no sponsors or no delegates were loaded. */
+export const NO_ATTENDEES_MESSAGE =
+	'No sponsors or delegates were found for this event, so nothing was changed. ' +
+	'Cvent may be unreachable. Try again in a few minutes.';
+
+/**
+ * Whether the attendees a scheduler run would use include at least one sponsor rep and one delegate.
+ * The attendee loader returns no one when Cvent's attendee lookup fails.
+ * A run without both sides would delete every un-pushed meeting and create none.
+ *
+ * @param {Attendee[]} attendees - The attendees the scheduler would use, with cancelled ones already left out.
+ * @returns {boolean} True when there is at least one sponsor and one delegate.
+ */
+export function hasSponsorsAndDelegates(attendees: Attendee[]): boolean {
+	return (
+		attendees.some(a => a.role === 'sponsor') &&
+		attendees.some(a => a.role === 'delegate')
+	);
+}
+
 /**
  * Produces a canonical, order-independent key for a pair of attendee IDs (e.g. `"d1|s2"`).
  *
@@ -119,11 +140,15 @@ export function computeMutualPairs(requests: MeetingRequest[]): Set<string> {
  * timeslot must have remaining capacity. Timeslots are scanned in array order,
  * so callers control priority by ordering the input.
  *
+ * Only timeslots of the given meeting kind are considered.
+ * A sponsor meeting must land in a `sponsor_delegate` slot, even when a slot of another kind is free and earlier.
+ *
  * @param {Timeslot[]} timeslots - The event's global timeslots.
  * @param {1 | 2} day - The event day to search within.
  * @param {Set<string>} busyA - Start times the first attendee is already booked at.
  * @param {Set<string>} busyB - Start times the second attendee is already booked at.
  * @param {Map<string, number>} remaining - Remaining capacity by timeslot id.
+ * @param {MeetingKind} kind - The meeting kind the timeslot must be mapped to.
  * @returns {Timeslot | null} The first bookable timeslot, or null if none.
  */
 export function findAvailableTimeslot(
@@ -131,13 +156,15 @@ export function findAvailableTimeslot(
 	day: 1 | 2,
 	busyA: Set<string>,
 	busyB: Set<string>,
-	remaining: Map<string, number>
+	remaining: Map<string, number>,
+	kind: MeetingKind,
 ): Timeslot | null {
 
 	for (const ts of timeslots) {
 
-		// Wrong day, or no capacity left in this timeslot.
+		// Wrong day, wrong meeting kind, or no capacity left in this timeslot.
 		if (ts.day !== day) continue;
+		if (ts.kind !== kind) continue;
 		if ((remaining.get(ts.id) ?? 0) <= 0) continue;
 
 		// Either attendee already has a meeting at this start time.

@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { runScheduler } from './engine';
 import { pairKey } from './helpers';
 import type { Attendee, Location, MeetingRequest, Timeslot } from '@/types';
+import type { MeetingKind } from '@/lib/events/meetingKinds';
 import { emptyProfile } from '@/lib/attendees/formatProfile';
 
 // ---------------------------------------------------------------------------
@@ -46,10 +47,17 @@ function makeAttendee(
  * @param {1 | 2} day - The event day this timeslot belongs to.
  * @param {string} startTime - Start time string (any distinct value; treated opaquely).
  * @param {number} [capacity=1] - How many meetings may book this timeslot.
+ * @param {MeetingKind} [kind] - The slot's meeting kind. Defaults to sponsor_delegate on Day 1 and delegate_delegate on Day 2.
  * @returns {Timeslot} The timeslot.
  */
-function makeTimeslot(id: string, day: 1 | 2, startTime: string, capacity = 1): Timeslot {
-    return { id, day, startTime, endTime: startTime, capacity, locationId: null, appointmentTypeId: 'type-1' };
+function makeTimeslot(
+    id: string,
+    day: 1 | 2,
+    startTime: string,
+    capacity = 1,
+    kind: MeetingKind = day === 1 ? 'sponsor_delegate' : 'delegate_delegate',
+): Timeslot {
+    return { id, day, startTime, endTime: startTime, capacity, locationId: null, appointmentTypeId: `type-${kind}`, appointmentTypeName: null, kind };
 }
 
 /**
@@ -701,5 +709,237 @@ describe('runScheduler — sponsor is always attendeeA', () => {
             expect(accountIds.has(m.attendeeA)).toBe(true);
             expect(accountIds.has(m.attendeeB)).toBe(false);
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Appointment-type mapping: meeting kinds, Day 2 spillover and cross-day caps
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds a diamond sponsor. makeAttendee defaults sponsors to standard.
+ *
+ * @param {string} id - The sponsor's id, also its account id.
+ * @param {string} company - The sponsor's company name.
+ * @returns {Attendee} A diamond-tier sponsor.
+ */
+function makeDiamond(id: string, company: string): Attendee {
+    return { ...makeAttendee(id, company, 'sponsor'), sponsorTier: 'diamond' };
+}
+
+/**
+ * Builds delegates d1..dN, each at a different company so diversity never applies.
+ *
+ * @param {number} count - How many delegates to build.
+ * @param {string} [prefix='d'] - Id prefix.
+ * @returns {Attendee[]} The delegates.
+ */
+function makeDelegates(count: number, prefix = 'd'): Attendee[] {
+    return Array.from({ length: count }, (_, i) =>
+        makeAttendee(`${prefix}${i + 1}`, `${prefix.toUpperCase()}Co${i + 1}`, 'delegate'),
+    );
+}
+
+/**
+ * Builds sponsor_delegate slots on one day, one per start time, with ids prefixed by the day.
+ *
+ * @param {1 | 2} day - The event day.
+ * @param {number} count - How many distinct start times.
+ * @param {number} [capacity=1] - Capacity of each slot.
+ * @returns {Timeslot[]} The slots.
+ */
+function sponsorSlots(day: 1 | 2, count: number, capacity = 1): Timeslot[] {
+    return Array.from({ length: count }, (_, i) =>
+        makeTimeslot(`d${day}-s2d-${i + 1}`, day, `d${day}-${String(i + 8).padStart(2, '0')}:00`, capacity, 'sponsor_delegate'),
+    );
+}
+
+/**
+ * Looks up the kind of the slot each meeting was booked into.
+ *
+ * @param {{ timeslotId: string }[]} schedule - The engine's meetings.
+ * @param {Timeslot[]} timeslots - The timeslots passed to the engine.
+ * @returns {MeetingKind[]} The booked slot kinds, in schedule order.
+ */
+function bookedKinds(schedule: { timeslotId: string }[], timeslots: Timeslot[]): MeetingKind[] {
+    const byId = new Map(timeslots.map(t => [t.id, t]));
+    return schedule.map(m => byId.get(m.timeslotId)!.kind);
+}
+
+describe('runScheduler — meeting kinds', () => {
+    test('never books a sponsor meeting into a slot that is not sponsor_delegate, even a free earlier one', async () => {
+        const sponsor   = makeAttendee('s1', 'Acme', 'sponsor');
+        const delegates = makeDelegates(3);
+        const timeslots = [
+            makeTimeslot('group',  1, '08:00', 5, 'delegate_group'),
+            makeTimeslot('ignore', 1, '08:15', 5, 'ignore'),
+            makeTimeslot('d2d',    1, '08:30', 5, 'delegate_delegate'),
+            makeTimeslot('s2d-1',  1, '10:00', 1, 'sponsor_delegate'),
+            makeTimeslot('s2d-2',  1, '11:00', 1, 'sponsor_delegate'),
+        ];
+        const requests = delegates.map(d => makeRequest('s1', d.id, 5));
+
+        const { schedule, skipReasons } = await runScheduler([sponsor, ...delegates], requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(2);
+        expect(bookedKinds(schedule, timeslots)).toEqual(['sponsor_delegate', 'sponsor_delegate']);
+        expect(skipReasons.get(pairKey('s1', 'd3'))).toBe('no_availability');
+    });
+
+    test('books no sponsor meetings when the only free slots are of other kinds', async () => {
+        const sponsor   = makeAttendee('s1', 'Acme', 'sponsor');
+        const delegate  = makeAttendee('d1', 'Globex', 'delegate');
+        const timeslots = [
+            makeTimeslot('group', 1, '08:00', 5, 'delegate_group'),
+            makeTimeslot('ignore', 1, '09:00', 5, 'ignore'),
+        ];
+
+        const { schedule } = await runScheduler([sponsor, delegate], [makeRequest('s1', 'd1', 5)], timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(0);
+    });
+
+    test('passes 6 and 7 only book delegate_delegate slots', async () => {
+        const delegates = makeDelegates(4);
+        const timeslots = [
+            makeTimeslot('d2-s2d',   2, '08:00', 5, 'sponsor_delegate'),
+            makeTimeslot('d2-group', 2, '08:30', 5, 'delegate_group'),
+            makeTimeslot('d2-d2d-1', 2, '10:00', 1, 'delegate_delegate'),
+            makeTimeslot('d2-d2d-2', 2, '11:00', 1, 'delegate_delegate'),
+        ];
+        // d1 and d2 are mutual (pass 6). d3 asks d4 one way (pass 7).
+        const requests = [makeRequest('d1', 'd2', 3), makeRequest('d2', 'd1', 3), makeRequest('d3', 'd4', 2)];
+
+        const { schedule } = await runScheduler(delegates, requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule.map(m => m.passNumber).sort()).toEqual([6, 7]);
+        expect(bookedKinds(schedule, timeslots)).toEqual(['delegate_delegate', 'delegate_delegate']);
+    });
+
+    test('passes 6 and 7 book nothing when Day 2 has no delegate_delegate slot', async () => {
+        const delegates = makeDelegates(2);
+        const timeslots = [makeTimeslot('d2-s2d', 2, '08:00', 5, 'sponsor_delegate')];
+        const requests  = [makeRequest('d1', 'd2', 3), makeRequest('d2', 'd1', 3)];
+
+        const { schedule } = await runScheduler(delegates, requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(0);
+    });
+});
+
+describe('runScheduler — Day 2 spillover for diamond sponsors', () => {
+    test('keeps a standard sponsor on Day 1 even when Day 2 has free sponsor slots', async () => {
+        const sponsor   = makeAttendee('s1', 'Acme', 'sponsor');
+        const delegates = makeDelegates(3);
+        const timeslots = [...sponsorSlots(2, 5), ...sponsorSlots(1, 1)];
+        const requests  = delegates.map(d => makeRequest('s1', d.id, 5));
+
+        const { schedule } = await runScheduler([sponsor, ...delegates], requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(1);
+        expect(schedule.every(m => m.day === 1)).toBe(true);
+    });
+
+    test('puts a diamond sponsor on Day 1 when Day 1 has room, even if Day 2 slots come first', async () => {
+        const sponsor   = makeDiamond('s1', 'Acme');
+        const delegates = makeDelegates(3);
+        const timeslots = [...sponsorSlots(2, 5), ...sponsorSlots(1, 3)];
+        const requests  = delegates.map(d => makeRequest('s1', d.id, 5));
+
+        const { schedule } = await runScheduler([sponsor, ...delegates], requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(3);
+        expect(schedule.every(m => m.day === 1)).toBe(true);
+    });
+
+    test('gives a diamond sponsor a Day 2 sponsor slot once Day 1 is full', async () => {
+        const sponsor   = makeDiamond('s1', 'Acme');
+        const delegates = makeDelegates(3);
+        const timeslots = [...sponsorSlots(1, 1), ...sponsorSlots(2, 5)];
+        const requests  = delegates.map(d => makeRequest('s1', d.id, 5));
+
+        const { schedule } = await runScheduler([sponsor, ...delegates], requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule.map(m => m.day).sort()).toEqual([1, 2, 2]);
+        // The stored day matches the booked slot's day.
+        const byId = new Map(timeslots.map(t => [t.id, t]));
+        for (const m of schedule) expect(byId.get(m.timeslotId)!.day).toBe(m.day);
+    });
+
+    test('spills a diamond pair to Day 2 when the Day 1 slot is free but the delegate is busy then', async () => {
+        const sponsor   = makeDiamond('s1', 'Acme');
+        const delegate  = makeAttendee('d1', 'Globex', 'delegate');
+        const timeslots = [...sponsorSlots(1, 1, 5), ...sponsorSlots(2, 1, 5)];
+        const busy      = new Map([['d1', new Set([timeslots[0].startTime])]]);
+
+        const { schedule } = await runScheduler(
+            [sponsor, delegate], [makeRequest('s1', 'd1', 5)], timeslots, NO_LOCATIONS,
+            { busyStartTimesByAttendee: busy },
+        );
+
+        expect(schedule).toHaveLength(1);
+        expect(schedule[0].day).toBe(2);
+    });
+
+    test('never spills into a Day 2 slot of another kind', async () => {
+        const sponsor   = makeDiamond('s1', 'Acme');
+        const delegates = makeDelegates(2);
+        const timeslots = [
+            ...sponsorSlots(1, 1),
+            makeTimeslot('d2-d2d', 2, '08:00', 5, 'delegate_delegate'),
+            makeTimeslot('d2-group', 2, '09:00', 5, 'delegate_group'),
+        ];
+        const requests = delegates.map(d => makeRequest('s1', d.id, 5));
+
+        const { schedule } = await runScheduler([sponsor, ...delegates], requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(1);
+        expect(bookedKinds(schedule, timeslots)).toEqual(['sponsor_delegate']);
+    });
+});
+
+describe('runScheduler — sponsor-meeting caps count across both days', () => {
+    test('a diamond sponsor never exceeds 8 sponsor meetings across both days', async () => {
+        // Only 4 Day 1 times, so the diamond sponsor needs Day 2 to reach its package.
+        // Counting Day 1 alone would let it keep spilling into all 10 Day 2 slots.
+        const sponsor   = makeDiamond('s1', 'Acme');
+        const delegates = makeDelegates(15);
+        const timeslots = [...sponsorSlots(1, 4), ...sponsorSlots(2, 10)];
+        const requests  = delegates.map(d => makeRequest('s1', d.id, 5));
+
+        const { schedule, skipReasons } = await runScheduler([sponsor, ...delegates], requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(8);
+        expect(schedule.filter(m => m.day === 1)).toHaveLength(4);
+        expect(schedule.filter(m => m.day === 2)).toHaveLength(4);
+        expect(skipReasons.get(pairKey('s1', 'd15'))).toBe('cap_reached');
+    });
+
+    test('a standard sponsor never exceeds 5 sponsor meetings, with plenty of slots on both days', async () => {
+        const sponsor   = makeAttendee('s1', 'Acme', 'sponsor');
+        const delegates = makeDelegates(15);
+        const timeslots = [...sponsorSlots(1, 10), ...sponsorSlots(2, 10)];
+        const requests  = delegates.map(d => makeRequest('s1', d.id, 5));
+
+        const { schedule } = await runScheduler([sponsor, ...delegates], requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(5);
+        expect(schedule.every(m => m.day === 1)).toBe(true);
+    });
+
+    test("a delegate's sponsor-meeting cap counts their sponsor meetings on both days", async () => {
+        // Ten diamond sponsors all want d1, and Day 1 has only 3 times.
+        // Counting Day 1 alone would let d1 take all 10, since Day 2 meetings wouldn't count.
+        // The delegate cap through pass 5 is 7, across both days.
+        const sponsors  = Array.from({ length: 10 }, (_, i) => makeDiamond(`s${i + 1}`, `Co${i + 1}`));
+        const delegate  = makeAttendee('d1', 'Globex', 'delegate');
+        const timeslots = [...sponsorSlots(1, 3, 10), ...sponsorSlots(2, 10, 10)];
+        const requests  = sponsors.map(s => makeRequest(s.id, 'd1', 5));
+
+        const { schedule } = await runScheduler([...sponsors, delegate], requests, timeslots, NO_LOCATIONS);
+
+        expect(schedule).toHaveLength(7);
+        expect(schedule.filter(m => m.day === 1)).toHaveLength(3);
+        expect(schedule.filter(m => m.day === 2)).toHaveLength(4);
     });
 });

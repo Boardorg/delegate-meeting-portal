@@ -19,9 +19,13 @@ import {
     removeMeeting,
     type DelegateOption,
     type MeetingRow,
-    type SlotOption,
     type SyncStatus,
 } from "./actions";
+import {
+    groupSlotOptions,
+    slotTypeWarning,
+    type SlotOption,
+} from "@/lib/scheduling/slotOptions";
 import { StatChip } from "../_components/StatChip";
 import { TierPill } from "../_components/TierPill";
 
@@ -483,21 +487,19 @@ function EditMeetingModal({
                 ) : (
                     <label className="adm-field adm-field-mb-lg">
                         <span className="adm-field-label">Time Slot</span>
-                        <select
-                            className="adm-input adm-select"
+                        <SlotSelect
+                            options={options}
                             value={selectedKey}
-                            onChange={(e) => setSelectedKey(e.target.value)}
+                            onChange={setSelectedKey}
                             disabled={isPending}
-                        >
-                            {options.map((o) => (
-                                <option key={slotKey(o)} value={slotKey(o)}>
-                                    Day {o.day} – {fmtTime(o.startTime, timezone)}
-                                    {o.locationName ? ` · ${o.locationName}` : ""}
-                                </option>
-                            ))}
-                        </select>
+                            timezone={timezone}
+                        />
                     </label>
                 )}
+
+                <SlotTypeWarning
+                    option={options?.find((o) => slotKey(o) === selectedKey)}
+                />
 
                 {saveError && <div className="adm-modal-error">{saveError}</div>}
 
@@ -698,21 +700,21 @@ function CreateMeetingModal({
                                 No mutual available timeslots for this pair.
                             </span>
                         ) : (
-                            <select
-                                className="adm-input adm-select"
+                            <SlotSelect
+                                options={slotOptions ?? []}
                                 value={selectedKey}
-                                onChange={(e) => setSelectedKey(e.target.value)}
+                                onChange={setSelectedKey}
                                 disabled={isPending || !slotOptions}
-                            >
-                                {(slotOptions ?? []).map((o) => (
-                                    <option key={o.timeslotId} value={o.timeslotId}>
-                                        Day {o.day} – {fmtTime(o.startTime, timezone)}
-                                        {o.locationName ? ` · ${o.locationName}` : ""}
-                                    </option>
-                                ))}
-                            </select>
+                                timezone={timezone}
+                            />
                         )}
                     </label>
+                )}
+
+                {selected && !slotsLoading && (
+                    <SlotTypeWarning
+                        option={slotOptions?.find((o) => slotKey(o) === selectedKey)}
+                    />
                 )}
 
                 {saveError && <div className="adm-modal-error">{saveError}</div>}
@@ -731,6 +733,69 @@ function CreateMeetingModal({
                     </button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Time slot picker shared by the Edit and Create Meeting windows
+// ---------------------------------------------------------------------------
+
+/**
+ * The Time Slot dropdown. Options are grouped by Cvent appointment type, sponsor slots first.
+ * Each option also names its type, so the choice is clear while the list is closed.
+ *
+ * @param {{ options: SlotOption[]; value: string; onChange: (key: string) => void; disabled: boolean; timezone: string }} props
+ * @returns {JSX.Element} The select element.
+ */
+function SlotSelect({
+    options,
+    value,
+    onChange,
+    disabled,
+    timezone,
+}: {
+    options: SlotOption[];
+    value: string;
+    onChange: (key: string) => void;
+    disabled: boolean;
+    timezone: string;
+}) {
+    return (
+        <select
+            className="adm-input adm-select"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+        >
+            {groupSlotOptions(options).map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                    {g.options.map((o) => (
+                        <option key={o.timeslotId} value={o.timeslotId}>
+                            Day {o.day} – {fmtTime(o.startTime, timezone)}
+                            {o.locationName ? ` · ${o.locationName}` : ""}
+                            {` · ${g.label}`}
+                        </option>
+                    ))}
+                </optgroup>
+            ))}
+        </select>
+    );
+}
+
+/**
+ * Warns when the chosen slot isn't a sponsor slot, since Cvent will file the meeting under that slot's type.
+ * Renders nothing for a sponsor_delegate slot.
+ *
+ * @param {{ option: SlotOption | undefined }} props
+ * @returns {JSX.Element | null} The warning, or nothing.
+ */
+function SlotTypeWarning({ option }: { option: SlotOption | undefined }) {
+    const warning = slotTypeWarning(option);
+    if (!warning) return null;
+    return (
+        <div className="adm-modal-warn-at adm-field-mb-lg" role="alert">
+            {warning}
         </div>
     );
 }

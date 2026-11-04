@@ -4,7 +4,7 @@
     "nextToken": "1a2b3c4d5e6f7g8h9i10j11k",
     "currentToken": "1a2b3c4d5e6f7g8h9i10j11k",
     "limit": 100,
-    "totalCount": 27,
+    "totalCount": 33,
     "_links": {
       "next": {
         "href": "?token=90c5f062-76ad-4ea4-aa53-00eb698d9262"
@@ -363,6 +363,84 @@
       "type": "DEFINED",
       "appointmentType": {
         "id": "26ec8cf4-2fe5-6a9d-b053-a8f8dcddf9f5"
+      },
+      "location": {
+        "id": "33333333-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1110-tbl1a",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "22222222-0000-4000-8000-000000000002"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1110-tbl1b",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "22222222-0000-4000-8000-000000000003"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1110-confb",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "33333333-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1135-tbl1a",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "22222222-0000-4000-8000-000000000002"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1135-tbl1b",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "22222222-0000-4000-8000-000000000003"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1135-confb",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
       },
       "location": {
         "id": "33333333-0000-4000-8000-000000000004"

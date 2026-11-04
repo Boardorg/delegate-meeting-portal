@@ -4,8 +4,15 @@ import {
     getTimeslotsByEvent,
     getLocationsByEvent,
     getAppointmentEvent,
+    getAppointmentTypes,
 } from "@/lib/cvent/client";
 import type { CventAvailableTime, CventLocation } from "@/lib/cvent/types";
+import { getEventSettings } from "@/lib/events/settings";
+import {
+    kindForAppointmentType,
+    type AppointmentType,
+    type AppointmentTypeKinds,
+} from "@/lib/events/meetingKinds";
 import type { Timeslot, Location } from "@/types";
 
 /**
@@ -33,10 +40,22 @@ function normalizeCapacity(raw: number | undefined): number {
  * for each from the chronological order of distinct calendar dates (earliest
  * date → Day 1, next → Day 2, and so on).
  *
+ * Each timeslot also gets the meeting kind its appointment type is mapped to.
+ * Unmapped types get `ignore`.
+ * The type's name comes from the event's appointment-type list when it has one.
+ *
  * @param {CventAvailableTime[]} times - Raw available-times from the Cvent client.
+ * @param {AppointmentTypeKinds | null} [kinds=null] - The event's appointment-type mapping.
+ * @param {AppointmentType[]} [types=[]] - The event's appointment types, for their names.
  * @returns {Timeslot[]} The mapped timeslots.
  */
-export function toTimeslots(times: CventAvailableTime[]): Timeslot[] {
+export function toTimeslots(
+    times: CventAvailableTime[],
+    kinds: AppointmentTypeKinds | null = null,
+    types: AppointmentType[] = [],
+): Timeslot[] {
+    const nameById = new Map(types.map((t) => [t.id, t.name]));
+
     // ISO date (YYYY-MM-DD) → 1-based day index, in chronological order.
     const dates = [...new Set(times.map((t) => t.startTime.toISOString().slice(0, 10)))].sort();
     const dayByDate = new Map(dates.map((d, i) => [d, i + 1]));
@@ -52,6 +71,8 @@ export function toTimeslots(times: CventAvailableTime[]): Timeslot[] {
             capacity: normalizeCapacity(t.availableAppointments),
             locationId: t.location?.id ?? null,
             appointmentTypeId: t.appointmentType.id,
+            appointmentTypeName: nameById.get(t.appointmentType.id) ?? null,
+            kind: kindForAppointmentType(kinds, t.appointmentType.id),
         };
     });
 }
@@ -79,7 +100,56 @@ export type EventScheduleData = {
     locationById: Map<string, Location>;
     /** The event's real IANA timezone (e.g. "America/New_York"), for display formatting. */
     timezone: string;
+    /** The event's Cvent appointment types. Empty when Cvent couldn't list them. */
+    appointmentTypes: AppointmentType[];
+    /** The event's appointment-type mapping from Event settings. Null when nothing is mapped. */
+    appointmentTypeKinds: AppointmentTypeKinds | null;
 };
+
+/**
+ * Reads an event's appointment-type mapping from its settings row.
+ * A failed read is logged and treated as no mapping.
+ * The scheduler then stops before changing anything, which is the safe outcome.
+ *
+ * @param {string} eventCode - The event to read the mapping for.
+ * @returns {Promise<AppointmentTypeKinds | null>} The mapping, or null.
+ */
+async function loadAppointmentTypeKinds(
+    eventCode: string,
+): Promise<AppointmentTypeKinds | null> {
+    try {
+        const settings = await getEventSettings(eventCode);
+        return settings?.appointmentTypeKinds ?? null;
+    } catch (err) {
+        console.warn(
+            `loadEventScheduleData: could not read the appointment-type mapping for "${eventCode}". ` +
+                `${err instanceof Error ? err.message : String(err)}`,
+        );
+        return null;
+    }
+}
+
+/**
+ * Lists an event's appointment types for naming timeslots.
+ * A failed call is logged and returns an empty list.
+ * Availability still loads, and timeslots just have no type name.
+ *
+ * @param {string} eventCode - The event to list appointment types for.
+ * @returns {Promise<AppointmentType[]>} The appointment types, or an empty list.
+ */
+async function loadAppointmentTypeList(
+    eventCode: string,
+): Promise<AppointmentType[]> {
+    try {
+        return await getAppointmentTypes(eventCode);
+    } catch (err) {
+        console.warn(
+            `loadEventScheduleData: could not list appointment types for "${eventCode}". ` +
+                `${err instanceof Error ? err.message : String(err)}`,
+        );
+        return [];
+    }
+}
 
 /**
  * Loads and maps an event's timeslots and locations from Cvent (or mock
@@ -90,11 +160,20 @@ export type EventScheduleData = {
  * time, so nothing here may persist across requests, or it'd keep serving
  * stale data after every such change until the server process restarted.
  *
+ * It also reads the event's appointment-type mapping and Cvent's type names.
+ * Each timeslot carries its type's meeting kind and name.
+ *
  * @param {string} eventCode - The event to load availability for.
  * @returns {Promise<EventScheduleData>} Timeslots, locations, and their lookup maps.
  */
 export const loadEventScheduleData = cache(
     async (eventCode: string): Promise<EventScheduleData> => {
+        // Neither of these can fail the load. Each degrades on its own.
+        const [appointmentTypeKinds, appointmentTypes] = await Promise.all([
+            loadAppointmentTypeKinds(eventCode),
+            loadAppointmentTypeList(eventCode),
+        ]);
+
         let times: CventAvailableTime[];
         let locations: CventLocation[];
         let timezone: string;
@@ -124,10 +203,12 @@ export const loadEventScheduleData = cache(
                 timeslotById: new Map(),
                 locationById: new Map(),
                 timezone: "UTC",
+                appointmentTypes,
+                appointmentTypeKinds,
             };
         }
 
-        const timeslots = toTimeslots(times);
+        const timeslots = toTimeslots(times, appointmentTypeKinds, appointmentTypes);
         const mappedLocations = toLocations(locations);
         return {
             timeslots,
@@ -135,6 +216,8 @@ export const loadEventScheduleData = cache(
             timeslotById: new Map(timeslots.map((t) => [t.id, t])),
             locationById: new Map(mappedLocations.map((l) => [l.id, l])),
             timezone,
+            appointmentTypes,
+            appointmentTypeKinds,
         };
     },
 );

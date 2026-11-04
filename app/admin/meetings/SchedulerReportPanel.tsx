@@ -15,6 +15,8 @@ import type {
     SchedulerReport,
 } from "@/lib/scheduling/report";
 import { StatChip } from "./_components/StatChip";
+import Link from "next/link";
+import { BOOTH_PROBLEM_LABEL } from "@/lib/scheduling/booths";
 
 // ---------------------------------------------------------------------------
 // SchedulerReportPanel — post-run summary shown above the meetings table.
@@ -43,6 +45,7 @@ const REASON_LABEL: Record<SchedulerFailureReason, string> = {
     already_scheduled: "Already meets in Cvent",
     no_pass_match: "No matching pass",
     conflict_existing: "Conflicts with pushed meeting",
+    ...BOOTH_PROBLEM_LABEL,
 };
 
 export default function SchedulerReportPanel({
@@ -89,6 +92,23 @@ export default function SchedulerReportPanel({
                     {report.unmappedAppointmentTypes.join(", ")}. Choose a
                     meeting kind for each one in Event settings, or set it to
                     Ignore.
+                </div>
+            )}
+
+            {/* Sponsor companies that got no meetings because of their booth or package. */}
+            {report.boothProblems.length > 0 && (
+                <div className="adm-modal-warn-at" style={{ marginTop: 12 }}>
+                    {report.boothProblems.length === 1
+                        ? "This sponsor got no meetings because of its booth or package: "
+                        : "These sponsors got no meetings because of their booth or package: "}
+                    {report.boothProblems
+                        .map(
+                            (p) =>
+                                `${p.company} (${BOOTH_PROBLEM_LABEL[p.problem]})`,
+                        )
+                        .join(", ")}
+                    . Fix them in Salesforce or on the{" "}
+                    <Link href="/admin/booths">Sponsor booths</Link> page.
                 </div>
             )}
 

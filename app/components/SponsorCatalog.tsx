@@ -2,7 +2,6 @@
 
 import "@/app/frontend.css";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { contractedMeetings } from "@/lib/attendees/caps";
 import { partyId } from "@/lib/attendees/companies";
 import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
 import TopBar, { type TopBarEventLogo } from "@/app/components/TopBar";
@@ -96,6 +95,11 @@ interface Props {
     /** Delegates who cancelled in Cvent. They're not in the catalog, but their requests show in the drawer. */
     cancelledDelegates: CancelledDelegate[];
     currentSponsor: Attendee;
+    /**
+     * The sponsor company's meeting maximum, worked out on the server by
+     * companyMaximumMeetings() in lib/attendees/caps.ts, the same rule the scheduler uses.
+     */
+    maxMeetings: number;
     /** Current-event logo for the header, or null when the event has none. */
     eventLogo?: TopBarEventLogo | null;
 }
@@ -510,6 +514,7 @@ export default function SponsorCatalog({
     delegates,
     cancelledDelegates,
     currentSponsor,
+    maxMeetings,
     eventLogo,
 }: Props) {
     // The current company's party id (its Account id) — the key the server uses
@@ -551,11 +556,10 @@ export default function SponsorCatalog({
     const [catalogWidth, setCatalogWidth] = useState(999);
     const catalogRef = useRef<HTMLDivElement>(null);
 
-    // The contracted amount is a reference point, not a cap: requesters can
+    // The company's maximum is a reference point, not a cap: requesters can
     // file as many requests as they like (the scheduling engine still only
-    // schedules up to the contracted amount). `reachedPackage` just drives an
+    // schedules up to the maximum). `reachedPackage` just drives an
     // informational nudge once they've filed enough to fill that amount.
-    const maxMeetings = contractedMeetings(currentSponsor.sponsorTier);
     // Requests for delegates who cancelled won't become meetings, so they don't count toward the package.
     const cancelledBySf = useMemo(
         () => new Map(cancelledDelegates.map((d) => [d.salesforceId, d])),

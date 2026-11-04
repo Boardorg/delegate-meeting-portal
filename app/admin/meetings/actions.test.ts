@@ -41,6 +41,10 @@ vi.mock("@/lib/cvent/push", () => ({
     pushMeetingRows: vi.fn(),
     needsSync: vi.fn(),
 }));
+// No manual booth mapping, so each sponsor's booth is matched by location name.
+vi.mock("@/lib/events/settings", () => ({
+    getEventSettings: async () => ({ boothLocations: null }),
+}));
 
 import { runSchedulerForEvent } from "./actions";
 import { NO_ATTENDEES_MESSAGE } from "@/lib/scheduling/helpers";
@@ -86,6 +90,7 @@ function att(
         company: partial.company ?? "",
         title: "",
         sponsorTier: partial.role === "sponsor" ? "standard" : null,
+        boothNo: partial.boothNo,
         profile: emptyProfile(),
         scheduling: {
             maxSameCompanyMeetings: partial.role === "sponsor" ? null : 2,
@@ -93,6 +98,9 @@ function att(
         },
     };
 }
+
+// Every slot is at loc-1, which is Acme's booth.
+const BOOTH_1 = { id: "loc-1", name: "Booth 1", capacity: Infinity, parentLocationId: null };
 
 const TYPES = [
     { id: "t-s2d", name: "Sponsor to Delegate Meetings" },
@@ -142,9 +150,9 @@ function scheduleWith(kinds: AppointmentTypeKinds | null, slots?: Timeslot[]) {
     ];
     loadEventScheduleData.mockResolvedValue({
         timeslots,
-        locations: [],
+        locations: [BOOTH_1],
         timeslotById: new Map(timeslots.map((t) => [t.id, t])),
-        locationById: new Map(),
+        locationById: new Map([[BOOTH_1.id, BOOTH_1]]),
         timezone: "UTC",
         appointmentTypes: TYPES,
         appointmentTypeKinds: kinds,
@@ -157,7 +165,7 @@ beforeEach(() => {
     dbDelete.mockReturnValue({ where: async () => undefined });
     dbInsert.mockReturnValue({ values: insertValues });
     loadAttendees.mockResolvedValue([
-        att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme" }),
+        att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1" }),
         att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
     ]);
 });
@@ -226,7 +234,7 @@ describe("runSchedulerForEvent — appointment-type mapping", () => {
 });
 
 describe("runSchedulerForEvent — attendees didn't load", () => {
-    const SPONSOR = att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme" });
+    const SPONSOR = att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1" });
     const DELEGATE = att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" });
 
     /**

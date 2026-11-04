@@ -339,8 +339,14 @@ export type SponsorDetail = Attendee & {
     accountId: string;
     /** All reps belonging to the company (each hosts the company's Cvent appointments). */
     reps: Attendee[];
-    contracted: number;
-    bonus: number;
+    /** Meetings__c on the sponsor Opportunity. Null when blank. */
+    purchased: number | null;
+    /** Cvent_Bonus_Meetings__c on the sponsor Opportunity. Null when blank. */
+    bonus: number | null;
+    /** The company's meeting maximum, worked out by companyMaximumMeetings() in lib/attendees/caps.ts. */
+    maximum: number;
+    /** True when the maximum is the tier count, because all three Salesforce count fields are blank. */
+    maximumFromTier: boolean;
     requestCount: number;
     scheduledCount: number;
 };

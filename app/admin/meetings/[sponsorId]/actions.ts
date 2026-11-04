@@ -14,15 +14,20 @@ import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
 import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import { cancelAppointment, getAppointmentsByEvent } from "@/lib/cvent/client";
-import { contractedMeetings } from "@/lib/attendees/caps";
+import { companyMaximumMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import {
     bookedIntervals,
     buildSlotOptions,
+    isOtherCompanysBooth,
     slotOptionFromTimeslot,
     sortSlotOptions,
+    sponsorBoothFilter,
     type SlotOption,
+    type SponsorBoothFilter,
 } from "@/lib/scheduling/slotOptions";
+import { loadCompanyBooths } from "@/lib/scheduling/boothData";
+import type { EventScheduleData } from "@/lib/cvent/mapper";
 import type { SponsorDetail } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -77,6 +82,30 @@ function getSyncStatus(m: ScheduledMeetingRow): SyncStatus {
     if (m.lastModifiedAt && m.lastPushedAt && m.lastModifiedAt > m.lastPushedAt)
         return "modified";
     return "synced";
+}
+
+/**
+ * Builds the booth filter for a sponsor company's Edit and Create Meeting windows.
+ * The sponsor's own booth slots come first, and other companies' booths are left out.
+ * When the booth mapping can't be read, the filter is left off and every slot is offered, as before.
+ *
+ * @param {string} eventCode - The event.
+ * @param {string} sponsorId - The sponsor company's Account id.
+ * @param {EventScheduleData} scheduleData - The event's Cvent schedule data.
+ * @returns {Promise<SponsorBoothFilter | undefined>} The filter, or undefined when the booths couldn't be loaded.
+ */
+async function boothFilterForSponsor(
+    eventCode: string,
+    sponsorId: string,
+    scheduleData: EventScheduleData,
+): Promise<SponsorBoothFilter | undefined> {
+    const attendees = await loadAttendees(false, eventCode);
+    const booths = await loadCompanyBooths(
+        eventCode,
+        attendees,
+        scheduleData.locations,
+    );
+    return booths.ok ? sponsorBoothFilter(sponsorId, booths.booths) : undefined;
 }
 
 /**
@@ -137,8 +166,7 @@ export async function getMeetingDetail(params: {
 
     const attendeeMap = new Map(attendees.map((a) => [a.salesforceId, a]));
 
-    const contracted = contractedMeetings(company.tier);
-    const bonus = 0;
+    const max = companyMaximumMeetings(company);
 
     const meetings: MeetingRow[] = meetingRows
         .map((m) => {
@@ -196,8 +224,10 @@ export async function getMeetingDetail(params: {
             accountId: company.accountId,
             reps: company.reps,
             sponsorTier: company.tier === "diamond" ? "diamond" : "standard",
-            contracted,
-            bonus,
+            purchased: company.purchasedMeetings,
+            bonus: company.bonusMeetings,
+            maximum: max.maximum,
+            maximumFromTier: max.source === "tier",
             requestCount: requestRows.length,
             scheduledCount: meetingRows.length,
         },
@@ -217,6 +247,9 @@ export async function getMeetingDetail(params: {
  * can't move the meeting into a slot that double-books the requester or target.
  * The current meeting's own timeslot is always included so the admin can save
  * without changing the time.
+ *
+ * The sponsor's own booth slots come first, and slots at another company's booth are never offered.
+ * That includes the current slot, when it is at another company's booth.
  *
  * @param {{ meetingId: string; eventCode: string }} params
  * @returns {Promise<{ current: SlotOption | null; options: SlotOption[] }>}
@@ -251,6 +284,13 @@ export async function getSlotOptions(params: {
 
     const { timeslots, timeslotById, locationById } = scheduleData;
 
+    // The company is always the A side of a sponsor meeting.
+    const booth = await boothFilterForSponsor(
+        params.eventCode,
+        meeting.attendeeA,
+        scheduleData,
+    );
+
     const bookedA = bookedIntervals(
         otherMeetings,
         meeting.attendeeA,
@@ -261,16 +301,25 @@ export async function getSlotOptions(params: {
         meeting.attendeeB,
         timeslotById,
     );
-    const options = buildSlotOptions(timeslots, locationById, bookedA, bookedB);
+    const options = buildSlotOptions(
+        timeslots,
+        locationById,
+        bookedA,
+        bookedB,
+        booth,
+    );
 
     // The current timeslot, resolved for display. Always included so the admin
     // can save without changing the time even if it's otherwise filtered out.
     // Its appointment type is unknown when Cvent no longer lists the slot.
     const currentTs = timeslotById.get(meeting.timeslotId);
     const currentType = currentTs
-        ? slotOptionFromTimeslot(currentTs, locationById)
+        ? slotOptionFromTimeslot(currentTs, locationById, booth)
         : null;
     const current: SlotOption = {
+        ...(currentType?.ownBooth !== undefined
+            ? { ownBooth: currentType.ownBooth }
+            : {}),
         timeslotId: meeting.timeslotId,
         day: currentTs?.day ?? (meeting.day as 1 | 2),
         startTime: currentTs?.startTime ?? "",
@@ -283,6 +332,11 @@ export async function getSlotOptions(params: {
         appointmentTypeName: currentType?.appointmentTypeName ?? null,
         kind: currentType?.kind ?? null,
     };
+
+    // Never offer another company's booth, even as the current slot.
+    if (isOtherCompanysBooth({ locationId: meeting.locationId }, booth)) {
+        return { current, options };
+    }
 
     // Re-sort after adding the current slot, so it lands in its type's group.
     if (!options.some((o) => o.timeslotId === current.timeslotId)) {
@@ -388,7 +442,21 @@ export async function pushMeeting(params: {
             ),
         );
 
-    const summary = await pushMeetingRows(params.eventCode, rows);
+    // The company's other portal meetings decide the host split when two are at the same time.
+    const companyRows = rows[0]
+        ? await db
+              .select()
+              .from(scheduledMeetings)
+              .where(
+                  and(
+                      eq(scheduledMeetings.eventCode, params.eventCode),
+                      eq(scheduledMeetings.source, "portal"),
+                      eq(scheduledMeetings.attendeeA, rows[0].attendeeA),
+                  ),
+              )
+        : rows;
+
+    const summary = await pushMeetingRows(params.eventCode, rows, companyRows);
     revalidatePath("/admin/meetings", "layout");
 
     return buildSyncReport({
@@ -431,7 +499,8 @@ export async function pushAllForSponsor(params: {
     const toPush = sponsorRows.filter(needsSync);
     const alreadySynced = sponsorRows.length - toPush.length;
 
-    const summary = await pushMeetingRows(params.eventCode, toPush);
+    // Every one of the sponsor's portal meetings goes in, so the host split counts synced ones too.
+    const summary = await pushMeetingRows(params.eventCode, toPush, sponsorRows);
     revalidatePath("/admin/meetings", "layout");
 
     return buildSyncReport({
@@ -476,6 +545,7 @@ export async function listDelegates(params: {
  * Timeslots already taken by either attendee's existing meetings are
  * excluded. Each option carries its own native location — there's no separate
  * location picker to keep in sync.
+ * The sponsor's own booth slots come first, and slots at another company's booth are never offered.
  *
  * @param {{ sponsorId: string; delegateId: string; eventCode: string }} params
  * @returns {Promise<{ options: SlotOption[] }>}
@@ -505,12 +575,19 @@ export async function getNewMeetingSlots(params: {
         timeslotById,
     );
 
+    const booth = await boothFilterForSponsor(
+        params.eventCode,
+        params.sponsorId,
+        scheduleData,
+    );
+
     return {
         options: buildSlotOptions(
             timeslots,
             locationById,
             bookedSponsor,
             bookedDelegate,
+            booth,
         ),
     };
 }

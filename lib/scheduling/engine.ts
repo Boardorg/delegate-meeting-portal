@@ -14,12 +14,19 @@ import {
     findAvailableTimeslot,
     withDelegatePreferences,
     wouldViolateCompanyDiversity,
+    type BusyTimes,
+    type SlotLimits,
 } from "./helpers";
 import type { SchedulerFailureReason } from "./report";
 import {
     partyId,
     sponsorCompaniesByAccountId,
 } from "@/lib/attendees/companies";
+import {
+    companyMaximumMeetings,
+    companyMeetingsAtOnce,
+} from "@/lib/attendees/caps";
+import { primaryBoothProblem, type CompanyBooth } from "./booths";
 import type { MeetingKind } from "@/lib/events/meetingKinds";
 
 /**
@@ -43,6 +50,17 @@ interface SchedEntity {
     name: string;
     /** Display company name. */
     company: string;
+    /** The sponsor company's meeting maximum (see companyMaximumMeetings). 0 for delegates. */
+    maximum: number;
+    /** How many meetings the party may hold at the same start time. A delegate holds 1. */
+    atOnce: number;
+    /**
+     * The only location a sponsor company may meet at, its booth.
+     * Undefined when no booth rule applies, which is always the case for delegates.
+     */
+    boothLocationId?: string;
+    /** Why a sponsor company can't have meetings at all. Null when it can. */
+    blockedReason: SchedulerFailureReason | null;
 }
 
 // Defines the configuration for each pass of the scheduling algorithm, including caps and filters.
@@ -55,7 +73,8 @@ interface PassConfig {
     // Unset for passes with no fallback.
     diamondSpilloverDay?: 1 | 2;
     delegateCap: number;
-    sponsorCap: (tier: SponsorTier) => number;
+    // The sponsor company's cap for this pass, from its meeting maximum.
+    sponsorCap: (maximum: number) => number;
     // Filters read only the party's role, so they accept the lighter entity
     // shape (a company on the sponsor side, an individual on the delegate side).
     filter: (
@@ -66,32 +85,48 @@ interface PassConfig {
     ) => boolean;
 }
 
-// Cumulative meeting caps per sponsor tier, matched to contracted package counts.
-// Diamond: 8 contracted. Standard: 5 contracted.
-// These caps apply from pass 3 onward; earlier passes use lower shared ceilings.
-const SPONSOR_CAPS: Record<
-    string,
-    { pass3: number; pass4: number; pass5: number }
-> = {
-    diamond: { pass3: 6, pass4: 8, pass5: 8 },
-    standard: { pass3: 5, pass4: 5, pass5: 5 },
+/**
+ * The share of a sponsor company's maximum that passes 1 to 5 allow, cumulatively.
+ * Each is a fraction [numerator, denominator], so the caps are exact.
+ * A maximum of 8 gives 3, 4, 6, 8, 8.
+ */
+export const SPONSOR_PASS_SHARES: Record<1 | 2 | 3 | 4 | 5, [number, number]> = {
+    1: [3, 8],
+    2: [1, 2],
+    3: [3, 4],
+    4: [1, 1],
+    5: [1, 1],
 };
 
-const tierCap = (
-    tier: SponsorTier,
-    key: keyof (typeof SPONSOR_CAPS)["diamond"],
-) => (tier ? (SPONSOR_CAPS[tier]?.[key] ?? 5) : 5);
+/**
+ * A sponsor company's cumulative cap for one pass, as a share of its maximum.
+ * The share rounds up, and is at least 1 when the maximum is above 0.
+ * A maximum of 0 or less gives 0.
+ *
+ * @param {number} maximum - The company's meeting maximum.
+ * @param {[number, number]} share - The pass's share, as [numerator, denominator].
+ * @returns {number} The cap.
+ */
+export function sponsorPassCap(
+    maximum: number,
+    share: [number, number],
+): number {
+    if (maximum <= 0) return 0;
+    const [num, den] = share;
+    return Math.max(1, Math.ceil((maximum * num) / den));
+}
 
 // Defines the seven passes of the scheduling algorithm with their specific rules and caps.
 const PASSES: PassConfig[] = [
     {
         // Pass 1: Mutual sponsor <-> delegate requests only. Both parties requested each other.
+        // The sponsor cap is 37.5% of the company's maximum.
         passNumber: 1,
         day: 1,
         kind: "sponsor_delegate",
         diamondSpilloverDay: 2,
         delegateCap: 2,
-        sponsorCap: () => 3,
+        sponsorCap: (max) => sponsorPassCap(max, SPONSOR_PASS_SHARES[1]),
         filter: (req, tgt, _rank, mutual) =>
             mutual &&
             ((req.role === "sponsor" && tgt.role === "delegate") ||
@@ -99,52 +134,51 @@ const PASSES: PassConfig[] = [
     },
     {
         // Pass 2: High-interest sponsor requests (rank >= 4), regardless of mutuality.
+        // The sponsor cap is 50% of the company's maximum.
         passNumber: 2,
         day: 1,
         kind: "sponsor_delegate",
         diamondSpilloverDay: 2,
         delegateCap: 3,
-        sponsorCap: () => 4,
+        sponsorCap: (max) => sponsorPassCap(max, SPONSOR_PASS_SHARES[2]),
         filter: (req, tgt, rank, _mutual) =>
             req.role === "sponsor" && tgt.role === "delegate" && rank >= 4,
     },
     {
         // Pass 3: High-interest delegate requests for sponsors (rank >= 4), regardless of mutuality.
-        // Cap is now tier-aware: standard sponsors are held to their contracted limit (5).
+        // The sponsor cap is 75% of the company's maximum.
         passNumber: 3,
         day: 1,
         kind: "sponsor_delegate",
         diamondSpilloverDay: 2,
         delegateCap: 4,
-        sponsorCap: (tier) => tierCap(tier, "pass3"),
+        sponsorCap: (max) => sponsorPassCap(max, SPONSOR_PASS_SHARES[3]),
         filter: (req, tgt, rank, _mutual) =>
             req.role === "delegate" && tgt.role === "sponsor" && rank >= 4,
     },
     {
         // Pass 4: Second pass on mutual sponsor <-> delegate requests. Raises caps to fill remaining slots.
-        // Cap is tier-aware: standard stays at 5, diamond rises to 8.
+        // The sponsor cap rises to the company's full maximum.
         passNumber: 4,
         day: 1,
         kind: "sponsor_delegate",
         diamondSpilloverDay: 2,
         delegateCap: 5,
-        sponsorCap: (tier) => tierCap(tier, "pass4"),
+        sponsorCap: (max) => sponsorPassCap(max, SPONSOR_PASS_SHARES[4]),
         filter: (req, tgt, _rank, mutual) =>
             mutual &&
             ((req.role === "sponsor" && tgt.role === "delegate") ||
                 (req.role === "delegate" && tgt.role === "sponsor")),
     },
     {
-        // Pass 5: All remaining sponsor requests, any rank. Final cap matches contracted package counts.
-        // TODO: Replace hardcoded pass5 caps with contracted + bonus once the bonus field is
-        // available from Salesforce. The tierCap lookup will need to accept a dynamic value
-        // per attendee rather than a fixed tier-based constant.
+        // Pass 5: All remaining sponsor requests, any rank.
+        // The final sponsor cap is the company's maximum from Salesforce (see companyMaximumMeetings).
         passNumber: 5,
         day: 1,
         kind: "sponsor_delegate",
         diamondSpilloverDay: 2,
         delegateCap: 7,
-        sponsorCap: (tier) => tierCap(tier, "pass5"),
+        sponsorCap: (max) => sponsorPassCap(max, SPONSOR_PASS_SHARES[5]),
         filter: (req, tgt, _rank, _mutual) =>
             req.role === "sponsor" && tgt.role === "delegate",
     },
@@ -172,7 +206,7 @@ const PASSES: PassConfig[] = [
 
 /**
  * Returns the cumulative meeting cap for a party under a given pass. For a
- * sponsor company the tier is the company-resolved tier, so the cap is a single
+ * sponsor company the cap is a share of the company's maximum, so it is a single
  * budget shared across all the company's reps (all its meetings carry the same
  * account id on attendeeA, so counting by that id counts the whole company).
  *
@@ -183,7 +217,7 @@ const PASSES: PassConfig[] = [
 function getCap(entity: SchedEntity, pass: PassConfig): number {
     // Sponsors and delegates use separate cap functions per pass.
     return entity.role === "sponsor"
-        ? pass.sponsorCap(entity.tier)
+        ? pass.sponsorCap(entity.maximum)
         : pass.delegateCap;
 }
 
@@ -239,9 +273,39 @@ function sponsorTierOfPair(a: SchedEntity, b: SchedEntity): SponsorTier {
 export interface PreexistingSchedule {
 	/** Canonical pair keys (see pairKey) that already meet in Cvent, keyed by party id. */
 	pairs?: Set<string>;
-	/** Per-party (party id) set of ISO start times already booked in Cvent. For a
-	 *  sponsor company this is the union of all its reps' booked times. */
-	busyStartTimesByAttendee?: Map<string, Set<string>>;
+	/** Per-party (party id) ISO start times already booked in Cvent. For a
+	 *  sponsor company this is the union of all its reps' booked times.
+	 *  A map gives how many appointments the party already has at each start time,
+	 *  so they count toward a company's meetings at once (see preexistingFromAppointments).
+	 *  A set counts each listed start time once. */
+	busyStartTimesByAttendee?: Map<string, BusyTimes>;
+}
+
+/**
+ * Copies a party's pre-existing busy times into a count per start time.
+ *
+ * @param {BusyTimes | undefined} busy - The party's busy times, as a set or a count map.
+ * @returns {Map<string, number>} A new count per start time.
+ */
+function toBusyCounts(busy: BusyTimes | undefined): Map<string, number> {
+	const counts = new Map<string, number>();
+	if (!busy) return counts;
+	if (busy instanceof Map) {
+		for (const [time, n] of busy as ReadonlyMap<string, number>) counts.set(time, n);
+		return counts;
+	}
+	for (const time of busy as ReadonlySet<string>) counts.set(time, 1);
+	return counts;
+}
+
+/**
+ * Adds one meeting to a party's count at a start time.
+ *
+ * @param {Map<string, number>} busy - The party's count per start time.
+ * @param {string} startTime - The booked start time.
+ */
+function addBusy(busy: Map<string, number>, startTime: string): void {
+	busy.set(startTime, (busy.get(startTime) ?? 0) + 1);
 }
 
 /**
@@ -254,6 +318,17 @@ export interface PreexistingSchedule {
  * timeslot's remaining capacity. Each meeting's location defaults to the booked
  * timeslot's native Cvent location. Business rules (no duplicates, no self-meetings,
  * company diversity) are enforced on every candidate.
+ *
+ * A sponsor company's caps are shares of its meeting maximum from Salesforce (see
+ * companyMaximumMeetings and SPONSOR_PASS_SHARES). A company may hold up to its
+ * meetings-at-once limit at one start time (see companyMeetingsAtOnce), and a
+ * delegate holds one at a time. Cvent's own per-slot capacity still applies on top.
+ *
+ * When the caller passes `booths`, each sponsor company only books slots at its
+ * booth's location. A company with a booth problem, or missing from `booths`,
+ * gets no meetings, and its pairs are skipped with that problem as the reason.
+ * Without `booths` no booth rule applies. A company whose maximum is 0 gets no
+ * meetings either way.
  *
  * Each pass only books timeslots mapped to its meeting kind in Event settings.
  * Sponsor passes (1 to 5) use `sponsor_delegate` slots on Day 1.
@@ -284,6 +359,7 @@ export interface PreexistingSchedule {
  * @param {Timeslot[]} timeslots - The event's global, Cvent-sourced timeslots.
  * @param {Location[]} _locations - The event's locations (reserved for future location-aware assignment).
  * @param {PreexistingSchedule} [preexisting] - Pairs/times already booked in Cvent to schedule around.
+ * @param {Map<string, CompanyBooth>} [booths] - Each sponsor company's booth, keyed by Account id (see resolveCompanyBooths).
  * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[]; skipReasons: Map<string, SchedulerFailureReason>; effectiveRequests: MeetingRequest[] }>}
  *   Resolves to the flat list of newly scheduled meetings, a per-attendee
  *   breakdown, — for the run report — why each attempted-but-unscheduled
@@ -296,6 +372,7 @@ export async function runScheduler(
 	timeslots: Timeslot[],
 	_locations: Location[],
 	preexisting: PreexistingSchedule = {},
+	booths?: Map<string, CompanyBooth>,
 ): Promise<{
 	schedule: ScheduledMeeting[];
 	attendeeSchedules: AttendeeSchedule[];
@@ -318,6 +395,17 @@ export async function runScheduler(
 	// old per-rep attendee index so the whole algorithm keys by party id.
 	const entityByParty = new Map<string, SchedEntity>();
 	for (const c of companies.values()) {
+		const maximum = companyMaximumMeetings(c).maximum;
+
+		// The booth rule applies only when the caller passed booths.
+		// A company missing from them has no known booth, so it is treated as having none.
+		const booth = booths ? booths.get(c.accountId) : undefined;
+		const boothProblem = booths
+			? (booth ? primaryBoothProblem(booth) : 'no_booth')
+			: null;
+		const blockedReason: SchedulerFailureReason | null =
+			boothProblem ?? (maximum <= 0 ? 'no_package_meetings' : null);
+
 		entityByParty.set(c.accountId, {
 			partyId: c.accountId,
 			role: "sponsor",
@@ -326,6 +414,10 @@ export async function runScheduler(
 			maxSameCompanyMeetings: null,
 			name: c.name,
 			company: c.name,
+			maximum,
+			atOnce: companyMeetingsAtOnce(c),
+			boothLocationId: booth?.location?.id,
+			blockedReason,
 		});
 	}
 	for (const a of attendees) {
@@ -338,6 +430,10 @@ export async function runScheduler(
 			maxSameCompanyMeetings: a.scheduling.maxSameCompanyMeetings,
 			name: a.name,
 			company: a.company,
+			maximum: 0,
+			// A delegate never has two meetings at the same start time.
+			atOnce: 1,
+			blockedReason: null,
 		});
 	}
 
@@ -363,14 +459,15 @@ export async function runScheduler(
 	// pairs that already meet in Cvent so the engine won't re-create them.
 	const scheduledPairs = new Set<string>(preexisting.pairs);
 
-	// Per-party set of start times already booked, so no party is double-booked
-	// at the same wall-clock time. Keyed by party id and seeded from Cvent (a
-	// company's set is the union of all its reps' booked times — see
-	// buildPreexistingFromCvent).
-	const busyByAttendee = new Map<string, Set<string>>(
+	// Per-party count of meetings at each start time already booked, so no party
+	// holds more meetings at one wall-clock time than it may. Keyed by party id and
+	// seeded from Cvent (a company's counts cover all its reps' appointments — see
+	// buildPreexistingFromCvent). A delegate may hold 1 at a time, and a sponsor
+	// company up to its meetings-at-once limit.
+	const busyByAttendee = new Map<string, Map<string, number>>(
 		[...entityByParty.keys()].map(pid => [
 			pid,
-			new Set<string>(preexisting.busyStartTimesByAttendee?.get(pid)),
+			toBusyCounts(preexisting.busyStartTimesByAttendee?.get(pid)),
 		])
 	);
 
@@ -452,9 +549,14 @@ export async function runScheduler(
 			const requesterCapCount = countMeetingsForCap(allMeetings, requesterParty, pass);
 			const targetCapCount    = countMeetingsForCap(allMeetings, targetParty,    pass);
 
-			// Busy-time sets for each party, used to find a free timeslot below.
-			const requesterBusy = busyByAttendee.get(requesterParty) ?? new Set<string>();
-			const targetBusy    = busyByAttendee.get(targetParty)    ?? new Set<string>();
+			// Busy-time counts for each party, used to find a free timeslot below.
+			const requesterBusy = busyByAttendee.get(requesterParty) ?? new Map<string, number>();
+			const targetBusy    = busyByAttendee.get(targetParty)    ?? new Map<string, number>();
+
+			// Skip if a sponsor company can't have meetings at all, because of its booth or package.
+			// This comes before the cap check, so the report names the real reason.
+			const blockedReason = requester.blockedReason ?? target.blockedReason;
+			if (blockedReason) { skipReasons.set(key, blockedReason); continue; }
 
 			// Skip if either party has already reached the POLICY cap for this pass.
 			//
@@ -478,8 +580,15 @@ export async function runScheduler(
 			if (wouldViolateCompanyDiversity(allMeetings, entityByParty, requesterParty, targetParty, requesterMaxSame)) { skipReasons.set(key, "company_diversity"); continue; }
 			if (wouldViolateCompanyDiversity(allMeetings, entityByParty, targetParty, requesterParty, targetMaxSame))    { skipReasons.set(key, "company_diversity"); continue; }
 
+			// A sponsor company only meets at its booth, and may hold up to its at-once limit at one start time.
+			const limits: SlotLimits = {
+				locationId: requester.boothLocationId ?? target.boothLocationId,
+				limitA: requester.atOnce,
+				limitB: target.atOnce,
+			};
+
 			// Find a timeslot of this pass's kind on this pass's day, where both attendees are free and capacity remains.
-			let timeslot = findAvailableTimeslot(timeslots, pass.day, requesterBusy, targetBusy, timeslotRemaining, pass.kind);
+			let timeslot = findAvailableTimeslot(timeslots, pass.day, requesterBusy, targetBusy, timeslotRemaining, pass.kind, limits);
 
 			// A diamond sponsor may use a slot on the spillover day, but only when no slot on the pass's day works for the pair.
 			// Standard sponsors never spill over.
@@ -488,7 +597,7 @@ export async function runScheduler(
 				pass.diamondSpilloverDay &&
 				sponsorTierOfPair(requester, target) === 'diamond'
 			) {
-				timeslot = findAvailableTimeslot(timeslots, pass.diamondSpilloverDay, requesterBusy, targetBusy, timeslotRemaining, pass.kind);
+				timeslot = findAvailableTimeslot(timeslots, pass.diamondSpilloverDay, requesterBusy, targetBusy, timeslotRemaining, pass.kind, limits);
 			}
 
 			// Skip this pair if no usable timeslot exists — the event is out of
@@ -496,9 +605,11 @@ export async function runScheduler(
 			// booked at every remaining start time.
 			if (!timeslot) { skipReasons.set(key, "no_availability"); continue; }
 
-			// Book the timeslot: mark both attendees busy at its start time and draw down capacity.
-			requesterBusy.add(timeslot.startTime);
-			targetBusy.add(timeslot.startTime);
+			// Book the timeslot: count one more meeting for both attendees at its start time and draw down capacity.
+			addBusy(requesterBusy, timeslot.startTime);
+			addBusy(targetBusy, timeslot.startTime);
+			busyByAttendee.set(requesterParty, requesterBusy);
+			busyByAttendee.set(targetParty, targetBusy);
 			timeslotRemaining.set(timeslot.id, (timeslotRemaining.get(timeslot.id) ?? 0) - 1);
 
 			// Storage orientation is CANONICAL, not request direction: on a

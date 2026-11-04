@@ -56,8 +56,9 @@ describe("preexistingFromAppointments", () => {
         expect([...(busyStartTimesByAttendee ?? new Map()).keys()].sort()).toEqual(
             ["acct-acme", "d1-sf"].sort(),
         );
+        // A count per start time, so it counts toward the company's meetings at once.
         expect(busyStartTimesByAttendee?.get("acct-acme")).toEqual(
-            new Set(["2025-01-15T09:00:00Z"]),
+            new Map([["2025-01-15T09:00:00Z", 1]]),
         );
     });
 

@@ -21,6 +21,11 @@ import { partyId } from "@/lib/attendees/companies";
  * times union under it and intra-company rep↔rep pairs never form.
  * Unrecognized participants are ignored.
  *
+ * Busy times are a count per start time, one for each appointment the party is in then.
+ * A company can hold more than one meeting at a time, so its existing
+ * appointments count toward that limit instead of blocking the time outright.
+ * Each appointment counts once per party, however many of the company's reps host it.
+ *
  * @param {CventExistingAppointment[]} appointments - Existing Cvent appointments.
  * @param {Attendee[]} attendees - Loaded attendees, for contact-id → party-id mapping.
  * @returns {PreexistingSchedule} Pairs + per-party busy times to schedule around.
@@ -35,7 +40,7 @@ export function preexistingFromAppointments(
         if (a.cventContactId) partyIdByContactId.set(a.cventContactId, partyId(a));
     }
 
-    const busyStartTimesByAttendee = new Map<string, Set<string>>();
+    const busyStartTimesByAttendee = new Map<string, Map<string, number>>();
     const pairs = new Set<string>();
 
     for (const appt of appointments) {
@@ -50,11 +55,12 @@ export function preexistingFromAppointments(
             ),
         ];
 
-        // Each party is busy at this appointment's start time.
+        // Each party has one more appointment at this start time.
         for (const id of ids) {
-            const set = busyStartTimesByAttendee.get(id) ?? new Set<string>();
-            set.add(appt.startTime);
-            busyStartTimesByAttendee.set(id, set);
+            const counts =
+                busyStartTimesByAttendee.get(id) ?? new Map<string, number>();
+            counts.set(appt.startTime, (counts.get(appt.startTime) ?? 0) + 1);
+            busyStartTimesByAttendee.set(id, counts);
         }
 
         // Every pair among the parties already meets — don't re-schedule it.

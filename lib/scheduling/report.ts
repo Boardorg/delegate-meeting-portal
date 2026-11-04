@@ -5,6 +5,11 @@ import {
     resolvePartyName,
     sponsorCompaniesByAccountId,
 } from "@/lib/attendees/companies";
+import {
+    primaryBoothProblem,
+    type BoothProblem,
+    type CompanyBooth,
+} from "./booths";
 
 // ---------------------------------------------------------------------------
 // Scheduler run report
@@ -47,6 +52,9 @@ import {
  * Placed then dropped:
  * - conflict_existing: engine scheduled it, but reconciliation dropped it for
  *   conflicting with an already-pushed/Cvent meeting.
+ *
+ * The sponsor company can't have meetings at all (see BoothProblem in ./booths):
+ * - no_booth, booth_not_found, booth_conflict, multiple_opportunities and no_package_meetings.
  */
 export type SchedulerFailureReason =
     | "cap_reached"
@@ -57,7 +65,20 @@ export type SchedulerFailureReason =
     | "attendee_cancelled"
     | "already_scheduled"
     | "no_pass_match"
-    | "conflict_existing";
+    | "conflict_existing"
+    | BoothProblem;
+
+/** A sponsor company that got no meetings because of its booth or package. */
+export interface CompanyBoothProblem {
+    accountId: string;
+    company: string;
+    /** The booth number from Salesforce. Null when blank. */
+    boothNo: string | null;
+    /** The first problem, used as the reason on its requests. */
+    problem: BoothProblem;
+    /** Every problem that applies. */
+    problems: BoothProblem[];
+}
 
 /** A single request that did not result in a scheduled meeting. */
 export interface UnscheduledRequest {
@@ -96,6 +117,11 @@ export interface SchedulerReport {
      * Their slots were ignored this run. The panel shows them as a warning.
      */
     unmappedAppointmentTypes: string[];
+    /**
+     * Sponsor companies that got no meetings because of a booth or package problem, sorted by name.
+     * The panel lists them as a warning and links to the Sponsor booths page.
+     */
+    boothProblems: CompanyBoothProblem[];
 }
 
 /** Inputs for {@link buildSchedulerReport}. */
@@ -115,6 +141,8 @@ export interface BuildReportArgs {
     preexistingPairs: Set<string>;
     /** Names of appointment types with no mapping, whose slots the run ignored. Defaults to none. */
     unmappedAppointmentTypes?: string[];
+    /** Each sponsor company's booth, keyed by Account id. Defaults to none, so no booth problems are reported. */
+    companyBooths?: Map<string, CompanyBooth>;
 }
 
 // Interest levels the chart always shows a bar for, lowest to highest.
@@ -141,6 +169,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         reconciledOutPairs,
         preexistingPairs,
         unmappedAppointmentTypes = [],
+        companyBooths = new Map<string, CompanyBooth>(),
     } = args;
 
     // Name lookup for rendering the unscheduled list without extra queries.
@@ -159,6 +188,10 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
     // Parties the scheduler left out because they cancelled in Cvent.
     const isCancelled = (id: string): boolean =>
         isPartyCancelled(id, companies, attendeesBySalesforceId);
+
+    // The booth or package problem that stops a sponsor company's meetings, if any.
+    const boothProblemOf = (id: string): BoothProblem | null =>
+        primaryBoothProblem(companyBooths.get(id));
 
     // The pairs that survived reconciliation — a request is "scheduled" iff its
     // canonical pair is among these.
@@ -197,6 +230,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
                 reason: classifyUnscheduled(req, {
                     partyName,
                     isCancelled,
+                    boothProblemOf,
                     reconciledOutPairs,
                     skipReasons,
                     preexistingPairs,
@@ -231,12 +265,42 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         meetingsByPass,
         unscheduledRequests,
         unmappedAppointmentTypes: [...unmappedAppointmentTypes],
+        boothProblems: listBoothProblems(companyBooths, companies),
     };
 }
 
 /**
+ * Lists the sponsor companies with a booth or package problem, sorted by company name.
+ * Companies not in the attendee list are left out.
+ *
+ * @param {Map<string, CompanyBooth>} companyBooths - Each company's booth.
+ * @param {Map<string, { name: string }>} companies - The event's companies, for their names.
+ * @returns {CompanyBoothProblem[]} One entry per company that can't be scheduled.
+ */
+function listBoothProblems(
+    companyBooths: Map<string, CompanyBooth>,
+    companies: Map<string, { name: string }>,
+): CompanyBoothProblem[] {
+    const out: CompanyBoothProblem[] = [];
+    for (const b of companyBooths.values()) {
+        const problem = primaryBoothProblem(b);
+        const company = companies.get(b.accountId);
+        if (!problem || !company) continue;
+        out.push({
+            accountId: b.accountId,
+            company: company.name,
+            boothNo: b.boothNo,
+            problem,
+            problems: [...b.problems],
+        });
+    }
+    return out.sort((a, b) => a.company.localeCompare(b.company));
+}
+
+/**
  * Determines why a single unscheduled request failed, in precedence order:
- * dropped-in-reconciliation → engine-recorded skip → collection-phase reason
+ * dropped-in-reconciliation → a sponsor company's booth or package problem →
+ * engine-recorded skip → collection-phase reason
  * (self-request / non-attendee / no matching pass). The last three mirror the
  * `continue` branches the engine takes while collecting candidates, before any
  * skip reason is recorded — so they're reconstructed here from the request and
@@ -251,6 +315,7 @@ function classifyUnscheduled(
     ctx: {
         partyName: (id: string) => string | undefined;
         isCancelled: (id: string) => boolean;
+        boothProblemOf: (id: string) => BoothProblem | null;
         reconciledOutPairs: Set<string>;
         skipReasons: Map<string, SchedulerFailureReason>;
         preexistingPairs: Set<string>;
@@ -260,6 +325,7 @@ function classifyUnscheduled(
     const {
         partyName,
         isCancelled,
+        boothProblemOf,
         reconciledOutPairs,
         skipReasons,
         preexistingPairs,
@@ -268,6 +334,12 @@ function classifyUnscheduled(
 
     // Placed by the engine, then dropped for conflicting with a pushed meeting.
     if (reconciledOutPairs.has(pair)) return "conflict_existing";
+
+    // A sponsor company with a booth or package problem gets no meetings at all.
+    // That is the reason even when the pair matched no pass.
+    const boothProblem =
+        boothProblemOf(req.requesterId) ?? boothProblemOf(req.targetId);
+    if (boothProblem) return boothProblem;
 
     // The engine attempted the pair but couldn't place it (cap / availability /
     // company diversity).

@@ -4,7 +4,7 @@
     "nextToken": "1a2b3c4d5e6f7g8h9i10j11k",
     "currentToken": "1a2b3c4d5e6f7g8h9i10j11k",
     "limit": 100,
-    "totalCount": 33,
+    "totalCount": 87,
     "_links": {
       "next": {
         "href": "?token=90c5f062-76ad-4ea4-aa53-00eb698d9262"
@@ -444,6 +444,708 @@
       },
       "location": {
         "id": "33333333-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1030-booth1",
+      "startTime": "2026-10-31T10:30:00.000Z",
+      "endTime": "2026-10-31T10:50:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000001"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1030-booth2",
+      "startTime": "2026-10-31T10:30:00.000Z",
+      "endTime": "2026-10-31T10:50:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000002"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1030-booth3",
+      "startTime": "2026-10-31T10:30:00.000Z",
+      "endTime": "2026-10-31T10:50:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000003"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1030-booth4",
+      "startTime": "2026-10-31T10:30:00.000Z",
+      "endTime": "2026-10-31T10:50:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1030-booth5",
+      "startTime": "2026-10-31T10:30:00.000Z",
+      "endTime": "2026-10-31T10:50:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000005"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1030-booth6",
+      "startTime": "2026-10-31T10:30:00.000Z",
+      "endTime": "2026-10-31T10:50:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000006"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1030-booth7",
+      "startTime": "2026-10-31T10:30:00.000Z",
+      "endTime": "2026-10-31T10:50:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000007"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1030-booth8",
+      "startTime": "2026-10-31T10:30:00.000Z",
+      "endTime": "2026-10-31T10:50:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000008"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1030-booth13",
+      "startTime": "2026-10-31T10:30:00.000Z",
+      "endTime": "2026-10-31T10:50:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000013"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1055-booth1",
+      "startTime": "2026-10-31T10:55:00.000Z",
+      "endTime": "2026-10-31T11:15:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000001"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1055-booth2",
+      "startTime": "2026-10-31T10:55:00.000Z",
+      "endTime": "2026-10-31T11:15:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000002"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1055-booth3",
+      "startTime": "2026-10-31T10:55:00.000Z",
+      "endTime": "2026-10-31T11:15:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000003"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1055-booth4",
+      "startTime": "2026-10-31T10:55:00.000Z",
+      "endTime": "2026-10-31T11:15:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1055-booth5",
+      "startTime": "2026-10-31T10:55:00.000Z",
+      "endTime": "2026-10-31T11:15:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000005"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1055-booth6",
+      "startTime": "2026-10-31T10:55:00.000Z",
+      "endTime": "2026-10-31T11:15:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000006"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1055-booth7",
+      "startTime": "2026-10-31T10:55:00.000Z",
+      "endTime": "2026-10-31T11:15:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000007"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1055-booth8",
+      "startTime": "2026-10-31T10:55:00.000Z",
+      "endTime": "2026-10-31T11:15:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000008"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1055-booth13",
+      "startTime": "2026-10-31T10:55:00.000Z",
+      "endTime": "2026-10-31T11:15:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000013"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1120-booth1",
+      "startTime": "2026-10-31T11:20:00.000Z",
+      "endTime": "2026-10-31T11:40:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000001"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1120-booth2",
+      "startTime": "2026-10-31T11:20:00.000Z",
+      "endTime": "2026-10-31T11:40:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000002"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1120-booth3",
+      "startTime": "2026-10-31T11:20:00.000Z",
+      "endTime": "2026-10-31T11:40:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000003"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1120-booth4",
+      "startTime": "2026-10-31T11:20:00.000Z",
+      "endTime": "2026-10-31T11:40:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1120-booth5",
+      "startTime": "2026-10-31T11:20:00.000Z",
+      "endTime": "2026-10-31T11:40:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000005"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1120-booth6",
+      "startTime": "2026-10-31T11:20:00.000Z",
+      "endTime": "2026-10-31T11:40:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000006"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1120-booth7",
+      "startTime": "2026-10-31T11:20:00.000Z",
+      "endTime": "2026-10-31T11:40:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000007"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1120-booth8",
+      "startTime": "2026-10-31T11:20:00.000Z",
+      "endTime": "2026-10-31T11:40:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000008"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1120-booth13",
+      "startTime": "2026-10-31T11:20:00.000Z",
+      "endTime": "2026-10-31T11:40:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000013"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1145-booth1",
+      "startTime": "2026-10-31T11:45:00.000Z",
+      "endTime": "2026-10-31T12:05:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000001"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1145-booth2",
+      "startTime": "2026-10-31T11:45:00.000Z",
+      "endTime": "2026-10-31T12:05:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000002"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1145-booth3",
+      "startTime": "2026-10-31T11:45:00.000Z",
+      "endTime": "2026-10-31T12:05:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000003"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261031-1145-booth4",
+      "startTime": "2026-10-31T11:45:00.000Z",
+      "endTime": "2026-10-31T12:05:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1145-booth5",
+      "startTime": "2026-10-31T11:45:00.000Z",
+      "endTime": "2026-10-31T12:05:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000005"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1145-booth6",
+      "startTime": "2026-10-31T11:45:00.000Z",
+      "endTime": "2026-10-31T12:05:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000006"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1145-booth7",
+      "startTime": "2026-10-31T11:45:00.000Z",
+      "endTime": "2026-10-31T12:05:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000007"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1145-booth8",
+      "startTime": "2026-10-31T11:45:00.000Z",
+      "endTime": "2026-10-31T12:05:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000008"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261031-1145-booth13",
+      "startTime": "2026-10-31T11:45:00.000Z",
+      "endTime": "2026-10-31T12:05:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000013"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1110-booth1",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000001"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1110-booth2",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000002"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1110-booth3",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000003"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1110-booth4",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1110-booth5",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000005"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1110-booth6",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000006"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1110-booth7",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000007"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1110-booth8",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000008"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1110-booth13",
+      "startTime": "2026-11-01T11:10:00.000Z",
+      "endTime": "2026-11-01T11:30:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000013"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1135-booth1",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000001"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1135-booth2",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000002"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1135-booth3",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000003"
+      },
+      "availableAppointments": 2
+    },
+    {
+      "id": "mockv2-20261101-1135-booth4",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000004"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1135-booth5",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000005"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1135-booth6",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000006"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1135-booth7",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000007"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1135-booth8",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000008"
+      },
+      "availableAppointments": 1
+    },
+    {
+      "id": "mockv2-20261101-1135-booth13",
+      "startTime": "2026-11-01T11:35:00.000Z",
+      "endTime": "2026-11-01T11:55:00.000Z",
+      "type": "DEFINED",
+      "appointmentType": {
+        "id": "04ca6ae2-0dc3-487b-953e-86d6abbdf7d3"
+      },
+      "location": {
+        "id": "44444444-0000-4000-8000-000000000013"
       },
       "availableAppointments": 2
     }

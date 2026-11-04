@@ -11,6 +11,12 @@
         "company": "Project Farma",
         "title": "VP, Strategic Partnerships",
         "sponsorTier": "diamond",
+        "opportunityId": "006PF0000000001",
+        "boothNo": "1",
+        "purchasedMeetings": 3,
+        "bonusMeetings": 1,
+        "maximumMeetings": 4,
+        "meetingsAtOnce": 2,
         "profile": {
             "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
@@ -41,6 +47,12 @@
         "company": "Project Farma",
         "title": "Director, Partnerships",
         "sponsorTier": "standard",
+        "opportunityId": "006PF0000000001",
+        "boothNo": "1",
+        "purchasedMeetings": 3,
+        "bonusMeetings": 1,
+        "maximumMeetings": 4,
+        "meetingsAtOnce": 2,
         "profile": {
             "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
@@ -70,6 +82,12 @@
         "company": "Cellavance Solutions",
         "title": "Director, Global Marketing",
         "sponsorTier": "standard",
+        "opportunityId": "006CV0000000002",
+        "boothNo": "Booth 2",
+        "purchasedMeetings": 5,
+        "bonusMeetings": 2,
+        "maximumMeetings": null,
+        "meetingsAtOnce": null,
         "profile": {
             "annualRevenue": "50M-100M",
             "budgetaryResponsibility": null,
@@ -99,6 +117,12 @@
         "company": "OmniPath Biotech",
         "title": "Senior Manager, Business Development",
         "sponsorTier": "standard",
+        "opportunityId": "006OP0000000003",
+        "boothNo": "3",
+        "purchasedMeetings": null,
+        "bonusMeetings": null,
+        "maximumMeetings": null,
+        "meetingsAtOnce": 2,
         "profile": {
             "annualRevenue": null,
             "budgetaryResponsibility": null,
@@ -128,6 +152,12 @@
         "company": "Helix Manufacturing Partners",
         "title": "VP Sales & Client Success",
         "sponsorTier": "standard",
+        "opportunityId": "006HM0000000004",
+        "boothNo": null,
+        "purchasedMeetings": 4,
+        "bonusMeetings": 0,
+        "maximumMeetings": null,
+        "meetingsAtOnce": null,
         "profile": {
             "annualRevenue": "100M-500M",
             "budgetaryResponsibility": null,
@@ -157,6 +187,12 @@
         "company": "Vericel Sciences",
         "title": "Chief Revenue Officer",
         "sponsorTier": "diamond",
+        "opportunityId": "006VS0000000005",
+        "boothNo": "99",
+        "purchasedMeetings": 8,
+        "bonusMeetings": null,
+        "maximumMeetings": null,
+        "meetingsAtOnce": null,
         "profile": {
             "annualRevenue": "500M-1B",
             "budgetaryResponsibility": null,
@@ -174,6 +210,186 @@
             "maxSameCompanyMeetings": null,
             "requestedSponsorAccountIds": []
         }
+    },
+    {
+        "id": "s7",
+        "cventContactId": "cvent-s7-uuid",
+        "salesforceId": "a00PZ00000TML1AYAX",
+        "accountId": "001LX0000000006",
+        "name": "Hana Okafor",
+        "email": "hana.okafor@lumenexhibits.com",
+        "role": "sponsor",
+        "company": "Lumen Exhibits",
+        "title": "Partnerships Lead",
+        "sponsorTier": "standard",
+        "opportunityId": "006LX0000000006",
+        "boothNo": "5",
+        "purchasedMeetings": 0,
+        "bonusMeetings": null,
+        "maximumMeetings": null,
+        "meetingsAtOnce": null,
+        "profile": {
+            "annualRevenue": "50M-100M",
+            "budgetaryResponsibility": null,
+            "companySize": "51-200",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
+        },
+        "phone": ""
+    },
+    {
+        "id": "s8",
+        "cventContactId": "cvent-s8-uuid",
+        "salesforceId": "a00PZ00000TML1BYAX",
+        "accountId": "001NW0000000007",
+        "name": "Ravi Menon",
+        "email": "ravi.menon@northwind-analytics.com",
+        "role": "sponsor",
+        "company": "Northwind Analytics",
+        "title": "Partnerships Lead",
+        "sponsorTier": "standard",
+        "opportunityId": "006NW0000000007",
+        "boothNo": "6",
+        "purchasedMeetings": 5,
+        "bonusMeetings": 0,
+        "maximumMeetings": 6,
+        "meetingsAtOnce": null,
+        "profile": {
+            "annualRevenue": "50M-100M",
+            "budgetaryResponsibility": null,
+            "companySize": "51-200",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
+        },
+        "phone": ""
+    },
+    {
+        "id": "s9",
+        "cventContactId": "cvent-s9-uuid",
+        "salesforceId": "a00PZ00000TML1CYAX",
+        "accountId": "001BL0000000008",
+        "name": "Greta Lindqvist",
+        "email": "greta.lindqvist@brightlinelabs.com",
+        "role": "sponsor",
+        "company": "Brightline Labs",
+        "title": "Partnerships Lead",
+        "sponsorTier": "standard",
+        "opportunityId": "006BL0000000008",
+        "boothNo": "Booth 6",
+        "purchasedMeetings": 5,
+        "bonusMeetings": null,
+        "maximumMeetings": null,
+        "meetingsAtOnce": null,
+        "profile": {
+            "annualRevenue": "50M-100M",
+            "budgetaryResponsibility": null,
+            "companySize": "51-200",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
+        },
+        "phone": ""
+    },
+    {
+        "id": "s10",
+        "cventContactId": "cvent-s10-uuid",
+        "salesforceId": "a00PZ00000TML1DYAX",
+        "accountId": "001KB0000000009",
+        "name": "Owen Pryce",
+        "email": "owen.pryce@keystonebio.com",
+        "role": "sponsor",
+        "company": "Keystone Bio",
+        "title": "Partnerships Lead",
+        "sponsorTier": "standard",
+        "opportunityId": "006KB0000000009",
+        "boothNo": "7",
+        "purchasedMeetings": 5,
+        "bonusMeetings": null,
+        "maximumMeetings": null,
+        "meetingsAtOnce": null,
+        "profile": {
+            "annualRevenue": "50M-100M",
+            "budgetaryResponsibility": null,
+            "companySize": "51-200",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
+        },
+        "phone": ""
+    },
+    {
+        "id": "s11",
+        "cventContactId": "cvent-s11-uuid",
+        "salesforceId": "a00PZ00000TML1EYAX",
+        "accountId": "001KB0000000009",
+        "name": "Lucia Ferraz",
+        "email": "lucia.ferraz@keystonebio.com",
+        "role": "sponsor",
+        "company": "Keystone Bio",
+        "title": "Partnerships Lead",
+        "sponsorTier": "standard",
+        "opportunityId": "006KB0000000010",
+        "boothNo": "7",
+        "purchasedMeetings": 5,
+        "bonusMeetings": null,
+        "maximumMeetings": null,
+        "meetingsAtOnce": null,
+        "profile": {
+            "annualRevenue": "50M-100M",
+            "budgetaryResponsibility": null,
+            "companySize": "51-200",
+            "industrySectors": [
+                "BtoB Services"
+            ],
+            "interestAreas": [],
+            "transformationStage": null,
+            "systemsAndPlatforms": [],
+            "meetingInterests": [],
+            "priorityInitiative": null
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": null,
+            "requestedSponsorAccountIds": []
+        },
+        "phone": ""
     },
     {
         "id": "d1",

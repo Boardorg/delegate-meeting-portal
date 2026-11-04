@@ -21,9 +21,11 @@ export type AttendeeRecordSF = {
 export type AttendeeRole = "delegate" | "sponsor";
 
 /**
- * Sponsor package tier. Determines the sponsor's meeting cap in Pass 5.
- * - `diamond`: Highest tier; guaranteed 8 package meetings, cap raised to 10 in Pass 5.
- * - `standard`: All other tiers; guaranteed 5 package meetings, cap raised to 7 in Pass 5.
+ * Sponsor package tier, from the package name.
+ * A diamond sponsor may spill over to Day 2.
+ * The tier only sets a meeting count when all of the sponsor's Salesforce count fields are blank (see lib/attendees/caps.ts).
+ * - `diamond`: The package name contains "diamond". Falls back to 8 meetings.
+ * - `standard`: Any other package. Falls back to 5 meetings.
  * - `null`: Not applicable (delegates).
  */
 export type SponsorTier = "diamond" | "standard" | null;
@@ -247,10 +249,50 @@ export interface Attendee {
     title: string;
 
     /**
-     * Sponsor package tier. Determines meeting caps in Pass 5.
+     * Sponsor package tier. Decides the Day 2 spillover and the fallback meeting count.
      * Null for delegates.
      */
     sponsorTier: SponsorTier;
+
+    /**
+     * Salesforce Opportunity id of the rep's sponsor registration (`Registration__c`).
+     * Every value below comes from this Opportunity.
+     * Reps of one company normally share it.
+     * Absent or null for delegates.
+     */
+    opportunityId?: string | null;
+
+    /**
+     * The sponsor's booth number from `Registration__r.Booth_No__c`, trimmed.
+     * Free text in Salesforce, holding values like "3" or "Booth 3".
+     * Null when blank. Absent or null for delegates.
+     */
+    boothNo?: string | null;
+
+    /**
+     * Meetings in the sponsor's package, from `Registration__r.Meetings__c`.
+     * Null when blank, which is not the same as 0. Absent or null for delegates.
+     */
+    purchasedMeetings?: number | null;
+
+    /**
+     * Extra meetings on top of the package, from `Registration__r.Cvent_Bonus_Meetings__c`.
+     * Null when blank. Absent or null for delegates.
+     */
+    bonusMeetings?: number | null;
+
+    /**
+     * The total meetings the sponsor may have, from `Registration__r.Cvent_Maximum_Meetings__c`.
+     * Null when blank. Absent or null for delegates.
+     * See companyMaximumMeetings() in lib/attendees/caps.ts for how the maximum is worked out.
+     */
+    maximumMeetings?: number | null;
+
+    /**
+     * How many meetings the sponsor may hold at the same time, from `Registration__r.Cvent_Number_Diaries__c`.
+     * Null when blank, which counts as 1. Absent or null for delegates.
+     */
+    meetingsAtOnce?: number | null;
 
     /** Profile attributes used by the browse and filter UI. */
     profile: AttendeeProfile;

@@ -141,3 +141,8 @@ Use a preview deployment pointed at the staging database, with NALES mapped in E
 3. In Event settings for NALES, map "Sponsor to Delegate Meetings" to `sponsor_delegate`. Mapping the other types is optional for now.
 4. Clean up the mis-typed test appointments. Cvent can't change an appointment's type, so use **Unpush All Synced**, then re-run the scheduler, then **Push All to Cvent**. Re-run the scheduler before pushing. Otherwise the old meetings still on wrong-type slots get pushed with those types again (decision 7).
 5. Check the result in Cvent (manual check step 6).
+
+## Changes after review
+
+- A scheduler run also stops before changing anything when the attendees it would use (leaving out cancelled registrations) include no sponsors or no delegates, since a failed Cvent attendee lookup returns no one.
+- When a re-push can't create its replacement because the host is busy, push only edits the old appointment in place (after checking its type) when the old appointment starts at the same time as the new slot. A move to another time reports "Host slot full" and changes nothing.

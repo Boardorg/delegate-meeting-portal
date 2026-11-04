@@ -93,3 +93,36 @@ describe("buildSchedulerReport — cancelled attendees", () => {
         expect(reason).toBe("no_pass_match");
     });
 });
+
+describe("buildSchedulerReport — unmapped appointment types", () => {
+    /**
+     * Builds an empty report with the given unmapped type names.
+     *
+     * @param {string[] | undefined} unmapped - Names to pass, or undefined to leave them out.
+     * @returns The report.
+     */
+    function reportWith(unmapped: string[] | undefined) {
+        return buildSchedulerReport({
+            eventCode: "EVT",
+            generatedAt: "2025-01-01T00:00:00Z",
+            attendees: [],
+            requests: [],
+            reconciled: [],
+            skipReasons: new Map(),
+            reconciledOutPairs: new Set(),
+            preexistingPairs: new Set(),
+            unmappedAppointmentTypes: unmapped,
+        });
+    }
+
+    test("lists each unmapped type by name", () => {
+        expect(
+            reportWith(["Delegate Group Meetings", "Themed Lunches (Round Tables)"])
+                .unmappedAppointmentTypes,
+        ).toEqual(["Delegate Group Meetings", "Themed Lunches (Round Tables)"]);
+    });
+
+    test("lists none when the caller passes none", () => {
+        expect(reportWith(undefined).unmappedAppointmentTypes).toEqual([]);
+    });
+});

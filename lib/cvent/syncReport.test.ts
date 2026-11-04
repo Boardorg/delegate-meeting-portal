@@ -193,4 +193,31 @@ describe("buildSyncReport", () => {
         });
         expect(JSON.parse(JSON.stringify(report))).toEqual(report);
     });
+
+    it("lists a meeting pushed under another appointment type as a warning, not a failure", () => {
+        const report = buildSyncReport({
+            eventCode: "NALES",
+            generatedAt: "2026-10-22T00:00:00.000Z",
+            totalPortalMeetings: 1,
+            alreadySynced: 0,
+            results: [
+                {
+                    meetingId: "m1",
+                    label: "Acme & Dee",
+                    ok: true,
+                    kind: "create",
+                    warning: "Pushed as Delegate Group Meetings.",
+                },
+            ],
+        });
+        expect(report.failed).toBe(0);
+        expect(report.created).toBe(1);
+        expect(report.warnings).toEqual([
+            {
+                meetingId: "m1",
+                label: "Acme & Dee",
+                detail: "Pushed as Delegate Group Meetings.",
+            },
+        ]);
+    });
 });

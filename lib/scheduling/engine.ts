@@ -20,6 +20,7 @@ import {
     partyId,
     sponsorCompaniesByAccountId,
 } from "@/lib/attendees/companies";
+import type { MeetingKind } from "@/lib/events/meetingKinds";
 
 /**
  * A single scheduling entity: one party in the algorithm. For sponsors this is
@@ -48,6 +49,11 @@ interface SchedEntity {
 interface PassConfig {
     passNumber: number;
     day: 1 | 2;
+    // The meeting kind this pass books. It only uses timeslots mapped to this kind.
+    kind: MeetingKind;
+    // A day a diamond sponsor's pair may fall back to when no slot on `day` works.
+    // Unset for passes with no fallback.
+    diamondSpilloverDay?: 1 | 2;
     delegateCap: number;
     sponsorCap: (tier: SponsorTier) => number;
     // Filters read only the party's role, so they accept the lighter entity
@@ -82,6 +88,8 @@ const PASSES: PassConfig[] = [
         // Pass 1: Mutual sponsor <-> delegate requests only. Both parties requested each other.
         passNumber: 1,
         day: 1,
+        kind: "sponsor_delegate",
+        diamondSpilloverDay: 2,
         delegateCap: 2,
         sponsorCap: () => 3,
         filter: (req, tgt, _rank, mutual) =>
@@ -93,6 +101,8 @@ const PASSES: PassConfig[] = [
         // Pass 2: High-interest sponsor requests (rank >= 4), regardless of mutuality.
         passNumber: 2,
         day: 1,
+        kind: "sponsor_delegate",
+        diamondSpilloverDay: 2,
         delegateCap: 3,
         sponsorCap: () => 4,
         filter: (req, tgt, rank, _mutual) =>
@@ -103,6 +113,8 @@ const PASSES: PassConfig[] = [
         // Cap is now tier-aware: standard sponsors are held to their contracted limit (5).
         passNumber: 3,
         day: 1,
+        kind: "sponsor_delegate",
+        diamondSpilloverDay: 2,
         delegateCap: 4,
         sponsorCap: (tier) => tierCap(tier, "pass3"),
         filter: (req, tgt, rank, _mutual) =>
@@ -113,6 +125,8 @@ const PASSES: PassConfig[] = [
         // Cap is tier-aware: standard stays at 5, diamond rises to 8.
         passNumber: 4,
         day: 1,
+        kind: "sponsor_delegate",
+        diamondSpilloverDay: 2,
         delegateCap: 5,
         sponsorCap: (tier) => tierCap(tier, "pass4"),
         filter: (req, tgt, _rank, mutual) =>
@@ -127,6 +141,8 @@ const PASSES: PassConfig[] = [
         // per attendee rather than a fixed tier-based constant.
         passNumber: 5,
         day: 1,
+        kind: "sponsor_delegate",
+        diamondSpilloverDay: 2,
         delegateCap: 7,
         sponsorCap: (tier) => tierCap(tier, "pass5"),
         filter: (req, tgt, _rank, _mutual) =>
@@ -136,6 +152,7 @@ const PASSES: PassConfig[] = [
         // Pass 6: Mutual delegate <-> delegate requests on Day 2 only.
         passNumber: 6,
         day: 2,
+        kind: "delegate_delegate",
         delegateCap: 2,
         sponsorCap: () => 0,
         filter: (req, tgt, _rank, mutual) =>
@@ -145,6 +162,7 @@ const PASSES: PassConfig[] = [
         // Pass 7: All remaining delegate <-> delegate requests on Day 2, any rank.
         passNumber: 7,
         day: 2,
+        kind: "delegate_delegate",
         delegateCap: 2,
         sponsorCap: () => 0,
         filter: (req, tgt, _rank, _mutual) =>
@@ -169,24 +187,49 @@ function getCap(entity: SchedEntity, pass: PassConfig): number {
         : pass.delegateCap;
 }
 
+// The meeting kind each pass books, keyed by pass number.
+// A meeting's kind is the kind of the pass that booked it.
+const PASS_KIND = new Map(PASSES.map((p) => [p.passNumber, p.kind]));
+
 /**
- * Counts how many meetings an attendee currently has scheduled on a specific day.
+ * Counts the meetings that count toward an attendee's cap in a given pass.
+ * Only meetings of the pass's kind are counted.
+ *
+ * Sponsor meetings count across every day.
+ * A diamond sponsor can have Day 2 sponsor meetings, and they must still fit the package.
+ * The same goes for a delegate's sponsor-meeting cap.
+ *
+ * Delegate-to-delegate meetings still count on the pass's day only, so their day rule is unchanged.
  *
  * @param {ScheduledMeeting[]} meetings - All meetings scheduled so far.
  * @param {string} attendeeId - The attendee to count for.
- * @param {1 | 2} day - The event day to count on.
- * @returns {number} The number of meetings this attendee has on that day.
+ * @param {PassConfig} pass - The current pass. Its kind and day decide what counts.
+ * @returns {number} The number of this attendee's meetings that count toward the pass cap.
  */
-function countMeetingsOnDay(
+function countMeetingsForCap(
     meetings: ScheduledMeeting[],
     attendeeId: string,
-    day: 1 | 2,
+    pass: PassConfig,
 ): number {
     return meetings.filter(
         (m) =>
-            m.day === day &&
-            (m.attendeeA === attendeeId || m.attendeeB === attendeeId),
+            (m.attendeeA === attendeeId || m.attendeeB === attendeeId) &&
+            PASS_KIND.get(m.passNumber) === pass.kind &&
+            (pass.kind === "sponsor_delegate" || m.day === pass.day),
     ).length;
+}
+
+/**
+ * Returns the tier of the sponsor company in a pair, or null when neither side is a sponsor.
+ *
+ * @param {SchedEntity} a - One side of the pair.
+ * @param {SchedEntity} b - The other side of the pair.
+ * @returns {SponsorTier} The sponsor side's tier, or null.
+ */
+function sponsorTierOfPair(a: SchedEntity, b: SchedEntity): SponsorTier {
+    if (a.role === "sponsor") return a.tier;
+    if (b.role === "sponsor") return b.tier;
+    return null;
 }
 
 /**
@@ -211,6 +254,12 @@ export interface PreexistingSchedule {
  * timeslot's remaining capacity. Each meeting's location defaults to the booked
  * timeslot's native Cvent location. Business rules (no duplicates, no self-meetings,
  * company diversity) are enforced on every candidate.
+ *
+ * Each pass only books timeslots mapped to its meeting kind in Event settings.
+ * Sponsor passes (1 to 5) use `sponsor_delegate` slots on Day 1.
+ * A diamond sponsor's pair may use a Day 2 `sponsor_delegate` slot when no Day 1 slot works.
+ * Sponsor-meeting caps count across both days, so a diamond sponsor still stays within the package.
+ * Passes 6 and 7 use `delegate_delegate` slots on Day 2.
  *
  * The engine avoids conflicting with meetings that already exist in Cvent when
  * the caller passes `preexisting`: those pairs are treated as already scheduled
@@ -397,11 +446,11 @@ export async function runScheduler(
 			// Get the requester and target scheduling entities again for this request.
 			const requester = entityByParty.get(requesterParty)!;
 			const target = entityByParty.get(targetParty)!;
-			const day = pass.day;
 
-			// Count how many meetings each party already has on this day.
-			const requesterDayCount = countMeetingsOnDay(allMeetings, requesterParty, day);
-			const targetDayCount    = countMeetingsOnDay(allMeetings, targetParty,    day);
+			// Count each party's meetings that count toward this pass's cap.
+			// Sponsor meetings count across both days (see countMeetingsForCap).
+			const requesterCapCount = countMeetingsForCap(allMeetings, requesterParty, pass);
+			const targetCapCount    = countMeetingsForCap(allMeetings, targetParty,    pass);
 
 			// Busy-time sets for each party, used to find a free timeslot below.
 			const requesterBusy = busyByAttendee.get(requesterParty) ?? new Set<string>();
@@ -420,8 +469,8 @@ export async function runScheduler(
 			//
 			// Nothing is lost by dropping the availability term: findAvailableTimeslot
 			// below rejects exactly the same pairs, and labels them "no_availability".
-			if (requesterDayCount >= getCap(requester, pass)) { skipReasons.set(key, "cap_reached"); continue; }
-			if (targetDayCount    >= getCap(target,    pass)) { skipReasons.set(key, "cap_reached"); continue; }
+			if (requesterCapCount >= getCap(requester, pass)) { skipReasons.set(key, "cap_reached"); continue; }
+			if (targetCapCount    >= getCap(target,    pass)) { skipReasons.set(key, "cap_reached"); continue; }
 
 			// Skip if this meeting would violate the company diversity rule for either party.
 			const requesterMaxSame = requester.maxSameCompanyMeetings ?? 2;
@@ -429,8 +478,18 @@ export async function runScheduler(
 			if (wouldViolateCompanyDiversity(allMeetings, entityByParty, requesterParty, targetParty, requesterMaxSame)) { skipReasons.set(key, "company_diversity"); continue; }
 			if (wouldViolateCompanyDiversity(allMeetings, entityByParty, targetParty, requesterParty, targetMaxSame))    { skipReasons.set(key, "company_diversity"); continue; }
 
-			// Find a timeslot on this day where both attendees are free and capacity remains.
-			const timeslot = findAvailableTimeslot(timeslots, day, requesterBusy, targetBusy, timeslotRemaining);
+			// Find a timeslot of this pass's kind on this pass's day, where both attendees are free and capacity remains.
+			let timeslot = findAvailableTimeslot(timeslots, pass.day, requesterBusy, targetBusy, timeslotRemaining, pass.kind);
+
+			// A diamond sponsor may use a slot on the spillover day, but only when no slot on the pass's day works for the pair.
+			// Standard sponsors never spill over.
+			if (
+				!timeslot &&
+				pass.diamondSpilloverDay &&
+				sponsorTierOfPair(requester, target) === 'diamond'
+			) {
+				timeslot = findAvailableTimeslot(timeslots, pass.diamondSpilloverDay, requesterBusy, targetBusy, timeslotRemaining, pass.kind);
+			}
 
 			// Skip this pair if no usable timeslot exists — the event is out of
 			// appointment capacity for this day, or one of the two is already
@@ -468,7 +527,8 @@ export async function runScheduler(
 				id: `mtg-${String(meetingCounter++).padStart(3, '0')}-${Date.now()}`,
 				attendeeA,
 				attendeeB,
-				day,
+				// The booked slot's day, which is Day 2 for a diamond sponsor's spillover.
+				day: timeslot.day,
 				timeslotId: timeslot.id,
 				passNumber: pass.passNumber,
 				mutual: isMutual,

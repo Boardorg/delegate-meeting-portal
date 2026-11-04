@@ -3,18 +3,67 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { EventSettingsRow } from "@/lib/db/schema";
+import {
+    MEETING_KIND_LABEL,
+    appointmentTypeRows,
+    type AppointmentType,
+    type MeetingKind,
+} from "@/lib/events/meetingKinds";
 import { createEvent, updateEvent, deleteEvent } from "./actions";
 
 // ---------------------------------------------------------------------------
 // EventSettingsForm — edit the active event's Cvent config, or create a new
 // event. The event being edited follows the global sidebar switcher; creating
 // an event makes it active (and thus the one shown here).
+//
+// The Appointment types section maps each of the event's Cvent appointment types to a meeting kind.
+// It only shows when editing an existing event.
 // ---------------------------------------------------------------------------
+
+/** The active event's Cvent appointment types, or why they couldn't be loaded. */
+export type AppointmentTypesLoad =
+    | { ok: true; types: AppointmentType[] }
+    | { ok: false; reason: string };
 
 type Props = {
     active: EventSettingsRow | null;
     hasEvents: boolean;
+    /** Null when there is no active event. */
+    appointmentTypes: AppointmentTypesLoad | null;
 };
+
+/** The mapping being edited. A blank kind means the type is not mapped. */
+type KindsDraft = Record<string, MeetingKind | "">;
+
+/**
+ * Builds the mapping draft from the saved row, for controlled dropdowns.
+ *
+ * @param {EventSettingsRow | null} row - The active event's settings row.
+ * @returns {KindsDraft} The saved kinds, keyed by appointment-type id.
+ */
+function kindsFrom(row: EventSettingsRow | null): KindsDraft {
+    return { ...(row?.appointmentTypeKinds ?? {}) };
+}
+
+/**
+ * Turns the draft into the mapping to save.
+ * Only types Cvent listed are kept, and unmapped types are left out.
+ *
+ * @param {KindsDraft} draft - The edited mapping.
+ * @param {AppointmentType[]} types - The event's appointment types.
+ * @returns {Record<string, string>} The mapping to send to the server.
+ */
+function kindsToSave(
+    draft: KindsDraft,
+    types: AppointmentType[],
+): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const t of types) {
+        const kind = draft[t.id];
+        if (kind) out[t.id] = kind;
+    }
+    return out;
+}
 
 /** The editable settings fields (code is handled separately). */
 type Draft = {
@@ -57,7 +106,11 @@ const ID_FIELDS: { key: keyof Draft; label: string; hint: string }[] = [
     },
 ];
 
-export default function EventSettingsForm({ active, hasEvents }: Props) {
+export default function EventSettingsForm({
+    active,
+    hasEvents,
+    appointmentTypes,
+}: Props) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
 
@@ -65,6 +118,7 @@ export default function EventSettingsForm({ active, hasEvents }: Props) {
     const [creating, setCreating] = useState(!hasEvents);
     const [code, setCode] = useState("");
     const [draft, setDraft] = useState<Draft>(draftFrom(active));
+    const [kinds, setKinds] = useState<KindsDraft>(kindsFrom(active));
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [message, setMessage] = useState<{
         ok: boolean;
@@ -95,11 +149,17 @@ export default function EventSettingsForm({ active, hasEvents }: Props) {
     }
 
     function handleSave() {
+        // Only send the mapping when the types loaded.
+        // Otherwise the save leaves the stored mapping as it is.
+        const mapping =
+            appointmentTypes?.ok
+                ? { appointmentTypeKinds: kindsToSave(kinds, appointmentTypes.types) }
+                : {};
         startTransition(async () => {
             const res = creating
                 ? await createEvent({ code, ...draft })
                 : active
-                  ? await updateEvent(active.code, draft)
+                  ? await updateEvent(active.code, { ...draft, ...mapping })
                   : ({ ok: false, error: "Error: no event selected" } as const);
 
             if (res.ok) {
@@ -258,6 +318,73 @@ export default function EventSettingsForm({ active, hasEvents }: Props) {
                             <span className="adm-field-hint">{f.hint}</span>
                         </label>
                     ))}
+
+                    {/* Appointment types. Each Cvent type maps to a meeting kind.
+                        Only shown when editing an existing event. */}
+                    {!creating && appointmentTypes && (
+                        <div className="adm-field adm-field-mb">
+                            <span className="adm-field-label">
+                                Appointment Types
+                            </span>
+                            <span className="adm-field-hint adm-field-mb">
+                                Map each Cvent appointment type to a meeting
+                                kind. The scheduler only books sponsor meetings
+                                into types mapped to “Sponsor to delegate”. That
+                                is the only mapping needed for now.
+                            </span>
+                            <span className="adm-field-hint adm-field-mb">
+                                The scheduler won’t use slots of a type set to
+                                “Not mapped” or “Ignore”. “Not mapped” also
+                                makes the run report remind you about the type.
+                                “Ignore” means you’ve decided it isn’t used, and
+                                hides that reminder.
+                            </span>
+                            {!appointmentTypes.ok ? (
+                                <div className="adm-modal-warn-at">
+                                    {appointmentTypes.reason}
+                                </div>
+                            ) : appointmentTypes.types.length === 0 ? (
+                                <div className="adm-modal-warn-at">
+                                    Cvent returned no appointment types for this
+                                    event.
+                                </div>
+                            ) : (
+                                appointmentTypeRows(
+                                    appointmentTypes.types,
+                                    kinds,
+                                ).map((row) => (
+                                    <label
+                                        key={row.id}
+                                        className="adm-field adm-field-mb"
+                                    >
+                                        <span className="adm-field-label">
+                                            {row.name}
+                                        </span>
+                                        <select
+                                            className="adm-input adm-select"
+                                            value={row.kind}
+                                            onChange={(e) =>
+                                                setKinds((k) => ({
+                                                    ...k,
+                                                    [row.id]: e.target.value as
+                                                        | MeetingKind
+                                                        | "",
+                                                }))
+                                            }
+                                            disabled={pending}
+                                        >
+                                            <option value="">Not mapped</option>
+                                            {row.options.map((kind) => (
+                                                <option key={kind} value={kind}>
+                                                    {MEETING_KIND_LABEL[kind]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                ))
+                            )}
+                        </div>
+                    )}
 
                     {message && (
                         <div

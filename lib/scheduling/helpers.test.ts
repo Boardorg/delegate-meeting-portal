@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { pairKey, computeMutualPairs, findAvailableTimeslot, withDelegatePreferences, wouldViolateCompanyDiversity, DELEGATE_PREFERENCE_RANK } from './helpers';
+import { pairKey, computeMutualPairs, findAvailableTimeslot, reconcileWithPushed, withDelegatePreferences, wouldViolateCompanyDiversity, DELEGATE_PREFERENCE_RANK } from './helpers';
 import { emptyProfile } from '@/lib/attendees/formatProfile';
 import type { Attendee, MeetingRequest, Timeslot, ScheduledMeeting } from '@/types';
 import type { MeetingKind } from '@/lib/events/meetingKinds';
@@ -158,6 +158,67 @@ describe('findAvailableTimeslot', () => {
     test('returns null when only slots of another kind are free', () => {
         const group = makeTimeslot('ts-group', 1, '09:00', 1, 'delegate_group');
         expect(findAvailableTimeslot([group], 1, new Set(), new Set(), remainingOf([group]), 'sponsor_delegate')).toBeNull();
+    });
+
+    test('only considers the allowed location when one is given', () => {
+        const other = { ...makeTimeslot('ts-other', 1, '09:00', 5), locationId: 'booth-1' };
+        const own = { ...makeTimeslot('ts-own', 1, '10:00', 5), locationId: 'booth-3' };
+        const all = [other, own];
+        expect(findAvailableTimeslot(all, 1, new Map(), new Map(), remainingOf(all), 'sponsor_delegate', { locationId: 'booth-3' })).toEqual(own);
+    });
+
+    test('lets a party with an at-once limit of 2 take a second meeting at a busy start time', () => {
+        const ts = makeTimeslot('ts-1', 1, '09:00', 2);
+        const busyA = new Map([['09:00', 1]]);
+        expect(findAvailableTimeslot([ts], 1, busyA, new Map(), remainingOf([ts]), 'sponsor_delegate', { limitA: 2 })).toEqual(ts);
+        expect(findAvailableTimeslot([ts], 1, busyA, new Map(), remainingOf([ts]), 'sponsor_delegate')).toBeNull();
+    });
+
+    test('never gives the other party a second meeting at the same start time', () => {
+        const ts = makeTimeslot('ts-1', 1, '09:00', 2);
+        const busyB = new Map([['09:00', 1]]);
+        expect(findAvailableTimeslot([ts], 1, new Map(), busyB, remainingOf([ts]), 'sponsor_delegate', { limitA: 2 })).toBeNull();
+    });
+});
+
+describe('reconcileWithPushed', () => {
+    const SLOTS = new Map([
+        ['ts-9a', { startTime: '2026-01-20T09:00:00Z' }],
+        ['ts-9b', { startTime: '2026-01-20T09:00:00Z' }],
+        ['ts-10', { startTime: '2026-01-20T10:00:00Z' }],
+    ]);
+
+    /**
+     * Builds a meeting row.
+     *
+     * @param {string} a - The sponsor company.
+     * @param {string} b - The delegate.
+     * @param {string} timeslotId - The slot.
+     * @returns {{ attendeeA: string; attendeeB: string; timeslotId: string }} The meeting.
+     */
+    const m = (a: string, b: string, timeslotId: string) => ({ attendeeA: a, attendeeB: b, timeslotId });
+
+    test('drops a fresh meeting whose pair is already pushed', () => {
+        const { kept, droppedPairs } = reconcileWithPushed([m('acct-a', 'd1', 'ts-10')], [m('acct-a', 'd1', 'ts-9a')], SLOTS, () => 1);
+        expect(kept).toHaveLength(0);
+        expect([...droppedPairs]).toEqual([pairKey('acct-a', 'd1')]);
+    });
+
+    test('keeps a second same-time meeting for a company that may hold two at once', () => {
+        const atOnce = (p: string) => (p === 'acct-a' ? 2 : 1);
+        const { kept } = reconcileWithPushed([m('acct-a', 'd2', 'ts-9a')], [m('acct-a', 'd1', 'ts-9a')], SLOTS, atOnce);
+        expect(kept).toHaveLength(1);
+    });
+
+    test('drops a fresh meeting that would give a company more than it may hold at once', () => {
+        const { kept } = reconcileWithPushed([m('acct-a', 'd2', 'ts-9b')], [m('acct-a', 'd1', 'ts-9a')], SLOTS, () => 1);
+        expect(kept).toHaveLength(0);
+    });
+
+    test('drops a fresh meeting that would put a delegate in two meetings at once', () => {
+        const atOnce = (p: string) => (p.startsWith('acct') ? 2 : 1);
+        const { kept } = reconcileWithPushed([m('acct-b', 'd1', 'ts-9b')], [m('acct-a', 'd1', 'ts-9a')], SLOTS, atOnce);
+        expect(kept).toHaveLength(0);
     });
 });
 

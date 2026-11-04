@@ -41,12 +41,18 @@ vi.mock("@/lib/cvent/push", () => ({
     pushMeetingRows: vi.fn(),
     needsSync: vi.fn(),
 }));
-// No manual booth mapping, so each sponsor's booth is matched by location name.
+// No manual booth mapping by default, so each sponsor's booth is matched by location name.
+const getEventSettings = vi.fn();
 vi.mock("@/lib/events/settings", () => ({
-    getEventSettings: async () => ({ boothLocations: null }),
+    getEventSettings: (...a: unknown[]) => getEventSettings(...a),
 }));
 
-import { runSchedulerForEvent } from "./actions";
+import {
+    countBoothProblemsForEvent,
+    listSponsorsPage,
+    runSchedulerForEvent,
+} from "./actions";
+import { BOOTH_MAPPING_UNAVAILABLE_MESSAGE } from "@/lib/scheduling/boothData";
 import { NO_ATTENDEES_MESSAGE } from "@/lib/scheduling/helpers";
 import { meetingRequests } from "@/lib/db/schema";
 import {
@@ -89,8 +95,13 @@ function att(
         role: partial.role,
         company: partial.company ?? "",
         title: "",
-        sponsorTier: partial.role === "sponsor" ? "standard" : null,
+        sponsorTier: partial.sponsorTier ?? (partial.role === "sponsor" ? "standard" : null),
+        opportunityId: partial.opportunityId,
         boothNo: partial.boothNo,
+        purchasedMeetings: partial.purchasedMeetings,
+        bonusMeetings: partial.bonusMeetings,
+        maximumMeetings: partial.maximumMeetings,
+        meetingsAtOnce: partial.meetingsAtOnce,
         profile: emptyProfile(),
         scheduling: {
             maxSameCompanyMeetings: partial.role === "sponsor" ? null : 2,
@@ -164,6 +175,7 @@ beforeEach(() => {
     vi.stubEnv("USE_MOCK", "false");
     dbDelete.mockReturnValue({ where: async () => undefined });
     dbInsert.mockReturnValue({ values: insertValues });
+    getEventSettings.mockResolvedValue({ boothLocations: null });
     loadAttendees.mockResolvedValue([
         att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1" }),
         att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
@@ -281,5 +293,88 @@ describe("runSchedulerForEvent — attendees didn't load", () => {
         expect(result.ok).toBe(true);
         expect(dbDelete).toHaveBeenCalledTimes(1);
         expect(insertValues).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("runSchedulerForEvent — booths", () => {
+    test("stops and changes nothing when the booth mapping can't be read", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        getEventSettings.mockRejectedValue(new Error("db down"));
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result).toEqual({ ok: false, error: BOOTH_MAPPING_UNAVAILABLE_MESSAGE });
+        expect(dbDelete).not.toHaveBeenCalled();
+        expect(dbInsert).not.toHaveBeenCalled();
+    });
+
+    test("gives a sponsor with no booth no meetings and lists it in the report", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme" }),
+            att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
+        ]);
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.report.meetingsScheduled).toBe(0);
+        expect(result.report.unscheduledRequests.map((u) => u.reason)).toEqual(["no_booth"]);
+        expect(result.report.boothProblems.map((p) => [p.company, p.problem])).toEqual([["Acme", "no_booth"]]);
+    });
+
+    test("uses the manual mapping from Event settings", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        // Acme's booth number 7 matches nothing by name, but is mapped to loc-1 by hand.
+        getEventSettings.mockResolvedValue({ boothLocations: { "7": "loc-1" } });
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "7" }),
+            att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
+        ]);
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok && result.report.meetingsScheduled).toBe(1);
+    });
+});
+
+describe("countBoothProblemsForEvent", () => {
+    test("counts the companies with a booth problem, for the warning before a run", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1" }),
+            att({ salesforceId: "s2", role: "sponsor", accountId: "acct-beta", company: "Beta" }),
+            att({ salesforceId: "s3", role: "sponsor", accountId: "acct-gamma", company: "Gamma", boothNo: "99" }),
+        ]);
+
+        expect(await countBoothProblemsForEvent("EVT")).toBe(2);
+    });
+
+    test("returns null when the booths can't be checked", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        getEventSettings.mockRejectedValue(new Error("db down"));
+
+        expect(await countBoothProblemsForEvent("EVT")).toBeNull();
+    });
+});
+
+describe("listSponsorsPage — Salesforce meeting counts", () => {
+    test("shows purchased, bonus and maximum with the scheduler's rule, including the tier fallback", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", purchasedMeetings: 3, bonusMeetings: 2 }),
+            att({ salesforceId: "s2", role: "sponsor", accountId: "acct-beta", company: "Beta", purchasedMeetings: 4, maximumMeetings: 6 }),
+            att({ salesforceId: "s3", role: "sponsor", accountId: "acct-dia", company: "Diamond Co", sponsorTier: "diamond" }),
+            att({ salesforceId: "s4", role: "sponsor", accountId: "acct-exh", company: "Exhibitor", purchasedMeetings: 0 }),
+        ]);
+
+        const page = await listSponsorsPage({ eventCode: "EVT", sortDir: "asc" });
+        const byCompany = new Map(page.rows.map((r) => [r.company, r]));
+
+        expect(byCompany.get("Acme")).toMatchObject({ purchased: 3, bonus: 2, maximum: 5, maximumFromTier: false, requestCount: 1 });
+        expect(byCompany.get("Beta")).toMatchObject({ purchased: 4, bonus: null, maximum: 6, maximumFromTier: false });
+        expect(byCompany.get("Diamond Co")).toMatchObject({ purchased: null, bonus: null, maximum: 8, maximumFromTier: true });
+        expect(byCompany.get("Exhibitor")).toMatchObject({ purchased: 0, maximum: 0, maximumFromTier: false });
     });
 });

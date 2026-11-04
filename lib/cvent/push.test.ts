@@ -611,3 +611,79 @@ describe("appointmentCode", () => {
         expect(lastInput().code).toBe(`mtg-1-${lastPushedAt.getTime()}`);
     });
 });
+
+describe("pushMeetingRows — reps split across same-time meetings", () => {
+    beforeEach(() => {
+        createAppointment.mockImplementation(async (_e: string, input: { code: string }) => `appt-${input.code}`);
+        // Three reps who can host, listed out of Salesforce id order.
+        loadAttendees.mockResolvedValue([
+            att({ id: "s3", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h3" }),
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "s2", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h2" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+            att({ id: "d2", role: "delegate", salesforceId: "d2-sf", cventContactId: "cd2" }),
+        ]);
+    });
+
+    /**
+     * Reads the hosts of each createAppointment call, keyed by appointment code.
+     *
+     * @returns {Map<string, string[]>} The hosts per meeting code.
+     */
+    function hostsByCode(): Map<string, string[]> {
+        return new Map(
+            createAppointment.mock.calls.map((c) => [
+                c[1].code as string,
+                [...(c[1].hostContactIds as string[])],
+            ]),
+        );
+    }
+
+    test("one meeting at a start time is pushed with every rep who can host", async () => {
+        const summary = await pushMeetingRows("EVT", [row({ id: "m-a" })]);
+
+        expect(summary.pushed).toBe(1);
+        expect([...lastInput().hostContactIds].sort()).toEqual(["h1", "h2", "h3"]);
+    });
+
+    test("two meetings at the same start time split three reps, with no rep on both", async () => {
+        const rows = [
+            row({ id: "m-b", attendeeB: "d2-sf" }),
+            row({ id: "m-a", attendeeB: "d1-sf" }),
+        ];
+
+        const summary = await pushMeetingRows("EVT", rows);
+
+        expect(summary.pushed).toBe(2);
+        const hosts = hostsByCode();
+        expect(hosts.get("m-a")).toEqual(["h1", "h3"]);
+        expect(hosts.get("m-b")).toEqual(["h2"]);
+        expect(summary.results.every((r) => r.warning?.includes("split"))).toBe(true);
+    });
+
+    test("pushing again gives the same split, counting the meeting that is already pushed", async () => {
+        // m-a was pushed earlier. Only m-b is pushed now, with every portal meeting passed in.
+        const pushedA = row({ id: "m-a", attendeeB: "d1-sf", cventAppointmentId: "appt-m-a" });
+        const freshB = row({ id: "m-b", attendeeB: "d2-sf" });
+
+        await pushMeetingRows("EVT", [freshB], [pushedA, freshB]);
+
+        expect(hostsByCode().get("m-b")).toEqual(["h2"]);
+    });
+
+    test("a meeting with no rep left to host fails instead of double-booking a rep", async () => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+            att({ id: "d2", role: "delegate", salesforceId: "d2-sf", cventContactId: "cd2" }),
+        ]);
+
+        const summary = await pushMeetingRows("EVT", [
+            row({ id: "m-a", attendeeB: "d1-sf" }),
+            row({ id: "m-b", attendeeB: "d2-sf" }),
+        ]);
+
+        expect(summary.pushed).toBe(1);
+        expect(summary.results.find((r) => r.meetingId === "m-b")?.reason).toBe("host_not_in_cvent");
+    });
+});

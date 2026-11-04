@@ -62,6 +62,36 @@ describe("preexistingFromAppointments", () => {
         );
     });
 
+    test("counts each of a company's appointments at the same start time", () => {
+        // Two appointments at 09:00, each hosted by a different rep of one company.
+        const attendees = [
+            att({ id: "s1", role: "sponsor", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "s2", role: "sponsor", accountId: "acct-acme", cventContactId: "h2" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+            att({ id: "d2", role: "delegate", salesforceId: "d2-sf", cventContactId: "cd2" }),
+        ];
+        const appointments = [
+            { startTime: "2025-01-15T09:00:00Z", participantContactIds: ["h1", "cd1"] },
+            { startTime: "2025-01-15T09:00:00Z", participantContactIds: ["h2", "cd2"] },
+            { startTime: "2025-01-15T10:00:00Z", participantContactIds: ["h1", "h2", "cd1"] },
+        ];
+
+        const { busyStartTimesByAttendee } = preexistingFromAppointments(appointments, attendees);
+
+        expect(busyStartTimesByAttendee?.get("acct-acme")).toEqual(
+            new Map([
+                ["2025-01-15T09:00:00Z", 2],
+                ["2025-01-15T10:00:00Z", 1],
+            ]),
+        );
+        expect(busyStartTimesByAttendee?.get("d1-sf")).toEqual(
+            new Map([
+                ["2025-01-15T09:00:00Z", 1],
+                ["2025-01-15T10:00:00Z", 1],
+            ]),
+        );
+    });
+
     test("ignores participants that don't map to a known attendee", () => {
         const attendees = [
             att({ id: "s1", role: "sponsor", accountId: "acct-acme", cventContactId: "h1" }),

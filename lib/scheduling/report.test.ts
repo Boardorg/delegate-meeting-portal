@@ -126,3 +126,80 @@ describe("buildSchedulerReport — unmapped appointment types", () => {
         expect(reportWith(undefined).unmappedAppointmentTypes).toEqual([]);
     });
 });
+
+describe("buildSchedulerReport — booth problems", () => {
+    // Every booth problem, each tried on its own.
+    const PROBLEMS = [
+        "no_booth",
+        "booth_not_found",
+        "booth_conflict",
+        "multiple_opportunities",
+        "no_package_meetings",
+    ] as const;
+
+    /**
+     * Builds the report for one request from a company with one booth problem.
+     *
+     * @param {(typeof PROBLEMS)[number]} problem - The company's booth problem.
+     * @returns The report.
+     */
+    function reportFor(problem: (typeof PROBLEMS)[number]) {
+        return buildSchedulerReport({
+            eventCode: "EVT",
+            generatedAt: "2025-01-01T00:00:00Z",
+            attendees: [
+                att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme" }),
+                att({ salesforceId: "d1", role: "delegate" }),
+            ],
+            requests: [request],
+            reconciled: [],
+            skipReasons: new Map(),
+            reconciledOutPairs: new Set(),
+            preexistingPairs: new Set(),
+            companyBooths: new Map([
+                [
+                    "acct-acme",
+                    {
+                        accountId: "acct-acme",
+                        boothNo: "3",
+                        location: null,
+                        source: null,
+                        manualLocationId: null,
+                        automaticLocation: null,
+                        problems: [problem],
+                    },
+                ],
+            ]),
+        });
+    }
+
+    test.each(PROBLEMS)("gives %s as the reason for the company's requests", (problem) => {
+        expect(reportFor(problem).unscheduledRequests[0].reason).toBe(problem);
+    });
+
+    test("lists the company and its problem", () => {
+        expect(reportFor("no_booth").boothProblems).toEqual([
+            {
+                accountId: "acct-acme",
+                company: "Acme",
+                boothNo: "3",
+                problem: "no_booth",
+                problems: ["no_booth"],
+            },
+        ]);
+    });
+
+    test("lists no booth problems when the caller passes no booths", () => {
+        const report = buildSchedulerReport({
+            eventCode: "EVT",
+            generatedAt: "2025-01-01T00:00:00Z",
+            attendees: [],
+            requests: [],
+            reconciled: [],
+            skipReasons: new Map(),
+            reconciledOutPairs: new Set(),
+            preexistingPairs: new Set(),
+        });
+        expect(report.boothProblems).toEqual([]);
+    });
+});

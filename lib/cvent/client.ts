@@ -442,8 +442,8 @@ async function fetchAppointmentsPage(
 /**
  * Lists every appointment for an event, following pagination to the end.
  * Used to resolve a synced meeting's display time and location from the
- * appointment itself, since listAvailableTimes/listLocations only reflect
- * currently open capacity and stop including a slot once it's fully booked.
+ * appointment itself, since a slot in listAvailableTimes/listLocations can't say which appointment holds it.
+ * Full slots are still listed, and availableAppointments is the location's max-at-same-time setting, not the room left.
  *
  * Push also uses it to read an existing appointment's type before editing it in place.
  * Cvent's get-appointment call returns 404 for appointments that do exist, so the list is the only reliable source.
@@ -731,6 +731,10 @@ async function fetchExistingAppointmentsPage(
  * contact ids), following pagination to the end. The scheduling engine uses
  * these to avoid re-booking a pair that already meets, or putting an attendee
  * in a time they're already booked. Deleted appointments are skipped.
+ *
+ * Each appointment also carries its `id`, its `hostContactIds` and its `locationName`.
+ * Push's busy-host lookup uses the ids and hosts to leave off reps already hosting at that time.
+ * The scheduler uses the hosts the same way, and the location name to take existing appointments off a slot's room.
  *
  * Mock mode reads the optional data/mock/cvent/appointments.json fixture (raw
  * Cvent appointment records) so reconciliation — including multi-host

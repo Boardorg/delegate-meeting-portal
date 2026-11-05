@@ -563,4 +563,19 @@ describe('runScheduler — existing Cvent appointments', () => {
         const open = await run(attendees, requestsFrom('acct-a', ds), [isoSlot('b1', T9, 2)]);
         expect(open.schedule).toHaveLength(2);
     });
+
+    test("without Cvent's appointment list, pushed meetings come off their timeslot's room", async () => {
+        const a = [
+            sponsor('s1', 'acct-a', { boothNo: '1', meetingsAtOnce: 2 }),
+            sponsor('s2', 'acct-a', { boothNo: '1', meetingsAtOnce: 2 }),
+        ];
+        const ds = delegates(1);
+        const timeslots = [isoSlot('b1', T9, 1)];
+
+        const { schedule } = await run([...a, ...ds], requestsFrom('acct-a', ds), timeslots, null, {
+            bookedByTimeslotId: new Map([[timeslots[0].id, 1]]),
+        });
+
+        expect(schedule).toHaveLength(0);
+    });
 });

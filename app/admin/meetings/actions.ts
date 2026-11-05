@@ -392,6 +392,16 @@ export async function runSchedulerForEvent(
         countMeetingsByParty(pushedRows),
     );
 
+    // When Cvent's appointment list couldn't be read, a slot's room can't be matched by location name.
+    // The pushed meetings in each timeslot are taken off its room instead.
+    if (!preexisting.bookedBySlot) {
+        const byTimeslot = new Map<string, number>();
+        for (const r of pushedRows) {
+            byTimeslot.set(r.timeslotId, (byTimeslot.get(r.timeslotId) ?? 0) + 1);
+        }
+        preexisting.bookedByTimeslotId = byTimeslot;
+    }
+
     // Run the engine. It avoids the pre-existing Cvent pairs/times; pushed DB
     // meetings are additionally guarded via post-reconciliation below.
     //

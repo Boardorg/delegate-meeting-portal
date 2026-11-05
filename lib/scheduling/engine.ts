@@ -297,6 +297,9 @@ export interface PreexistingSchedule {
 	/** How many Cvent appointments are at each location and start time, keyed by slotRoomKey.
 	 *  A slot's room is its Cvent capacity minus these, since availableAppointments is the static setting. */
 	bookedBySlot?: Map<string, number>;
+	/** How many pushed portal meetings are in each timeslot, keyed by timeslot id.
+	 *  Only used when `bookedBySlot` is missing, because Cvent's appointment list couldn't be read. */
+	bookedByTimeslotId?: Map<string, number>;
 }
 
 /**
@@ -510,8 +513,12 @@ export async function runScheduler(
 	// location and time are taken off first. Appointments carry only a location name.
 	const locationNameById = new Map(locations.map(l => [l.id, l.name]));
 	const timeslotRemaining = new Map(timeslots.map(t => {
+		// Without Cvent's appointment list, the pushed meetings in each timeslot are taken off instead.
+		if (!preexisting.bookedBySlot) {
+			return [t.id, t.capacity - (preexisting.bookedByTimeslotId?.get(t.id) ?? 0)];
+		}
 		const name = t.locationId ? locationNameById.get(t.locationId) : undefined;
-		const booked = name ? (preexisting.bookedBySlot?.get(slotRoomKey(name, t.startTime)) ?? 0) : 0;
+		const booked = name ? (preexisting.bookedBySlot.get(slotRoomKey(name, t.startTime)) ?? 0) : 0;
 		return [t.id, t.capacity - booked];
 	}));
 

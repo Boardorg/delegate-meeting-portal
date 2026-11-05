@@ -33,8 +33,10 @@ vi.mock("@/lib/attendees/loader", () => ({
 vi.mock("@/lib/cvent/mapper", () => ({
     loadEventScheduleData: (...a: unknown[]) => loadEventScheduleData(...a),
 }));
+// The event's Cvent appointments. None by default.
+const getEventAppointments = vi.fn();
 vi.mock("@/lib/cvent/client", () => ({
-    getEventAppointments: async () => [],
+    getEventAppointments: (...a: unknown[]) => getEventAppointments(...a),
     cancelAppointment: vi.fn(),
 }));
 vi.mock("@/lib/cvent/push", () => ({
@@ -72,10 +74,11 @@ function meetingRequestsTable(): unknown {
 // Meetings already pushed to Cvent, as scheduled_meetings rows. None by default.
 let PUSHED: { attendeeA: string; attendeeB: string; timeslotId: string; cventAppointmentId: string }[] = [];
 
-// One sponsor request from Acme to Dee.
-const REQUESTS = [
+// One sponsor request from Acme to Dee by default.
+const ONE_REQUEST = [
     { id: 1, requesterId: "acct-acme", targetId: "d1", rank: 5, eventCode: "EVT" },
 ];
+let REQUESTS = ONE_REQUEST;
 
 /**
  * Minimal attendee builder.
@@ -88,7 +91,7 @@ function att(
 ): Attendee {
     return {
         id: partial.salesforceId,
-        cventContactId: "",
+        cventContactId: partial.cventContactId ?? "",
         cventCancelled: partial.cventCancelled,
         salesforceId: partial.salesforceId,
         accountId: partial.accountId ?? "",
@@ -179,7 +182,9 @@ beforeEach(() => {
     dbDelete.mockReturnValue({ where: async () => undefined });
     dbInsert.mockReturnValue({ values: insertValues });
     getEventSettings.mockResolvedValue({ boothLocations: null });
+    getEventAppointments.mockResolvedValue([]);
     PUSHED = [];
+    REQUESTS = ONE_REQUEST;
     loadAttendees.mockResolvedValue([
         att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1" }),
         att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
@@ -365,6 +370,62 @@ describe("runSchedulerForEvent — existing meetings count toward the maximum", 
         if (!result.ok) return;
         expect(result.report.meetingsScheduled).toBe(0);
         expect(result.report.unscheduledRequests.map((u) => u.reason)).toEqual(["cap_reached"]);
+    });
+});
+
+describe("runSchedulerForEvent — pushed meetings listed in both Cvent and the DB", () => {
+    test("counts them once, so a maximum of 5 with 3 pushed books 2 more", async () => {
+        const kinds: AppointmentTypeKinds = { "t-s2d": "sponsor_delegate" };
+        const times = ["2026-01-20T10:00:00Z", "2026-01-20T11:00:00Z", "2026-01-20T12:00:00Z"];
+        scheduleWith(kinds, times.map((t, i) => slot(`ts-${i}`, t, "t-s2d", kinds)));
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1", maximumMeetings: 5, cventContactId: "h-acme" }),
+            ...["d1", "d2", "d3"].map((id) => att({ salesforceId: id, role: "delegate" })),
+        ]);
+        REQUESTS = ["d1", "d2", "d3"].map((d, i) => ({ id: i + 1, requesterId: "acct-acme", targetId: d, rank: 5, eventCode: "EVT" }));
+
+        // The same 3 pushed meetings, as DB rows and as Cvent appointments, at times the run doesn't use.
+        PUSHED = [0, 1, 2].map((i) => ({
+            attendeeA: "acct-acme",
+            attendeeB: `d-old-${i}`,
+            timeslotId: `old-${i}`,
+            cventAppointmentId: `appt-${i}`,
+        }));
+        getEventAppointments.mockResolvedValue(
+            [0, 1, 2].map((i) => ({
+                id: `appt-${i}`,
+                startTime: `2026-01-20T0${i + 6}:00:00Z`,
+                participantContactIds: ["h-acme", `cd-old-${i}`],
+                hostContactIds: ["h-acme"],
+                locationName: "Booth 1",
+            })),
+        );
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok && result.report.meetingsScheduled).toBe(2);
+    });
+});
+
+describe("runSchedulerForEvent — Cvent's appointment list can't be read", () => {
+    test("takes pushed meetings off their slot's room, so a full 1-per-slot booth gets no second meeting", async () => {
+        const kinds: AppointmentTypeKinds = { "t-s2d": "sponsor_delegate" };
+        // One slot at Booth 1, 1 per slot, already holding a pushed Acme meeting.
+        scheduleWith(kinds, [{ ...slot("ts-s2d", "2026-01-20T10:00:00Z", "t-s2d", kinds), capacity: 1 }]);
+        getEventAppointments.mockRejectedValue(new Error("Cvent down"));
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1", meetingsAtOnce: 2, cventContactId: "h1" }),
+            att({ salesforceId: "s2", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1", meetingsAtOnce: 2, cventContactId: "h2" }),
+            att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
+        ]);
+        PUSHED = [{ attendeeA: "acct-acme", attendeeB: "d-old", timeslotId: "ts-s2d", cventAppointmentId: "appt-old" }];
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.report.meetingsScheduled).toBe(0);
+        expect(result.report.unscheduledRequests.map((u) => u.reason)).toEqual(["no_availability"]);
     });
 });
 

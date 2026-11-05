@@ -189,7 +189,12 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
     const isCancelled = (id: string): boolean =>
         isPartyCancelled(id, companies, attendeesBySalesforceId);
 
-    // The booth or package problem that stops a sponsor company's meetings, if any.
+    /**
+     * The booth or package problem that stops a sponsor company's meetings, if any.
+     *
+     * @param {string} id - The party id.
+     * @returns {BoothProblem | null} The company's first problem, or null.
+     */
     const boothProblemOf = (id: string): BoothProblem | null =>
         primaryBoothProblem(companyBooths.get(id));
 
@@ -299,9 +304,9 @@ function listBoothProblems(
 
 /**
  * Determines why a single unscheduled request failed, in precedence order:
- * dropped-in-reconciliation → a sponsor company's booth or package problem →
- * engine-recorded skip → collection-phase reason
- * (self-request / non-attendee / no matching pass). The last three mirror the
+ * dropped-in-reconciliation → engine-recorded skip → collection-phase reason
+ * (self-request / non-attendee / already meets in Cvent) → a sponsor company's
+ * booth or package problem → no matching pass. The collection-phase ones mirror the
  * `continue` branches the engine takes while collecting candidates, before any
  * skip reason is recorded — so they're reconstructed here from the request and
  * attendee data rather than reported by the engine.
@@ -335,12 +340,6 @@ function classifyUnscheduled(
     // Placed by the engine, then dropped for conflicting with a pushed meeting.
     if (reconciledOutPairs.has(pair)) return "conflict_existing";
 
-    // A sponsor company with a booth or package problem gets no meetings at all.
-    // That is the reason even when the pair matched no pass.
-    const boothProblem =
-        boothProblemOf(req.requesterId) ?? boothProblemOf(req.targetId);
-    if (boothProblem) return boothProblem;
-
     // The engine attempted the pair but couldn't place it (cap / availability /
     // company diversity).
     const skip = skipReasons.get(pair);
@@ -359,5 +358,13 @@ function classifyUnscheduled(
     }
     if (req.requesterId === req.targetId) return "self_request";
     if (preexistingPairs.has(pair)) return "already_scheduled";
+
+    // A sponsor company with a booth or package problem gets no meetings at all.
+    // That is the reason even when the pair matched no pass.
+    // A pair the engine attempted already carries it as its skip reason.
+    const boothProblem =
+        boothProblemOf(req.requesterId) ?? boothProblemOf(req.targetId);
+    if (boothProblem) return boothProblem;
+
     return "no_pass_match";
 }

@@ -2,6 +2,7 @@ import { describe, test, expect } from "vitest";
 import type { Attendee, MeetingRequest } from "@/types";
 import { emptyProfile } from "@/lib/attendees/formatProfile";
 import { buildSchedulerReport } from "./report";
+import { pairKey } from "./helpers";
 
 /**
  * Builds a minimal attendee for report tests.
@@ -141,9 +142,10 @@ describe("buildSchedulerReport — booth problems", () => {
      * Builds the report for one request from a company with one booth problem.
      *
      * @param {(typeof PROBLEMS)[number]} problem - The company's booth problem.
+     * @param {Set<string>} [preexistingPairs] - Pairs that already meet in Cvent. Defaults to none.
      * @returns The report.
      */
-    function reportFor(problem: (typeof PROBLEMS)[number]) {
+    function reportFor(problem: (typeof PROBLEMS)[number], preexistingPairs = new Set<string>()) {
         return buildSchedulerReport({
             eventCode: "EVT",
             generatedAt: "2025-01-01T00:00:00Z",
@@ -155,7 +157,7 @@ describe("buildSchedulerReport — booth problems", () => {
             reconciled: [],
             skipReasons: new Map(),
             reconciledOutPairs: new Set(),
-            preexistingPairs: new Set(),
+            preexistingPairs,
             companyBooths: new Map([
                 [
                     "acct-acme",
@@ -175,6 +177,11 @@ describe("buildSchedulerReport — booth problems", () => {
 
     test.each(PROBLEMS)("gives %s as the reason for the company's requests", (problem) => {
         expect(reportFor(problem).unscheduledRequests[0].reason).toBe(problem);
+    });
+
+    test("gives already_scheduled ahead of a booth problem when the pair already meets in Cvent", () => {
+        const report = reportFor("no_booth", new Set([pairKey("acct-acme", "d1")]));
+        expect(report.unscheduledRequests[0].reason).toBe("already_scheduled");
     });
 
     test("lists the company and its problem", () => {

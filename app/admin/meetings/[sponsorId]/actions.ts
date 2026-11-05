@@ -84,6 +84,46 @@ function getSyncStatus(m: ScheduledMeetingRow): SyncStatus {
     return "synced";
 }
 
+/** The result of saving a meeting from the Edit or Create Meeting window. */
+export type MeetingSaveResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Checks a meeting save against the sponsor booths.
+ * A sponsor's meeting may not go in another company's booth, even when the window is bypassed.
+ * Both the chosen location and the slot's own location are checked.
+ * When the booths can't be loaded the save is refused, so a meeting can't slip into another booth.
+ *
+ * @param {{ eventCode: string; sponsorId: string; timeslotId: string; locationId: string | null }} params - The save.
+ * @returns {Promise<string | null>} Why the save is refused, or null when it may go ahead.
+ */
+async function otherBoothRefusal(params: {
+    eventCode: string;
+    sponsorId: string;
+    timeslotId: string;
+    locationId: string | null;
+}): Promise<string | null> {
+    const [attendees, scheduleData] = await Promise.all([
+        loadAttendees(false, params.eventCode),
+        loadEventScheduleData(params.eventCode),
+    ]);
+    const booths = await loadCompanyBooths(
+        params.eventCode,
+        attendees,
+        scheduleData.locations,
+    );
+    if (!booths.ok) return booths.error;
+    const filter = sponsorBoothFilter(params.sponsorId, booths.booths);
+    const slotLocationId =
+        scheduleData.timeslotById.get(params.timeslotId)?.locationId ?? null;
+    for (const locationId of [params.locationId, slotLocationId]) {
+        if (isOtherCompanysBooth({ locationId }, filter)) {
+            const name = scheduleData.locationById.get(locationId!)?.name ?? "That location";
+            return `Error: ${name} is another company's booth, so this meeting can't go there.`;
+        }
+    }
+    return null;
+}
+
 /**
  * Builds the booth filter for a sponsor company's Edit and Create Meeting windows.
  * The sponsor's own booth slots come first, and other companies' booths are left out.
@@ -351,14 +391,41 @@ export async function getSlotOptions(params: {
  * edit time for sync status tracking. `day` comes from the chosen timeslot's
  * SlotOption so the stored day stays consistent with the timeslot.
  *
+ * A slot at another company's booth is refused with an error, and nothing is saved.
+ *
  * @param {{ id: string; timeslotId: string; day: 1 | 2; locationId: string | null }} params
+ * @returns {Promise<MeetingSaveResult>} Success, or why nothing was saved.
  */
 export async function editMeeting(params: {
     id: string;
     timeslotId: string;
     day: 1 | 2;
     locationId: string | null;
-}): Promise<void> {
+}): Promise<MeetingSaveResult> {
+    // The meeting's event and company, to check the new slot against the booths.
+    const [meeting] = await db
+        .select({
+            eventCode: scheduledMeetings.eventCode,
+            attendeeA: scheduledMeetings.attendeeA,
+        })
+        .from(scheduledMeetings)
+        .where(
+            and(
+                eq(scheduledMeetings.id, params.id),
+                eq(scheduledMeetings.source, "portal"),
+            ),
+        )
+        .limit(1);
+    if (!meeting) return { ok: false, error: "Error: meeting not found" };
+
+    const refusal = await otherBoothRefusal({
+        eventCode: meeting.eventCode,
+        sponsorId: meeting.attendeeA,
+        timeslotId: params.timeslotId,
+        locationId: params.locationId,
+    });
+    if (refusal) return { ok: false, error: refusal };
+
     await db
         .update(scheduledMeetings)
         .set({
@@ -374,6 +441,7 @@ export async function editMeeting(params: {
             ),
         );
     revalidatePath("/admin/meetings", "layout");
+    return { ok: true };
 }
 
 /**
@@ -597,7 +665,10 @@ export async function getNewMeetingSlots(params: {
  * delegate attendeeB. matchKind is always "admin". The meeting ID is a UUID
  * so it doesn't collide with engine-generated "mtg-NNN" ids.
  *
+ * A slot at another company's booth is refused with an error, and nothing is saved.
+ *
  * @param {{ eventCode: string; sponsorId: string; delegateId: string; timeslotId: string; day: 1 | 2; locationId: string | null }} params
+ * @returns {Promise<MeetingSaveResult>} Success, or why nothing was saved.
  */
 export async function createMeeting(params: {
     eventCode: string;
@@ -606,7 +677,15 @@ export async function createMeeting(params: {
     timeslotId: string;
     day: 1 | 2;
     locationId: string | null;
-}): Promise<void> {
+}): Promise<MeetingSaveResult> {
+    const refusal = await otherBoothRefusal({
+        eventCode: params.eventCode,
+        sponsorId: params.sponsorId,
+        timeslotId: params.timeslotId,
+        locationId: params.locationId,
+    });
+    if (refusal) return { ok: false, error: refusal };
+
     const { randomUUID } = await import("crypto");
     await db.insert(scheduledMeetings).values({
         id: randomUUID(),
@@ -626,4 +705,5 @@ export async function createMeeting(params: {
         lastPushedAt: null,
     });
     revalidatePath("/admin/meetings", "layout");
+    return { ok: true };
 }

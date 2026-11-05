@@ -469,12 +469,17 @@ function EditMeetingModal({
         startTransition(async () => {
             try {
                 setSaveError(null);
-                await editMeeting({
+                const result = await editMeeting({
                     id: meeting.id,
                     timeslotId: opt.timeslotId,
                     day: opt.day,
                     locationId: opt.locationId,
                 });
+                // The server refuses a slot at another company's booth, and says why.
+                if (!result.ok) {
+                    setSaveError(result.error);
+                    return;
+                }
                 onSaved();
             } catch (e) {
                 setSaveError(e instanceof Error ? e.message : "Failed to save.");
@@ -603,7 +608,7 @@ function CreateMeetingModal({
         startTransition(async () => {
             try {
                 setSaveError(null);
-                await createMeeting({
+                const result = await createMeeting({
                     eventCode,
                     sponsorId,
                     delegateId: selected.salesforceId,
@@ -611,6 +616,11 @@ function CreateMeetingModal({
                     day: opt.day,
                     locationId: opt.locationId,
                 });
+                // The server refuses a slot at another company's booth, and says why.
+                if (!result.ok) {
+                    setSaveError(result.error);
+                    return;
+                }
                 onCreated();
             } catch (e) {
                 setSaveError(e instanceof Error ? e.message : "Failed to create meeting.");

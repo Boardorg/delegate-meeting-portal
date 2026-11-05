@@ -103,7 +103,7 @@ export function requestedMeetingsAtOnce(
 /**
  * How many meetings a company may hold at the same start time.
  * It is the smaller of its Diaries value (blank counts as 1) and the number of its reps who can host in Cvent.
- * It is never below 1.
+ * It is never below 1, so a Diaries value of 0 counts as 1 too.
  * A company with no rep who can host still gets one at a time, as before.
  * Push then reports that no rep can host.
  *

@@ -136,4 +136,9 @@ describe("companyMeetingsAtOnce", () => {
         const c = companyOf([rep({ cventContactId: "", meetingsAtOnce: 2 })]);
         expect(companyMeetingsAtOnce(c)).toBe(1);
     });
+
+    test("a Diaries value of 0 counts as 1", () => {
+        const c = companyOf([rep({ salesforceId: "s1", meetingsAtOnce: 0 }), rep({ salesforceId: "s2", meetingsAtOnce: 0 })]);
+        expect(companyMeetingsAtOnce(c)).toBe(1);
+    });
 });

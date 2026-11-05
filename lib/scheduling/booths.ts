@@ -229,6 +229,21 @@ export function countBoothProblems(booths: Map<string, CompanyBooth>): number {
 }
 
 /**
+ * The warning "Run Scheduling Engine" shows before a run, from the count of companies with a booth problem.
+ * The window adds a link to the Sponsor booths page after it.
+ *
+ * @param {number | null} count - How many companies have a booth problem, or null when the booths couldn't be checked.
+ * @returns {string | null} The warning, or null when every company can be scheduled.
+ */
+export function runBoothWarning(count: number | null): string | null {
+    if (count === null) return "The portal couldn't check the sponsor booths.";
+    if (count <= 0) return null;
+    return count === 1
+        ? "1 sponsor has a booth or package problem and will get no meetings."
+        : `${count} sponsors have a booth or package problem and will get no meetings.`;
+}
+
+/**
  * The location ids that are some company's booth.
  * The editor uses it to keep one company's meetings out of another company's booth.
  *
@@ -270,7 +285,7 @@ export function sponsorSlotLocations(
 
 /**
  * A booth's Cvent per-slot limit, the most meetings any of its sponsor slots can take at once.
- * Cvent stops listing a slot once it is fully booked, so this reads the slots still listed.
+ * Cvent's availableAppointments is the location's max-at-same-time setting, not the room left.
  * Null when the location has no listed sponsor slot.
  *
  * @param {string | null | undefined} locationId - The booth's location id.

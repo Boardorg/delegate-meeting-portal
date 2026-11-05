@@ -9,6 +9,7 @@ import {
     primaryBoothProblem,
     resolveBoothLocation,
     resolveCompanyBooths,
+    runBoothWarning,
     sponsorSlotLocations,
     validateBoothMapping,
     withBoothMapping,
@@ -184,6 +185,24 @@ describe("resolveCompanyBooths", () => {
     test("counts the companies with a problem", () => {
         const booths = boothsFor([rep("a", { boothNo: null }), rep("b", { boothNo: "99" }), rep("c", { boothNo: "5" })]);
         expect(countBoothProblems(booths)).toBe(2);
+    });
+});
+
+describe("runBoothWarning", () => {
+    test("says 1 sponsor for a count of exactly 1", () => {
+        expect(runBoothWarning(1)).toBe("1 sponsor has a booth or package problem and will get no meetings.");
+    });
+
+    test("gives the count for more than one", () => {
+        expect(runBoothWarning(3)).toBe("3 sponsors have a booth or package problem and will get no meetings.");
+    });
+
+    test("shows nothing when no company has a problem", () => {
+        expect(runBoothWarning(0)).toBeNull();
+    });
+
+    test("says the booths couldn't be checked when the count is unknown", () => {
+        expect(runBoothWarning(null)).toBe("The portal couldn't check the sponsor booths.");
     });
 });
 

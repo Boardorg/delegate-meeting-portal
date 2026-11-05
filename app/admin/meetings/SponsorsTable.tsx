@@ -31,6 +31,7 @@ import type {
     SponsorsPage,
 } from "./actions";
 import type { SchedulerReport } from "@/lib/scheduling/report";
+import { runBoothWarning } from "@/lib/scheduling/booths";
 import type { SyncReport } from "@/lib/cvent/syncReport";
 
 // ---------------------------------------------------------------------------
@@ -615,6 +616,7 @@ function RunEngineModal({
     onConfirm: () => void;
     onCancel: () => void;
 }) {
+    const boothWarning = runBoothWarning(boothProblemCount);
     return (
         <div className="adm-modal-overlay">
             <div className="adm-modal adm-modal-md">
@@ -626,17 +628,9 @@ function RunEngineModal({
                     preserved and count against per-sponsor caps.
                 </p>
                 {/* Companies with a booth problem get no meetings, so say so before running. */}
-                {boothProblemCount !== null && boothProblemCount > 0 && (
+                {boothWarning && (
                     <div className="adm-modal-warn-at" role="alert">
-                        {boothProblemCount === 1
-                            ? "1 sponsor has a booth or package problem and will get no meetings. "
-                            : `${boothProblemCount} sponsors have a booth or package problem and will get no meetings. `}
-                        See the <Link href="/admin/booths">Sponsor booths</Link> page.
-                    </div>
-                )}
-                {boothProblemCount === null && (
-                    <div className="adm-modal-warn-at" role="alert">
-                        The portal couldn&apos;t check the sponsor booths. See the{" "}
+                        {boothWarning} See the{" "}
                         <Link href="/admin/booths">Sponsor booths</Link> page.
                     </div>
                 )}

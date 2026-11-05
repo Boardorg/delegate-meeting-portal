@@ -7,11 +7,12 @@ import { sponsorSlotLocations } from "@/lib/scheduling/booths";
 import BoothsTable from "./BoothsTable";
 
 // ---------------------------------------------------------------------------
-// /admin/booths — the Sponsor booths page.
+// /admin/booths is the Sponsor booths page.
 //
 // Server component: shows each sponsor company's booth, meeting counts and
 // any problem that stops its meetings, for the active event.
-// Booth numbers and meeting counts are read-only here. Salesforce stays the place to change them.
+// Booth numbers and meeting counts are read-only here.
+// Salesforce stays the place to change them.
 // The only thing an admin edits is which Cvent location a booth number means.
 // ---------------------------------------------------------------------------
 

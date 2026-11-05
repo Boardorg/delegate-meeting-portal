@@ -3,11 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveBoothMapping } from "./actions";
-import type { BoothRow } from "@/lib/scheduling/boothRows";
+import { matchLabel, type BoothRow } from "@/lib/scheduling/boothRows";
 import { BOOTH_PROBLEM_LABEL } from "@/lib/scheduling/booths";
 
 // ---------------------------------------------------------------------------
-// BoothsTable — one row per sponsor company for /admin/booths.
+// BoothsTable shows one row per sponsor company for /admin/booths.
 //
 // Shows the booth and meeting values read from Salesforce, and lets an admin
 // pick which Cvent location a booth number means.
@@ -102,19 +102,6 @@ export default function BoothsTable({
             </div>
         </div>
     );
-}
-
-/**
- * The plain label for where a row's Cvent location came from.
- *
- * @param {BoothRow} row - The row.
- * @returns {string} For example "Manual mapping", "Automatic match" or "No match".
- */
-export function matchLabel(row: BoothRow): string {
-    if (row.matchSource === "manual") return "Manual mapping";
-    if (row.matchSource === "automatic") return "Automatic match";
-    if (row.manualLocationId) return "Manual mapping to a location Cvent no longer has";
-    return "No match";
 }
 
 /**

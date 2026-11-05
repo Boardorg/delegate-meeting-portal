@@ -205,6 +205,12 @@ describe('reconcileWithPushed', () => {
     });
 
     test('keeps a second same-time meeting for a company that may hold two at once', () => {
+        /**
+         * Lets acct-a hold two meetings at once, and everyone else one.
+         *
+         * @param {string} p - The party id.
+         * @returns {number} The at-once limit.
+         */
         const atOnce = (p: string) => (p === 'acct-a' ? 2 : 1);
         const { kept } = reconcileWithPushed([m('acct-a', 'd2', 'ts-9a')], [m('acct-a', 'd1', 'ts-9a')], SLOTS, atOnce);
         expect(kept).toHaveLength(1);
@@ -216,6 +222,12 @@ describe('reconcileWithPushed', () => {
     });
 
     test('drops a fresh meeting that would put a delegate in two meetings at once', () => {
+        /**
+         * Lets every company hold two meetings at once, and each delegate one.
+         *
+         * @param {string} p - The party id.
+         * @returns {number} The at-once limit.
+         */
         const atOnce = (p: string) => (p.startsWith('acct') ? 2 : 1);
         const { kept } = reconcileWithPushed([m('acct-b', 'd1', 'ts-9b')], [m('acct-a', 'd1', 'ts-9a')], SLOTS, atOnce);
         expect(kept).toHaveLength(0);

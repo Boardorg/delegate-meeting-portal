@@ -301,7 +301,7 @@ type ReconcileMeeting = { attendeeA: string; attendeeB: string; timeslotId: stri
 /**
  * The key reconciliation groups a meeting's time by.
  * It is the slot's start time when the slot is known.
- * A pushed meeting's slot can drop out of Cvent's list once it is full, so the slot id stands in then.
+ * A pushed meeting's slot can be missing from Cvent's list, for example after it was removed, so the slot id stands in then.
  *
  * @param {ReconcileMeeting} m - The meeting.
  * @param {Map<string, Pick<Timeslot, 'startTime'>>} timeslotById - The event's timeslots.

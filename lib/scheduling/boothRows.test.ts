@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 import type { Attendee, Location, Timeslot } from "@/types";
 import { emptyProfile } from "@/lib/attendees/formatProfile";
-import { buildBoothRows } from "./boothRows";
+import { buildBoothRows, matchLabel, type BoothRow } from "./boothRows";
 
 // ---------------------------------------------------------------------------
 // The Sponsor booths page rows: one per company, with its values and warnings.
@@ -85,6 +85,33 @@ const ATTENDEES = [
     rep("a5", "acct-match", "Match Made in Heaven [TEST]", { name: "Alejandro Gil", boothNo: "4", cventContactId: "" }),
     rep("a6", "acct-real", "Real Sponsor", { purchasedMeetings: 3 }),
 ];
+
+describe("matchLabel", () => {
+    test("names each of the four ways a row's location can come out", () => {
+        expect(matchLabel({ matchSource: "manual", manualLocationId: "b5" } as BoothRow)).toBe("Manual mapping");
+        expect(matchLabel({ matchSource: "automatic", manualLocationId: null } as BoothRow)).toBe("Automatic match");
+        expect(matchLabel({ matchSource: null, manualLocationId: "gone" } as BoothRow)).toBe(
+            "Manual mapping to a location Cvent no longer has",
+        );
+        expect(matchLabel({ matchSource: null, manualLocationId: null } as BoothRow)).toBe("No match");
+    });
+
+    test("labels real rows, including a stale manual mapping and a booth with no match", () => {
+        const rows = buildBoothRows(
+            [
+                rep("r1", "acct-stale", "Stale", { boothNo: "3" }),
+                rep("r2", "acct-none", "None", { boothNo: "99" }),
+            ],
+            LOCATIONS,
+            TIMESLOTS,
+            { "3": "loc-gone" },
+        );
+        expect(rows.map((r) => [r.company, matchLabel(r)])).toEqual([
+            ["None", "No match"],
+            ["Stale", "Manual mapping to a location Cvent no longer has"],
+        ]);
+    });
+});
 
 describe("buildBoothRows", () => {
     const rows = buildBoothRows(ATTENDEES, LOCATIONS, TIMESLOTS, { "3": "b5" });

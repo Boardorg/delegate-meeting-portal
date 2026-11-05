@@ -62,7 +62,8 @@ export async function saveBoothMapping(params: {
     if (!valid.ok) return valid;
     const boothNo = valid.boothNo;
 
-    // Set or remove one key. An empty mapping is stored as SQL NULL.
+    // Set or remove one key.
+    // An empty mapping is stored as SQL NULL.
     const current = sql`coalesce(${eventSettings.boothLocations}, '{}'::jsonb)`;
     const next =
         params.locationId === null

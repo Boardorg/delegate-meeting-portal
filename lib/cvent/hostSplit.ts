@@ -38,7 +38,7 @@ export function freeReps(
  * Whether two meetings are at the same time.
  * Meetings in the same timeslot always are.
  * Otherwise both start times must be known and equal.
- * Cvent stops listing a slot once it is full, so a pushed meeting's slot may be unknown.
+ * A pushed meeting's slot may be missing from Cvent's list, for example after it was removed.
  *
  * @param {SplitMeeting} a - One meeting.
  * @param {SplitMeeting} b - The other meeting.

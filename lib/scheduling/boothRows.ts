@@ -22,7 +22,8 @@ import {
 // Rows for the Sponsor booths admin page.
 //
 // Pure, so the page's values and warnings can be tested without Salesforce, Cvent or the DB.
-// Booth numbers and meeting counts are read-only here. Salesforce stays the place to change them.
+// Booth numbers and meeting counts are read-only here.
+// Salesforce stays the place to change them.
 // ---------------------------------------------------------------------------
 
 /** One rep on a booths page row. */
@@ -73,6 +74,19 @@ export type BoothRow = {
     /** Plain warnings that don't stop the company's meetings. */
     warnings: string[];
 };
+
+/**
+ * The plain label for where a row's Cvent location came from.
+ *
+ * @param {BoothRow} row - The row.
+ * @returns {string} For example "Manual mapping", "Automatic match" or "No match".
+ */
+export function matchLabel(row: BoothRow): string {
+    if (row.matchSource === "manual") return "Manual mapping";
+    if (row.matchSource === "automatic") return "Automatic match";
+    if (row.manualLocationId) return "Manual mapping to a location Cvent no longer has";
+    return "No match";
+}
 
 /**
  * Builds the warnings for one row.

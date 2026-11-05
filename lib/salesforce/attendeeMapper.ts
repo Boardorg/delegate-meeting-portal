@@ -339,9 +339,9 @@ export const attendeeFieldMappers: AttendeeFieldMappers<MeetingDataRecord> = {
         const packageLabel = record.Registration__r?.Sponsorship_Package__c;
         let packageType: SponsorTier = null;
         if (typeof packageLabel == "string") {
-            packageLabel.toLowerCase().includes("diamond")
-                ? (packageType = "diamond")
-                : (packageType = "standard");
+            packageType = packageLabel.toLowerCase().includes("diamond")
+                ? "diamond"
+                : "standard";
         }
         return packageType;
     },

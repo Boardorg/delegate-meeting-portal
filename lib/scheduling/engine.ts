@@ -150,7 +150,7 @@ const PASSES: PassConfig[] = [
         diamondSpilloverDay: 2,
         delegateCap: 3,
         sponsorCap: (max) => sponsorPassCap(max, SPONSOR_PASS_SHARES[2]),
-        filter: (req, tgt, rank, _mutual) =>
+        filter: (req, tgt, rank) =>
             req.role === "sponsor" && tgt.role === "delegate" && rank >= 4,
     },
     {
@@ -162,7 +162,7 @@ const PASSES: PassConfig[] = [
         diamondSpilloverDay: 2,
         delegateCap: 4,
         sponsorCap: (max) => sponsorPassCap(max, SPONSOR_PASS_SHARES[3]),
-        filter: (req, tgt, rank, _mutual) =>
+        filter: (req, tgt, rank) =>
             req.role === "delegate" && tgt.role === "sponsor" && rank >= 4,
     },
     {
@@ -188,7 +188,7 @@ const PASSES: PassConfig[] = [
         diamondSpilloverDay: 2,
         delegateCap: 7,
         sponsorCap: (max) => sponsorPassCap(max, SPONSOR_PASS_SHARES[5]),
-        filter: (req, tgt, _rank, _mutual) =>
+        filter: (req, tgt) =>
             req.role === "sponsor" && tgt.role === "delegate",
     },
     {
@@ -208,7 +208,7 @@ const PASSES: PassConfig[] = [
         kind: "delegate_delegate",
         delegateCap: 2,
         sponsorCap: () => 0,
-        filter: (req, tgt, _rank, _mutual) =>
+        filter: (req, tgt) =>
             req.role === "delegate" && tgt.role === "delegate",
     },
 ];

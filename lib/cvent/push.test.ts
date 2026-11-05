@@ -729,6 +729,18 @@ describe("pushMeetingRows — reps split across same-time meetings", () => {
         expect(summary.results[0].warning).toContain("already hosts another Cvent appointment");
     });
 
+    test("still pushes, splitting among every rep, when Cvent's appointment list can't be read", async () => {
+        getEventAppointments.mockRejectedValue(new Error("Cvent down"));
+        // m-a is already pushed. Without the list, it still takes part in the split.
+        const pushedA = row({ id: "m-a", attendeeB: "d1-sf", cventAppointmentId: "appt-m-a" });
+        const freshB = row({ id: "m-b", attendeeB: "d2-sf" });
+
+        const summary = await pushMeetingRows("EVT", [freshB], [pushedA, freshB]);
+
+        expect(summary.pushed).toBe(1);
+        expect(hostsByCode().get("m-b")).toEqual(["h2"]);
+    });
+
     test("re-pushing a meeting doesn't count its own old appointment's hosts as busy", async () => {
         createAppointment.mockResolvedValue("appt-new");
         getEventAppointments.mockResolvedValue([

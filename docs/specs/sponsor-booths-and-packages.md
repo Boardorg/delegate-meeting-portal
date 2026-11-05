@@ -218,3 +218,15 @@ The three NALES test sponsors are set up in Salesforce for this:
 5. Check the database for requests and meetings stored under the old company ids that decision 1 removes. At NALES these are the Contact accounts of the 7 reps above. Move each one to its Opportunity's account id or delete it before deploy. A person runs this, with read-only checks first.
 6. Deploy.
 7. Unpush the sponsor meetings already in Cvent at the wrong booth (Booth 1 and Booth 13), re-run the scheduler, then push.
+
+## Changes after review
+
+Decided by Peter on 2026-11-04, after review and verification.
+
+- **Existing meetings count toward the maximum.** Before a run books anything, a company's count starts from its meetings already pushed and its other appointments in Cvent. A company with a maximum of 5 and 5 pushed meetings gets no new ones. The run window text that says pushed meetings count against caps becomes true.
+- **New meetings only get reps who are free.** Push gives a meeting only reps who are not already hosting another appointment at that time in Cvent. Existing appointments are never changed to free up a rep. The scheduler only books a company's second or later meeting at a start time when at least one rep who can host is free then.
+- **A company with no reps who can host still gets one meeting at a time.** Diaries of 0 also counts as 1. The meetings are scheduled, and push reports `host_not_in_cvent` for them.
+- **A slot's room subtracts appointments already in Cvent.** Cvent's `availableAppointments` is the booth's "Max. appointments allowed at same time" setting, not the room left, and Cvent lists full slots. Checked live on 2026-11-04.
+- **The server refuses a meeting at another company's booth.** Saving one from the Edit or Create Meeting window returns an error, even if the window is bypassed.
+- **An Opportunity with no account groups its reps by the Opportunity id.** None existed in any active event on 2026-11-04.
+- **The run report gives `already_scheduled` ahead of booth problems.**

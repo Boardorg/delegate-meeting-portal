@@ -216,6 +216,39 @@ export async function countBoothProblemsForEvent(
 }
 
 /**
+ * Counts each party's meetings, from both sides of each meeting.
+ *
+ * @param {{ attendeeA: string; attendeeB: string }[]} rows - The meetings.
+ * @returns {Map<string, number>} The count per party id.
+ */
+function countMeetingsByParty(
+    rows: { attendeeA: string; attendeeB: string }[],
+): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+        counts.set(r.attendeeA, (counts.get(r.attendeeA) ?? 0) + 1);
+        counts.set(r.attendeeB, (counts.get(r.attendeeB) ?? 0) + 1);
+    }
+    return counts;
+}
+
+/**
+ * Merges two counts per party, keeping the larger one for each.
+ *
+ * @param {Map<string, number> | undefined} a - One count, such as Cvent's.
+ * @param {Map<string, number>} b - The other count, such as the pushed DB rows.
+ * @returns {Map<string, number>} The larger count per party.
+ */
+function largerCounts(
+    a: Map<string, number> | undefined,
+    b: Map<string, number>,
+): Map<string, number> {
+    const out = new Map(a ?? []);
+    for (const [party, n] of b) out.set(party, Math.max(out.get(party) ?? 0, n));
+    return out;
+}
+
+/**
  * Builds the engine's pre-existing schedule from the event's current Cvent
  * appointments. Wraps preexistingFromAppointments (which maps participant
  * contact ids to party ids) around the Cvent fetch, returning an empty schedule
@@ -350,6 +383,15 @@ export async function runSchedulerForEvent(
     // unavailable — the DB-based reconciliation below still guards pushed rows.
     const preexisting = await buildPreexistingFromCvent(eventCode, attendees);
 
+    // Existing meetings count toward each company's maximum before the run books anything.
+    // Cvent's appointment list already includes pushed meetings, so the two counts overlap.
+    // The larger one is used per party, which still counts pushed meetings when Cvent
+    // couldn't be read, or in mock mode where Cvent lists none.
+    preexisting.meetingCountByParty = largerCounts(
+        preexisting.meetingCountByParty,
+        countMeetingsByParty(pushedRows),
+    );
+
     // Run the engine. It avoids the pre-existing Cvent pairs/times; pushed DB
     // meetings are additionally guarded via post-reconciliation below.
     //
@@ -383,6 +425,13 @@ export async function runSchedulerForEvent(
     // Dropped pairs are also collected here as reconciledOutPairs: the report
     // attributes these to "conflict_existing" rather than an engine skip reason.
     const schedulableCompanies = sponsorCompaniesByAccountId(schedulable);
+    /**
+     * How many meetings a party may hold at one start time.
+     * A sponsor company may hold up to its meetings-at-once limit, and anyone else 1.
+     *
+     * @param {string} party - The party id.
+     * @returns {number} The at-once limit.
+     */
     const atOnceOf = (party: string): number => {
         const company = schedulableCompanies.get(party);
         return company ? companyMeetingsAtOnce(company) : 1;

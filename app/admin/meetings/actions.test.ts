@@ -19,7 +19,7 @@ vi.mock("@/lib/db/client", () => ({
     db: {
         select: () => ({
             from: (table: unknown) => ({
-                where: async () => (table === meetingRequestsTable() ? REQUESTS : []),
+                where: async () => (table === meetingRequestsTable() ? REQUESTS : PUSHED),
             }),
         }),
         delete: (...a: unknown[]) => dbDelete(...a),
@@ -68,6 +68,9 @@ import {
 function meetingRequestsTable(): unknown {
     return meetingRequests;
 }
+
+// Meetings already pushed to Cvent, as scheduled_meetings rows. None by default.
+let PUSHED: { attendeeA: string; attendeeB: string; timeslotId: string; cventAppointmentId: string }[] = [];
 
 // One sponsor request from Acme to Dee.
 const REQUESTS = [
@@ -176,6 +179,7 @@ beforeEach(() => {
     dbDelete.mockReturnValue({ where: async () => undefined });
     dbInsert.mockReturnValue({ values: insertValues });
     getEventSettings.mockResolvedValue({ boothLocations: null });
+    PUSHED = [];
     loadAttendees.mockResolvedValue([
         att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1" }),
         att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
@@ -336,6 +340,31 @@ describe("runSchedulerForEvent — booths", () => {
         const result = await runSchedulerForEvent("EVT");
 
         expect(result.ok && result.report.meetingsScheduled).toBe(1);
+    });
+});
+
+describe("runSchedulerForEvent — existing meetings count toward the maximum", () => {
+    test("a maximum of 5 with 5 meetings already pushed gets no new meetings", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1", maximumMeetings: 5 }),
+            att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
+        ]);
+        // Five pushed meetings with other delegates, at times the run doesn't use.
+        // Cvent's appointment list is empty here, as in mock mode, so the DB rows are what count.
+        PUSHED = Array.from({ length: 5 }, (_, i) => ({
+            attendeeA: "acct-acme",
+            attendeeB: `d-old-${i}`,
+            timeslotId: `old-${i}`,
+            cventAppointmentId: `appt-${i}`,
+        }));
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.report.meetingsScheduled).toBe(0);
+        expect(result.report.unscheduledRequests.map((u) => u.reason)).toEqual(["cap_reached"]);
     });
 });
 

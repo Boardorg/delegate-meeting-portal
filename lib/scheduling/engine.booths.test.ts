@@ -3,6 +3,8 @@ import { runScheduler, sponsorPassCap, SPONSOR_PASS_SHARES } from './engine';
 import { pairKey } from './helpers';
 import { resolveCompanyBooths, type BoothLocations } from './booths';
 import { sponsorCompaniesByAccountId } from '@/lib/attendees/companies';
+import { preexistingFromAppointments } from '@/lib/cvent/preexisting';
+import type { CventExistingAppointment } from '@/lib/cvent/client';
 import { emptyProfile } from '@/lib/attendees/formatProfile';
 import type { Attendee, Location, MeetingRequest, ScheduledMeeting, Timeslot } from '@/types';
 
@@ -291,6 +293,12 @@ describe('runScheduler — booths', () => {
         );
 
         expect(schedule.map(m => m.attendeeA)).toEqual(['acct-ok']);
+        /**
+         * The skip reason for a company's request to d1.
+         *
+         * @param {string} a - The company's Account id.
+         * @returns {string | undefined} The reason.
+         */
         const reason = (a: string) => skipReasons.get(pairKey(a, 'd1'));
         expect(reason('acct-no-booth')).toBe('no_booth');
         expect(reason('acct-not-found')).toBe('booth_not_found');
@@ -417,5 +425,142 @@ describe('runScheduler — meetings at once', () => {
             busyStartTimesByAttendee: new Map([['acct-a', new Map([['d1-09', 2]])]]),
         });
         expect(two.schedule).toHaveLength(0);
+    });
+});
+
+// Cvent-shaped times, so pre-existing appointments built by preexistingFromAppointments line up with the slots.
+const T9 = '2026-11-10T09:00:00.000Z';
+const T10 = '2026-11-10T10:00:00.000Z';
+
+/**
+ * Builds a sponsor slot at a real ISO time.
+ *
+ * @param {string} locationId - The booth.
+ * @param {string} startTime - The ISO start time.
+ * @param {number} capacity - Cvent's static per-slot setting.
+ * @returns {Timeslot} The slot.
+ */
+function isoSlot(locationId: string, startTime: string, capacity: number): Timeslot {
+    return slot(`${locationId}-${startTime}`, 1, startTime, locationId, capacity);
+}
+
+/**
+ * Builds an existing Cvent appointment.
+ *
+ * @param {string} startTime - ISO start time.
+ * @param {string[]} hosts - Host contact ids.
+ * @param {string[]} attendees - Attendee contact ids.
+ * @param {string | null} [locationName] - The location name.
+ * @returns {CventExistingAppointment} The appointment.
+ */
+function cventAppt(
+    startTime: string,
+    hosts: string[],
+    attendees: string[],
+    locationName: string | null = 'Booth 1',
+): CventExistingAppointment {
+    return { id: null, startTime, participantContactIds: [...hosts, ...attendees], hostContactIds: hosts, locationName };
+}
+
+describe('runScheduler — existing Cvent appointments', () => {
+    test('a maximum of 5 with 5 meetings already pushed gets no new meetings', async () => {
+        const s = sponsor('s1', 'acct-a', { boothNo: '1', maximumMeetings: 5 });
+        const ds = delegates(7);
+        const { schedule, skipReasons } = await run(
+            [s, ...ds],
+            requestsFrom('acct-a', ds.slice(5)),
+            boothSlots('b1', 1, ['09', '10', '11', '12']),
+            null,
+            { meetingCountByParty: new Map([['acct-a', 5]]) },
+        );
+
+        expect(schedule).toHaveLength(0);
+        expect(skipReasons.get(pairKey('acct-a', 'd6'))).toBe('cap_reached');
+    });
+
+    test('existing appointments in Cvent count toward the maximum, read through preexistingFromAppointments', async () => {
+        const s = sponsor('s1', 'acct-a', { boothNo: '1', maximumMeetings: 3 });
+        const ds = delegates(5);
+        const attendees = [s, ...ds];
+        const preexisting = preexistingFromAppointments(
+            [cventAppt(T9, ['cvent-s1'], ['cvent-d1']), cventAppt(T10, ['cvent-s1'], ['cvent-d2'])],
+            attendees,
+        );
+        const timeslots = ['2026-11-10T11:00:00.000Z', '2026-11-10T12:00:00.000Z', '2026-11-10T13:00:00.000Z'].map(t => isoSlot('b1', t, 1));
+
+        const { schedule } = await run(attendees, requestsFrom('acct-a', ds.slice(2)), timeslots, null, preexisting);
+
+        expect(schedule).toHaveLength(1);
+    });
+
+    test("C2: a meeting pushed alone with every rep leaves no free rep, so no second meeting goes at that time", async () => {
+        const a = [
+            sponsor('s1', 'acct-a', { boothNo: '1', meetingsAtOnce: 2 }),
+            sponsor('s2', 'acct-a', { boothNo: '1', meetingsAtOnce: 2 }),
+        ];
+        const ds = delegates(2);
+        const attendees = [...a, ...ds];
+        // M1 is in Cvent at 09:00, hosted by both reps.
+        const preexisting = preexistingFromAppointments(
+            [cventAppt(T9, ['cvent-s1', 'cvent-s2'], ['cvent-d1'])],
+            attendees,
+        );
+
+        const { schedule } = await run(attendees, requestsFrom('acct-a', [ds[1]]), [isoSlot('b1', T9, 2)], null, preexisting);
+
+        expect(schedule).toHaveLength(0);
+    });
+
+    test('C3: a Cvent-native appointment hosted by two of three reps leaves one free, so only one more meeting goes at that time', async () => {
+        const a = [
+            sponsor('s1', 'acct-a', { boothNo: '1', meetingsAtOnce: 3 }),
+            sponsor('s2', 'acct-a', { boothNo: '1', meetingsAtOnce: 3 }),
+            sponsor('s3', 'acct-a', { boothNo: '1', meetingsAtOnce: 3 }),
+        ];
+        const ds = delegates(4);
+        const attendees = [...a, ...ds];
+        // Made in Cvent directly, at 09:00, hosted by s1 and s2.
+        const preexisting = preexistingFromAppointments(
+            [cventAppt(T9, ['cvent-s1', 'cvent-s2'], ['cvent-d1'])],
+            attendees,
+        );
+
+        const { schedule } = await run(attendees, requestsFrom('acct-a', ds.slice(1)), [isoSlot('b1', T9, 5)], null, preexisting);
+
+        // Diaries and the room would allow two more, but only s3 is free to host.
+        expect(schedule).toHaveLength(1);
+    });
+
+    test('a company with no Cvent appointment at a time can use every rep there', async () => {
+        const a = [
+            sponsor('s1', 'acct-a', { boothNo: '1', meetingsAtOnce: 3 }),
+            sponsor('s2', 'acct-a', { boothNo: '1', meetingsAtOnce: 3 }),
+            sponsor('s3', 'acct-a', { boothNo: '1', meetingsAtOnce: 3 }),
+        ];
+        const ds = delegates(3);
+
+        const { schedule } = await run([...a, ...ds], requestsFrom('acct-a', ds), [isoSlot('b1', T9, 5)]);
+
+        expect(schedule).toHaveLength(3);
+    });
+
+    test("a slot's room is Cvent's setting minus the appointments already at that location and time", async () => {
+        const s = sponsor('s1', 'acct-a', { boothNo: '1', meetingsAtOnce: 2 });
+        const s2 = sponsor('s2', 'acct-a', { boothNo: '1', meetingsAtOnce: 2 });
+        const other = sponsor('x1', 'acct-x', { boothNo: '4' });
+        const ds = delegates(3);
+        const attendees = [s, s2, other, ...ds];
+        // Booth 1 shows 2 per slot at 09:00, and 2 appointments are already there.
+        // They belong to someone the portal doesn't know, so they block only the room.
+        const preexisting = preexistingFromAppointments(
+            [cventAppt(T9, ['h-stranger'], ['a-stranger']), cventAppt(T9, ['h-stranger-2'], ['a-stranger-2'])],
+            attendees,
+        );
+
+        const full = await run(attendees, requestsFrom('acct-a', ds), [isoSlot('b1', T9, 2)], null, preexisting);
+        expect(full.schedule).toHaveLength(0);
+
+        const open = await run(attendees, requestsFrom('acct-a', ds), [isoSlot('b1', T9, 2)]);
+        expect(open.schedule).toHaveLength(2);
     });
 });

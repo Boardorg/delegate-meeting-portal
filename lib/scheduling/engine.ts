@@ -15,10 +15,12 @@ import {
     withDelegatePreferences,
     wouldViolateCompanyDiversity,
     type BusyTimes,
+    slotRoomKey,
     type SlotLimits,
 } from "./helpers";
 import type { SchedulerFailureReason } from "./report";
 import {
+    hostingReps,
     partyId,
     sponsorCompaniesByAccountId,
 } from "@/lib/attendees/companies";
@@ -61,6 +63,13 @@ interface SchedEntity {
     boothLocationId?: string;
     /** Why a sponsor company can't have meetings at all. Null when it can. */
     blockedReason: SchedulerFailureReason | null;
+    /** Cvent contact ids of the sponsor company's reps who can host. Empty for delegates. */
+    hostContactIds: string[];
+    /**
+     * The sponsor company's appointments already in Cvent, pushed portal meetings included.
+     * They count toward its meeting maximum before the run books anything. 0 for delegates.
+     */
+    existingMeetings: number;
 }
 
 // Defines the configuration for each pass of the scheduling algorithm, including caps and filters.
@@ -279,6 +288,27 @@ export interface PreexistingSchedule {
 	 *  so they count toward a company's meetings at once (see preexistingFromAppointments).
 	 *  A set counts each listed start time once. */
 	busyStartTimesByAttendee?: Map<string, BusyTimes>;
+	/** How many appointments each party (party id) already has in Cvent, pushed portal meetings included.
+	 *  A sponsor company's count starts from this, so existing meetings count toward its maximum. */
+	meetingCountByParty?: Map<string, number>;
+	/** Per party, the contact ids already hosting a Cvent appointment at each ISO start time.
+	 *  A company's second or later meeting at a time is only booked when a rep who can host is free then. */
+	busyHostsByParty?: Map<string, Map<string, Set<string>>>;
+	/** How many Cvent appointments are at each location and start time, keyed by slotRoomKey.
+	 *  A slot's room is its Cvent capacity minus these, since availableAppointments is the static setting. */
+	bookedBySlot?: Map<string, number>;
+}
+
+/**
+ * Normalizes a start time for matching against Cvent appointments.
+ * A real date becomes its ISO string with milliseconds. Anything else is kept as is.
+ *
+ * @param {string} startTime - The start time.
+ * @returns {string} The matching key.
+ */
+function startKey(startTime: string): string {
+	const ms = Date.parse(startTime);
+	return Number.isNaN(ms) ? startTime : new Date(ms).toISOString();
 }
 
 /**
@@ -357,7 +387,7 @@ function addBusy(busy: Map<string, number>, startTime: string): void {
  * @param {Attendee[]} attendees - All attendees to schedule meetings for.
  * @param {MeetingRequest[]} requests - Meeting requests submitted through the portal.
  * @param {Timeslot[]} timeslots - The event's global, Cvent-sourced timeslots.
- * @param {Location[]} _locations - The event's locations (reserved for future location-aware assignment).
+ * @param {Location[]} locations - The event's locations, for matching Cvent appointments to slots by location name.
  * @param {PreexistingSchedule} [preexisting] - Pairs/times already booked in Cvent to schedule around.
  * @param {Map<string, CompanyBooth>} [booths] - Each sponsor company's booth, keyed by Account id (see resolveCompanyBooths).
  * @returns {Promise<{ schedule: ScheduledMeeting[]; attendeeSchedules: AttendeeSchedule[]; skipReasons: Map<string, SchedulerFailureReason>; effectiveRequests: MeetingRequest[] }>}
@@ -370,7 +400,7 @@ export async function runScheduler(
 	attendees: Attendee[],
 	requests: MeetingRequest[],
 	timeslots: Timeslot[],
-	_locations: Location[],
+	locations: Location[],
 	preexisting: PreexistingSchedule = {},
 	booths?: Map<string, CompanyBooth>,
 ): Promise<{
@@ -416,6 +446,8 @@ export async function runScheduler(
 			company: c.name,
 			maximum,
 			atOnce: companyMeetingsAtOnce(c),
+			hostContactIds: hostingReps(c).map(r => r.cventContactId),
+			existingMeetings: preexisting.meetingCountByParty?.get(c.accountId) ?? 0,
 			boothLocationId: booth?.location?.id,
 			blockedReason,
 		});
@@ -433,6 +465,8 @@ export async function runScheduler(
 			maximum: 0,
 			// A delegate never has two meetings at the same start time.
 			atOnce: 1,
+			hostContactIds: [],
+			existingMeetings: 0,
 			blockedReason: null,
 		});
 	}
@@ -461,9 +495,9 @@ export async function runScheduler(
 
 	// Per-party count of meetings at each start time already booked, so no party
 	// holds more meetings at one wall-clock time than it may. Keyed by party id and
-	// seeded from Cvent (a company's counts cover all its reps' appointments — see
-	// buildPreexistingFromCvent). A delegate may hold 1 at a time, and a sponsor
-	// company up to its meetings-at-once limit.
+	// seeded from Cvent. A company's counts cover all its reps' appointments, as
+	// built by buildPreexistingFromCvent. A delegate may hold 1 at a time, and a
+	// sponsor company up to its meetings-at-once limit.
 	const busyByAttendee = new Map<string, Map<string, number>>(
 		[...entityByParty.keys()].map(pid => [
 			pid,
@@ -472,7 +506,37 @@ export async function runScheduler(
 	);
 
 	// Remaining capacity per timeslot id, drawn down as meetings are booked.
-	const timeslotRemaining = new Map(timeslots.map(t => [t.id, t.capacity]));
+	// Cvent's capacity is the location's static setting, so appointments already at that
+	// location and time are taken off first. Appointments carry only a location name.
+	const locationNameById = new Map(locations.map(l => [l.id, l.name]));
+	const timeslotRemaining = new Map(timeslots.map(t => {
+		const name = t.locationId ? locationNameById.get(t.locationId) : undefined;
+		const booked = name ? (preexisting.bookedBySlot?.get(slotRoomKey(name, t.startTime)) ?? 0) : 0;
+		return [t.id, t.capacity - booked];
+	}));
+
+	// How many meetings this run has booked per party at each start time.
+	// A company's next meeting then needs a rep who is free, counting these and its Cvent hosts.
+	const newByParty = new Map<string, Map<string, number>>();
+
+	/**
+	 * Whether a sponsor company has a rep free to host one more meeting at a start time.
+	 * The first meeting at a time is always allowed, even with no rep who can host.
+	 * A later one needs a rep who can host, isn't hosting a Cvent appointment then, and isn't taken by this run.
+	 *
+	 * @param {SchedEntity} e - The party.
+	 * @param {string} startTime - The start time.
+	 * @returns {boolean} True when the party may book another meeting then.
+	 */
+	const hasFreeHost = (e: SchedEntity, startTime: string): boolean => {
+		if (e.role !== 'sponsor') return true;
+		const total = busyByAttendee.get(e.partyId)?.get(startTime) ?? 0;
+		if (total === 0) return true;
+		const busyHosts = preexisting.busyHostsByParty?.get(e.partyId)?.get(startKey(startTime));
+		const free = e.hostContactIds.filter(id => !busyHosts?.has(id)).length;
+		const booked = newByParty.get(e.partyId)?.get(startTime) ?? 0;
+		return booked < free;
+	};
 
 	// Initialize the master list of all scheduled meetings.
 	const allMeetings: ScheduledMeeting[] = [];
@@ -546,8 +610,15 @@ export async function runScheduler(
 
 			// Count each party's meetings that count toward this pass's cap.
 			// Sponsor meetings count across both days (see countMeetingsForCap).
-			const requesterCapCount = countMeetingsForCap(allMeetings, requesterParty, pass);
-			const targetCapCount    = countMeetingsForCap(allMeetings, targetParty,    pass);
+			/**
+			 * A sponsor company's appointments already in Cvent, which count toward its sponsor-meeting caps too.
+			 *
+			 * @param {SchedEntity} e - The party.
+			 * @returns {number} The count to add for this pass.
+			 */
+			const existingFor = (e: SchedEntity): number => (pass.kind === 'sponsor_delegate' ? e.existingMeetings : 0);
+			const requesterCapCount = countMeetingsForCap(allMeetings, requesterParty, pass) + existingFor(requester);
+			const targetCapCount    = countMeetingsForCap(allMeetings, targetParty,    pass) + existingFor(target);
 
 			// Busy-time counts for each party, used to find a free timeslot below.
 			const requesterBusy = busyByAttendee.get(requesterParty) ?? new Map<string, number>();
@@ -585,6 +656,8 @@ export async function runScheduler(
 				locationId: requester.boothLocationId ?? target.boothLocationId,
 				limitA: requester.atOnce,
 				limitB: target.atOnce,
+				canBookA: (startTime) => hasFreeHost(requester, startTime),
+				canBookB: (startTime) => hasFreeHost(target, startTime),
 			};
 
 			// Find a timeslot of this pass's kind on this pass's day, where both attendees are free and capacity remains.
@@ -610,6 +683,11 @@ export async function runScheduler(
 			addBusy(targetBusy, timeslot.startTime);
 			busyByAttendee.set(requesterParty, requesterBusy);
 			busyByAttendee.set(targetParty, targetBusy);
+			for (const party of [requesterParty, targetParty]) {
+				const byTime = newByParty.get(party) ?? new Map<string, number>();
+				byTime.set(timeslot.startTime, (byTime.get(timeslot.startTime) ?? 0) + 1);
+				newByParty.set(party, byTime);
+			}
 			timeslotRemaining.set(timeslot.id, (timeslotRemaining.get(timeslot.id) ?? 0) - 1);
 
 			// Storage orientation is CANONICAL, not request direction: on a

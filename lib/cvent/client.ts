@@ -577,10 +577,23 @@ export const getEventAttendees = cache(
 
 /** An existing Cvent appointment, reduced to what pre-blocking the scheduler needs. */
 export type CventExistingAppointment = {
+    /** Cvent appointment id. Null when Cvent omits it. */
+    id: string | null;
     /** ISO 8601 UTC start time of the appointment. */
     startTime: string;
     /** Cvent contact ids of the appointment's participants (hosts + attendees). */
     participantContactIds: string[];
+    /**
+     * Cvent contact ids of the participants whose `type` is "host".
+     * A rep listed here is busy hosting at this start time.
+     * Cvent rejects a host who is already in another appointment at that time.
+     */
+    hostContactIds: string[];
+    /**
+     * The appointment's location name. Null when Cvent omits it.
+     * Appointments carry only the location's name, not its id.
+     */
+    locationName: string | null;
 };
 
 /**
@@ -589,7 +602,9 @@ export type CventExistingAppointment = {
  * recovered from a response-validation failure (`start` is an ISO string).
  */
 type RawCventAppointment = {
+    id?: string;
     start?: Date | string;
+    location?: { name?: string | null } | null;
     deleted?: boolean;
     /** e.g. "ACTIVE", "CONFIRMED", "CANCELLED" — see AppointmentStatusJson. */
     status?: string;
@@ -624,12 +639,20 @@ export function toExistingAppointments(
         const participantContactIds = (appt.participants ?? [])
             .map((p) => p.attendee?.contact?.id ?? p.attendee?.id)
             .filter((id): id is string => !!id);
+        // The hosts alone, read the same way, so push and the scheduler know which reps are busy.
+        const hostContactIds = (appt.participants ?? [])
+            .filter((p) => p.type?.toLowerCase() === "host")
+            .map((p) => p.attendee?.contact?.id ?? p.attendee?.id)
+            .filter((id): id is string => !!id);
         out.push({
+            id: appt.id ?? null,
             startTime:
                 typeof appt.start === "string"
                     ? appt.start
                     : appt.start.toISOString(),
             participantContactIds,
+            hostContactIds,
+            locationName: appt.location?.name ?? null,
         });
     }
     return out;

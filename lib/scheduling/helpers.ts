@@ -166,7 +166,27 @@ export type SlotLimits = {
 	limitA?: number;
 	/** How many meetings the second party may hold at one start time. Defaults to 1. */
 	limitB?: number;
+	/**
+	 * An extra check on the first party at a start time, on top of its limit.
+	 * A sponsor company uses it to need a free rep for a second or later meeting then.
+	 * Leave it out to allow every start time under the limit.
+	 */
+	canBookA?: (startTime: string) => boolean;
+	/** The same extra check for the second party. */
+	canBookB?: (startTime: string) => boolean;
 };
+
+/**
+ * The key that matches a slot to Cvent appointments at the same place and time.
+ * Appointments carry only a location name, so the key is the name, lowercased and trimmed, plus the start time.
+ *
+ * @param {string} locationName - The location's name.
+ * @param {string} startTime - The ISO start time.
+ * @returns {string} The key.
+ */
+export function slotRoomKey(locationName: string, startTime: string): string {
+	return `${locationName.trim().toLowerCase()}|${new Date(startTime).getTime()}`;
+}
 
 /**
  * Finds the first event-global timeslot on a given day that can host a meeting
@@ -216,6 +236,10 @@ export function findAvailableTimeslot(
 		// Either attendee already has as many meetings at this start time as they may hold.
 		if (busyCountAt(busyA, ts.startTime) >= limitA) continue;
 		if (busyCountAt(busyB, ts.startTime) >= limitB) continue;
+
+		// Either party's extra check rules out this start time.
+		if (limits.canBookA && !limits.canBookA(ts.startTime)) continue;
+		if (limits.canBookB && !limits.canBookB(ts.startTime)) continue;
 
 		return ts;
 	}
@@ -347,7 +371,12 @@ export function reconcileWithPushed<M extends ReconcileMeeting>(
 	for (const m of schedule) {
 		const pair = pairKey(m.attendeeA, m.attendeeB);
 
-		// Whether a party already holds as many meetings at this time as it may.
+		/**
+		 * Whether a party already holds as many meetings at this meeting's time as it may.
+		 *
+		 * @param {string} party - The party id.
+		 * @returns {boolean} True when one more meeting then would be too many.
+		 */
 		const full = (party: string): boolean =>
 			(counts.get(countKey(party, m)) ?? 0) >= atOnceOf(party);
 

@@ -127,6 +127,16 @@ describe("sponsor companies from the Opportunity", () => {
         });
     });
 
+    test("groups reps by the Opportunity id when the Opportunity has no account", () => {
+        const companies = sponsorCompaniesByAccountId([
+            rep({ salesforceId: "s1", accountId: "", opportunityId: "opp-1" }),
+            rep({ salesforceId: "s2", accountId: "", opportunityId: "opp-1" }),
+            rep({ salesforceId: "s3", accountId: "", opportunityId: null }),
+        ]);
+        expect([...companies.keys()].sort()).toEqual(["opp-1", "s3"]);
+        expect(companies.get("opp-1")!.reps.map((r) => r.salesforceId)).toEqual(["s1", "s2"]);
+    });
+
     test("marks a company whose reps are on more than one Opportunity", () => {
         const companies = sponsorCompaniesByAccountId([
             rep({ salesforceId: "s1", opportunityId: "opp-1" }),

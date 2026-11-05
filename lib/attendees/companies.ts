@@ -25,12 +25,18 @@ import type { Attendee, SponsorTier } from "@/types";
  * back to its own salesforceId, so it behaves as its own single-rep company
  * instead of collapsing every account-less sponsor under an empty key.
  *
+ * For sponsors the Account id is the sponsor Opportunity's account.
+ * When that Opportunity has no account, its reps are grouped by the Opportunity id instead.
+ * Only a rep with neither falls back to its own salesforceId.
+ *
  * @param {Attendee} attendee - The attendee.
  * @returns {string} The party id.
  */
 export function partyId(attendee: Attendee): string {
     if (attendee.role === "sponsor") {
-        return attendee.accountId || attendee.salesforceId;
+        return (
+            attendee.accountId || attendee.opportunityId || attendee.salesforceId
+        );
     }
     return attendee.salesforceId;
 }

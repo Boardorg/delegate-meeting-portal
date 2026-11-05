@@ -286,6 +286,43 @@ describe("Edit and Create Meeting saves — the server refuses another company's
         expect(dbUpdate).toHaveBeenCalledTimes(1);
     });
 
+    test("refuses a save into another company's booth when no attendees loaded, as when Cvent's attendee lookup fails", async () => {
+        loadAttendees.mockResolvedValue([]);
+
+        const result = await create("b2-09", "b2");
+
+        expect(result.ok).toBe(false);
+        expect(dbInsert).not.toHaveBeenCalled();
+    });
+
+    test("refuses the save when Cvent returned no locations", async () => {
+        loadEventScheduleData.mockResolvedValue({
+            timeslots: [],
+            locations: [],
+            timeslotById: new Map(),
+            locationById: new Map(),
+            timezone: "UTC",
+        });
+
+        const result = await create("b2-09", "b2");
+
+        expect(result.ok).toBe(false);
+        expect(dbInsert).not.toHaveBeenCalled();
+    });
+
+    test("returns an error instead of throwing when loading the attendees fails", async () => {
+        loadAttendees.mockRejectedValue(new Error("Salesforce down"));
+
+        const created = await create("b3-10", "b3");
+        rows = [lakesideMeeting("b3-10", "b3")];
+        const edited = await editMeeting({ id: "m1", timeslotId: "b3-11", day: 1, locationId: "b3" });
+
+        expect(created.ok).toBe(false);
+        expect(edited.ok).toBe(false);
+        expect(dbInsert).not.toHaveBeenCalled();
+        expect(dbUpdate).not.toHaveBeenCalled();
+    });
+
     test("refuses the save when the booths can't be checked", async () => {
         getEventSettings.mockRejectedValue(new Error("db down"));
 

@@ -92,6 +92,8 @@ export type MeetingSaveResult = { ok: true } | { ok: false; error: string };
  * A sponsor's meeting may not go in another company's booth, even when the window is bypassed.
  * Both the chosen location and the slot's own location are checked.
  * When the booths can't be loaded the save is refused, so a meeting can't slip into another booth.
+ * That includes an attendee or Cvent load that fails or comes back empty, and a sponsor missing from the booths.
+ * A failed load is returned as the refusal, never thrown.
  *
  * @param {{ eventCode: string; sponsorId: string; timeslotId: string; locationId: string | null }} params - The save.
  * @returns {Promise<string | null>} Why the save is refused, or null when it may go ahead.
@@ -102,16 +104,33 @@ async function otherBoothRefusal(params: {
     timeslotId: string;
     locationId: string | null;
 }): Promise<string | null> {
-    const [attendees, scheduleData] = await Promise.all([
-        loadAttendees(false, params.eventCode),
-        loadEventScheduleData(params.eventCode),
-    ]);
+    const unchecked =
+        "Error: the portal couldn't check the sponsor booths, so nothing was saved. Try again in a few minutes.";
+    let attendees: Awaited<ReturnType<typeof loadAttendees>>;
+    let scheduleData: Awaited<ReturnType<typeof loadEventScheduleData>>;
+    try {
+        [attendees, scheduleData] = await Promise.all([
+            loadAttendees(false, params.eventCode),
+            loadEventScheduleData(params.eventCode),
+        ]);
+    } catch (err) {
+        console.warn(
+            `otherBoothRefusal: could not load attendees or Cvent data for "${params.eventCode}". ` +
+                `${err instanceof Error ? err.message : String(err)}`,
+        );
+        return unchecked;
+    }
+
+    // Cvent returns no locations when it is down, and no attendees when its attendee lookup fails.
+    // Either would leave the booths empty, so nothing could be refused.
+    if (scheduleData.locations.length === 0) return unchecked;
     const booths = await loadCompanyBooths(
         params.eventCode,
         attendees,
         scheduleData.locations,
     );
     if (!booths.ok) return booths.error;
+    if (!booths.booths.has(params.sponsorId)) return unchecked;
     const filter = sponsorBoothFilter(params.sponsorId, booths.booths);
     const slotLocationId =
         scheduleData.timeslotById.get(params.timeslotId)?.locationId ?? null;
@@ -192,7 +211,7 @@ export async function getMeetingDetail(params: {
             getAppointmentsByEvent(params.eventCode),
         ]);
 
-    // A pushed meeting's Cvent timeslot drops out of listAvailableTimes once booked.
+    // A pushed meeting's Cvent timeslot can be missing from listAvailableTimes, for example after it was removed.
     // Look synced meetings up by their Cvent appointment instead, which keeps the real time and location.
     const appointmentById = new Map(appointments.map((a) => [a.id, a]));
 

@@ -192,6 +192,31 @@ describe("buildBoothRows", () => {
         expect(rows2[0].warnings).toEqual(["Meetings at once is 2, but only 1 rep can host in Cvent."]);
     });
 
+    test("warns when the booth's Cvent location has no sponsor timeslots", () => {
+        // Booth 2 exists in Cvent, but only Booth 5 has sponsor timeslots, like NALES with only Booths 1 and 13.
+        const rows2 = buildBoothRows(
+            [rep("x1", "acct-x", "X", { boothNo: "2" })],
+            LOCATIONS,
+            [slot("b5", 2)],
+            null,
+        );
+        expect(rows2[0].perSlotLimit).toBeNull();
+        expect(rows2[0].warnings).toEqual([
+            "Booth 2 has no sponsor timeslots in Cvent, so no meetings can be booked there. Add it to the sponsor appointment type's available times.",
+        ]);
+    });
+
+    test("does not warn about timeslots when the booth has no Cvent location", () => {
+        const rows2 = buildBoothRows(
+            [rep("x1", "acct-x", "X", { boothNo: "99" })],
+            LOCATIONS,
+            TIMESLOTS,
+            null,
+        );
+        expect(rows2[0].problems).toEqual(["booth_not_found"]);
+        expect(rows2[0].warnings).toEqual([]);
+    });
+
     test("warns when Cvent_Maximum_Meetings__c differs from purchased plus bonus", () => {
         expect(byCompany.get("Lakeside Learning Co. [TEST]")!.warnings).toEqual([
             "Cvent maximum is 6, but purchased plus bonus is 5.",

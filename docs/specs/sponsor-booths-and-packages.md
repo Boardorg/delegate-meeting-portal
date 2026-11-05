@@ -230,3 +230,4 @@ Decided by Peter on 2026-11-04, after review and verification.
 - **The server refuses a meeting at another company's booth.** Saving one from the Edit or Create Meeting window returns an error, even if the window is bypassed.
 - **An Opportunity with no account groups its reps by the Opportunity id.** None existed in any active event on 2026-11-04.
 - **The run report gives `already_scheduled` ahead of booth problems.**
+- **A booth with no sponsor timeslots in Cvent is called out.** Added by Peter on 2026-11-05, after local testing found NALES had sponsor timeslots only at Booths 1 and 13. The Sponsor booths page warns on that company's row. The run report gives `no_booth_slots`, "No sponsor timeslots at booth in Cvent", in place of "No availability". The company is not blocked, so its meetings book as soon as the booth gets timeslots in Cvent.

@@ -556,6 +556,16 @@ export async function runScheduler(
 	// overwrite earlier ones so the most-progressed reason wins.
 	const skipReasons = new Map<string, SchedulerFailureReason>();
 
+	// Each meeting kind's locations that have at least one timeslot in Cvent.
+	// A booth missing from its kind's set can never be booked, and the report says so.
+	const slotLocationsByKind = new Map<MeetingKind, Set<string>>();
+	for (const t of timeslots) {
+		if (!t.locationId) continue;
+		const ids = slotLocationsByKind.get(t.kind) ?? new Set<string>();
+		ids.add(t.locationId);
+		slotLocationsByKind.set(t.kind, ids);
+	}
+
 	// Loop through each pass in order, applying its specific filters and caps.
 	for (const pass of PASSES) {
 
@@ -683,7 +693,12 @@ export async function runScheduler(
 			// Skip this pair if no usable timeslot exists — the event is out of
 			// appointment capacity for this day, or one of the two is already
 			// booked at every remaining start time.
-			if (!timeslot) { skipReasons.set(key, "no_availability"); continue; }
+			// A booth with no timeslots of this pass's kind gets its own reason, since the fix is in Cvent.
+			if (!timeslot) {
+				const boothHasSlots = limits.locationId === undefined || !!slotLocationsByKind.get(pass.kind)?.has(limits.locationId);
+				skipReasons.set(key, boothHasSlots ? "no_availability" : "no_booth_slots");
+				continue;
+			}
 
 			// Book the timeslot: count one more meeting for both attendees at its start time and draw down capacity.
 			addBusy(requesterBusy, timeslot.startTime);

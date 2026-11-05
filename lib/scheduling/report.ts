@@ -37,6 +37,8 @@ import {
  *   never have more meetings than there are distinct start times, however many
  *   parallel slots each one holds.
  * - company_diversity: scheduling it would break the same-company meeting limit.
+ * - no_booth_slots: the sponsor's booth has no timeslots of the pass's kind in Cvent.
+ *   The fix is to add the booth's location to the sponsor appointment type's available times.
  *
  * The engine never attempted the pair (rejected during candidate collection):
  * - self_request: the request targets the requester themselves.
@@ -60,6 +62,7 @@ export type SchedulerFailureReason =
     | "cap_reached"
     | "no_availability"
     | "company_diversity"
+    | "no_booth_slots"
     | "self_request"
     | "not_an_attendee"
     | "attendee_cancelled"

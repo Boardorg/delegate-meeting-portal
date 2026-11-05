@@ -39,6 +39,7 @@ const REASON_LABEL: Record<SchedulerFailureReason, string> = {
     cap_reached: "Cap reached",
     no_availability: "No availability",
     company_diversity: "Company diversity limit",
+    no_booth_slots: "No sponsor timeslots at booth in Cvent",
     self_request: "Self request",
     not_an_attendee: "Not in attendee list",
     attendee_cancelled: "Cancelled in Cvent",

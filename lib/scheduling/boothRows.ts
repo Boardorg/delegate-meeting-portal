@@ -90,6 +90,7 @@ export function matchLabel(row: BoothRow): string {
 
 /**
  * Builds the warnings for one row.
+ * A booth with a Cvent location but no sponsor timeslots there is flagged, since no meeting can be booked at it.
  * Meetings at once is checked against the booth's Cvent per-slot limit and the reps who can host.
  * Cvent_Maximum_Meetings__c is checked against purchased plus bonus.
  *
@@ -98,6 +99,11 @@ export function matchLabel(row: BoothRow): string {
  */
 export function boothRowWarnings(row: Omit<BoothRow, "warnings">): string[] {
     const warnings: string[] = [];
+    if (row.location && row.perSlotLimit === null) {
+        warnings.push(
+            `${row.location.name} has no sponsor timeslots in Cvent, so no meetings can be booked there. Add it to the sponsor appointment type's available times.`,
+        );
+    }
     const atOnce = requestedMeetingsAtOnce(row);
     if (row.perSlotLimit !== null && atOnce > row.perSlotLimit) {
         warnings.push(

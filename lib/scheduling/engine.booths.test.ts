@@ -258,6 +258,29 @@ describe('runScheduler — booths', () => {
         expect(skipReasons.get(pairKey('acct-a', 'd3'))).toBe('no_availability');
     });
 
+    test("reports no_booth_slots when the company's booth has no sponsor timeslots in Cvent", async () => {
+        // Booth 3 is a Cvent location, but sponsor slots exist only at Booth 1, like NALES with only Booths 1 and 13.
+        const s = sponsor('s1', 'acct-a', { boothNo: '3' });
+        const ds = delegates(2);
+        const timeslots = boothSlots('b1', 1, ['09', '10', '11']);
+        const { schedule, skipReasons } = await run([s, ...ds], requestsFrom('acct-a', ds), timeslots);
+
+        expect(schedule).toHaveLength(0);
+        expect(skipReasons.get(pairKey('acct-a', 'd1'))).toBe('no_booth_slots');
+        expect(skipReasons.get(pairKey('acct-a', 'd2'))).toBe('no_booth_slots');
+    });
+
+    test('a booth that has sponsor timeslots but no room left still reports no_availability', async () => {
+        const s = sponsor('s1', 'acct-a', { boothNo: '3' });
+        const ds = delegates(2);
+        const timeslots = boothSlots('b3', 1, ['09']);
+        const { schedule, skipReasons } = await run([s, ...ds], requestsFrom('acct-a', ds), timeslots);
+
+        expect(schedule).toHaveLength(1);
+        const unbooked = ds.find(d => !schedule.some(m => m.attendeeB === d.salesforceId))!;
+        expect(skipReasons.get(pairKey('acct-a', unbooked.salesforceId))).toBe('no_availability');
+    });
+
     test('a manual mapping sends the company to the mapped location', async () => {
         const s = sponsor('s1', 'acct-a', { boothNo: '3' });
         const ds = delegates(1);

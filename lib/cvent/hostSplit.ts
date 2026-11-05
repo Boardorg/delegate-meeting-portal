@@ -6,6 +6,8 @@ import type { Attendee, Timeslot } from "@/types";
 // Cvent rejects a host who is already in another appointment at that time.
 // So when a sponsor company has more than one meeting at a start time, each
 // rep hosts only one of them.
+// A rep already hosting a Cvent appointment at that time is not free.
+// Existing appointments are never changed to free up a rep.
 //
 // Pure (no network or DB) so push can be tested without Cvent. Lives outside
 // lib/cvent/push.ts, which is server-only.
@@ -17,6 +19,20 @@ export type SplitMeeting = {
     attendeeA: string;
     timeslotId: string;
 };
+
+/**
+ * The reps who are free to host at a time, so not already hosting a Cvent appointment then.
+ *
+ * @param {Attendee[]} reps - The company's reps who can host.
+ * @param {ReadonlySet<string>} busyHostIds - Contact ids already hosting a Cvent appointment at that time.
+ * @returns {Attendee[]} The free reps.
+ */
+export function freeReps(
+    reps: Attendee[],
+    busyHostIds: ReadonlySet<string>,
+): Attendee[] {
+    return reps.filter((r) => !busyHostIds.has(r.cventContactId));
+}
 
 /**
  * Whether two meetings are at the same time.
@@ -50,16 +66,19 @@ export function sameMeetingTime(
  * @param {SplitMeeting} meeting - The meeting being pushed.
  * @param {SplitMeeting[]} companyMeetings - The event's portal meetings. Other companies' meetings are ignored.
  * @param {Map<string, Pick<Timeslot, "startTime">>} timeslotById - The event's timeslots.
+ * @param {(m: SplitMeeting) => boolean} [include] - Which other meetings take part, such as only those still to push. Defaults to all.
  * @returns {string[]} The meeting ids at that time, sorted.
  */
-export function sameTimeMeetingIds(
-    meeting: SplitMeeting,
-    companyMeetings: SplitMeeting[],
+export function sameTimeMeetingIds<M extends SplitMeeting>(
+    meeting: M,
+    companyMeetings: M[],
     timeslotById: Map<string, Pick<Timeslot, "startTime">>,
+    include: (m: M) => boolean = () => true,
 ): string[] {
     const ids = new Set<string>([meeting.id]);
     for (const m of companyMeetings) {
         if (m.attendeeA !== meeting.attendeeA) continue;
+        if (m.id !== meeting.id && !include(m)) continue;
         if (sameMeetingTime(meeting, m, timeslotById)) ids.add(m.id);
     }
     return [...ids].sort();

@@ -10,6 +10,7 @@ import {
     hostingReps,
 } from "@/lib/attendees/companies";
 import {
+    freeReps,
     hostContactIdsForMeeting,
     sameTimeMeetingIds,
 } from "@/lib/cvent/hostSplit";
@@ -18,6 +19,7 @@ import {
     updateAppointment,
     cancelAppointment,
     getAppointmentsByEvent,
+    getEventAppointments,
 } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 import type { Timeslot } from "@/types";
@@ -185,6 +187,43 @@ export function existingAppointmentLookup(
 }
 
 /**
+ * Builds a lookup from a start time to the contact ids already hosting a Cvent appointment then.
+ * Appointments made in Cvent directly count, and so do portal meetings pushed earlier.
+ * The old appointments of the meetings being pushed now are left out, since a re-push replaces them.
+ * Returns null when Cvent's appointment list can't be read, so the caller falls back to splitting among every rep.
+ * Cvent itself still rejects a host who is busy.
+ *
+ * @param {string} eventCode - The event the meetings belong to.
+ * @param {ReadonlySet<string>} replacedAppointmentIds - The Cvent ids of the appointments this push replaces.
+ * @returns {Promise<((startTime: string) => Set<string>) | null>} The lookup, or null.
+ */
+export async function busyHostLookup(
+    eventCode: string,
+    replacedAppointmentIds: ReadonlySet<string>,
+): Promise<((startTime: string) => Set<string>) | null> {
+    let appointments;
+    try {
+        appointments = await getEventAppointments(eventCode);
+    } catch (err) {
+        console.warn(
+            `pushMeetingRows: could not list Cvent appointments for "${eventCode}" to find busy hosts. ` +
+                `${err instanceof Error ? err.message : String(err)}`,
+        );
+        return null;
+    }
+    const byTime = new Map<number, Set<string>>();
+    for (const appt of appointments) {
+        if (appt.id && replacedAppointmentIds.has(appt.id)) continue;
+        const ms = new Date(appt.startTime).getTime();
+        if (Number.isNaN(ms)) continue;
+        const hosts = byTime.get(ms) ?? new Set<string>();
+        for (const id of appt.hostContactIds) hosts.add(id);
+        byTime.set(ms, hosts);
+    }
+    return (startTime) => new Set(byTime.get(new Date(startTime).getTime()));
+}
+
+/**
  * Whether an existing appointment starts at the same moment as a slot.
  * Both are parsed to timestamps, so differently formatted ISO strings still compare correctly.
  * An unknown or unparseable time never matches.
@@ -278,9 +317,11 @@ export function needsSync(row: ScheduledMeetingRow): boolean {
  * appointment id + push time; failures are captured per row so one bad
  * meeting doesn't abort the batch.
  *
- * A company with one meeting at a start time has every rep who can host as a host.
- * A company with more than one splits its reps across them, so no rep hosts two at once (see lib/cvent/hostSplit.ts).
- * The split counts every meeting in `companyMeetings` at that time, pushed or not.
+ * A meeting only gets reps who are free, so not already hosting another Cvent appointment at that time.
+ * That covers appointments made in Cvent and portal meetings pushed earlier, whatever reps they were given.
+ * Existing appointments are never changed to free up a rep.
+ * The free reps are split across the company's meetings at that time that are still to push, so no rep hosts two at once (see lib/cvent/hostSplit.ts).
+ * When Cvent's appointment list can't be read, the split counts every meeting in `companyMeetings` at that time instead.
  *
  * @param {string} eventCode - The event the meetings belong to.
  * @param {ScheduledMeetingRow[]} rows - The meeting rows to push.
@@ -307,6 +348,16 @@ export async function pushMeetingRows(
     // reps all become hosts.
     const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
     const companiesByAccountId = sponsorCompaniesByAccountId(attendees);
+
+    // Which reps already host a Cvent appointment at each time, read once for the batch.
+    // The appointments this batch replaces don't count, and neither do their meetings' old reps.
+    const batchIds = new Set(rows.map((r) => r.id));
+    const replacedAppointmentIds = new Set(
+        rows
+            .map((r) => r.cventAppointmentId)
+            .filter((id): id is string => !!id),
+    );
+    const busyHostsAt = await busyHostLookup(eventCode, replacedAppointmentIds);
 
     // Existing appointments' times and types, read from Cvent only if an in-place update needs one.
     const existingAppointmentOf = existingAppointmentLookup(eventCode);
@@ -400,31 +451,54 @@ export async function pushMeetingRows(
             continue;
         }
 
-        // When the company has more than one meeting at this time, each rep hosts only one of them.
+        // Only reps who aren't already hosting a Cvent appointment at this time are free.
         // Cvent rejects a host who is already in another appointment at that time.
+        // When the company has more than one meeting still to push at this time, each free rep hosts only one of them.
+        // Meetings already in Cvent keep their reps, which are busy rather than dealt again.
+        const busyHosts = busyHostsAt
+            ? busyHostsAt(timeslot.startTime)
+            : new Set<string>();
         const meetingIdsAtTime = sameTimeMeetingIds(
             row,
             companyMeetings,
             scheduleData.timeslotById,
+            busyHostsAt
+                ? (m) => !m.cventAppointmentId || batchIds.has(m.id)
+                : undefined,
         );
-        const hostContactIds = company
-            ? hostContactIdsForMeeting(
-                  hostingReps(company),
-                  row.id,
-                  meetingIdsAtTime,
-              )
+        const available = company
+            ? freeReps(hostingReps(company), busyHosts)
             : [];
+        const hostContactIds = hostContactIdsForMeeting(
+            available,
+            row.id,
+            meetingIdsAtTime,
+        );
         if (hostContactIds.length === 0) {
+            const companyName = company?.name ?? row.attendeeA;
             results.push({
                 meetingId: row.id,
                 label,
                 ok: false,
                 kind,
                 reason: "host_not_in_cvent",
-                error: `${company?.name ?? row.attendeeA} has ${meetingIdsAtTime.length} meetings at this time but only ${allHostContactIds.length} ${allHostContactIds.length === 1 ? "rep" : "reps"} who can host, so this one has no host. Move a meeting to another time.`,
+                error:
+                    available.length === 0
+                        ? `Every rep of ${companyName} who can host is already hosting another Cvent appointment at this time, so this meeting has no host. Move it to another time.`
+                        : `${companyName} has ${meetingIdsAtTime.length} meetings to push at this time but only ${available.length} free ${available.length === 1 ? "rep" : "reps"} who can host, so this one has no host. Move a meeting to another time.`,
             });
             continue;
         }
+        // Reps left off because they already host another Cvent appointment at this time.
+        const busyRepNames = company
+            ? hostingReps(company)
+                  .filter((r) => busyHosts.has(r.cventContactId))
+                  .map((r) => r.name)
+            : [];
+        const busyWarning =
+            busyRepNames.length > 0
+                ? `${busyRepNames.join(", ")} already ${busyRepNames.length === 1 ? "hosts" : "host"} another Cvent appointment at this time, so ${busyRepNames.length === 1 ? "that rep was" : "those reps were"} not added as ${busyRepNames.length === 1 ? "a host" : "hosts"}.`
+                : undefined;
         const splitWarning =
             meetingIdsAtTime.length > 1
                 ? `${company?.name ?? row.attendeeA} has ${meetingIdsAtTime.length} meetings at this time, so its reps were split across them.`
@@ -533,6 +607,7 @@ export async function pushMeetingRows(
             const notes: string[] = [];
             if (typeWarning) notes.push(typeWarning);
             if (splitWarning) notes.push(splitWarning);
+            if (busyWarning) notes.push(busyWarning);
             if (hostWarning) notes.push(hostWarning);
             if (cancelledHostWarning) notes.push(cancelledHostWarning);
             if (targetWarning) notes.push(targetWarning);

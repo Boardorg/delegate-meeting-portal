@@ -629,7 +629,7 @@ function RunEngineModal({
                 </p>
                 {/* Companies with a booth problem get no meetings, so say so before running. */}
                 {boothWarning && (
-                    <div className="adm-modal-warn-at" role="alert">
+                    <div className="adm-modal-warn-at" role="alert" style={{ marginBottom: 16 }}>
                         {boothWarning} See the{" "}
                         <Link href="/admin/booths">Sponsor booths</Link> page.
                     </div>

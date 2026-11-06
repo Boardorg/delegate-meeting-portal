@@ -13,6 +13,7 @@ import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { getEventAppointments, cancelAppointment } from "@/lib/cvent/client";
 import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
 import { preexistingFromAppointments } from "@/lib/cvent/preexisting";
+import { countAppointmentsNotInPortal } from "@/lib/cvent/cventOnly";
 import {
     buildSyncReport,
     isAppointmentAlreadyGone,
@@ -87,6 +88,7 @@ export type SponsorsPage = Page<SponsorRow>;
 /**
  * Returns a sorted, searched, paginated page of sponsors for an event,
  * with their request and scheduled meeting counts attached.
+ * A company's scheduled count includes its Cvent appointments that this database has no meeting for.
  *
  * @param {{ eventCode: string; q?: string; sortField?: SponsorSortField; sortDir?: "asc" | "desc"; page?: number }} params
  * @returns {Promise<SponsorsPage>} The page of sponsor rows plus totals.
@@ -99,7 +101,7 @@ export async function listSponsorsPage(params: {
     page?: number;
 }): Promise<SponsorsPage> {
     // Get all attendees, meeting requests, and scheduled meetings for this event in parallel.
-    const [attendees, requestRows, meetingRows] = await Promise.all([
+    const [attendees, requestRows, meetingRows, activeAppointments] = await Promise.all([
         loadAttendees(false, params.eventCode),
         db
             .select({ requesterId: meetingRequests.requesterId })
@@ -109,9 +111,18 @@ export async function listSponsorsPage(params: {
             .select({
                 attendeeA: scheduledMeetings.attendeeA,
                 attendeeB: scheduledMeetings.attendeeB,
+                cventAppointmentId: scheduledMeetings.cventAppointmentId,
             })
             .from(scheduledMeetings)
             .where(eq(scheduledMeetings.eventCode, params.eventCode)),
+        // The list still loads without them when Cvent can't be read.
+        getEventAppointments(params.eventCode).catch((err) => {
+            console.warn(
+                `listSponsorsPage: could not load Cvent appointments for "${params.eventCode}". ` +
+                    `${err instanceof Error ? err.message : String(err)}`,
+            );
+            return [];
+        }),
     ]);
 
     // Build a map of request counts keyed by requester party id (company
@@ -136,6 +147,21 @@ export async function listSponsorsPage(params: {
             m.attendeeB,
             (scheduledCountMap.get(m.attendeeB) ?? 0) + 1,
         );
+    }
+
+    // Add each company's Cvent appointments that this database has no meeting for.
+    // Another environment pushed them, or someone made them in Cvent.
+    const knownAppointmentIds = new Set(
+        meetingRows
+            .map((m) => m.cventAppointmentId)
+            .filter((id): id is string => !!id),
+    );
+    for (const [accountId, count] of countAppointmentsNotInPortal(
+        activeAppointments,
+        attendees,
+        knownAppointmentIds,
+    )) {
+        scheduledCountMap.set(accountId, (scheduledCountMap.get(accountId) ?? 0) + count);
     }
 
     // Group sponsor reps into companies — one row per company.

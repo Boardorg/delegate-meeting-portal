@@ -468,3 +468,36 @@ describe("listSponsorsPage — Salesforce meeting counts", () => {
         expect(byCompany.get("Exhibitor")).toMatchObject({ purchased: 0, maximum: 0, maximumFromTier: false });
     });
 });
+
+describe("listSponsorsPage — appointments only in Cvent", () => {
+    test("counts a company's Cvent appointments this database has no meeting for, and not ones it has", async () => {
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", cventContactId: "h-acme" }),
+            att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex", cventContactId: "c-d1" }),
+        ]);
+        // One pushed from here, and two pushed from another environment.
+        PUSHED = [{ attendeeA: "acct-acme", attendeeB: "d1", timeslotId: "ts-1", cventAppointmentId: "appt-here" }];
+        getEventAppointments.mockResolvedValue(
+            ["appt-here", "appt-other-1", "appt-other-2"].map((id, i) => ({
+                id,
+                startTime: `2026-01-20T0${i + 6}:00:00Z`,
+                participantContactIds: ["h-acme", "c-d1"],
+                hostContactIds: ["h-acme"],
+                locationName: "Booth 1",
+            })),
+        );
+
+        const page = await listSponsorsPage({ eventCode: "EVT" });
+
+        expect(page.rows.find((r) => r.company === "Acme")?.scheduledCount).toBe(3);
+    });
+
+    test("still lists sponsors when Cvent can't be read", async () => {
+        getEventAppointments.mockRejectedValue(new Error("Cvent down"));
+        PUSHED = [{ attendeeA: "acct-acme", attendeeB: "d1", timeslotId: "ts-1", cventAppointmentId: "appt-here" }];
+
+        const page = await listSponsorsPage({ eventCode: "EVT" });
+
+        expect(page.rows.find((r) => r.company === "Acme")?.scheduledCount).toBe(1);
+    });
+});

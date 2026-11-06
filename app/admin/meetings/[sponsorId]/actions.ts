@@ -13,7 +13,12 @@ import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
 import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
-import { cancelAppointment, getAppointmentsByEvent } from "@/lib/cvent/client";
+import {
+    cancelAppointment,
+    getAppointmentsByEvent,
+    getEventAppointments,
+} from "@/lib/cvent/client";
+import { companyAppointmentsNotInPortal } from "@/lib/cvent/cventOnly";
 import { companyMaximumMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import {
@@ -174,6 +179,9 @@ async function boothFilterForSponsor(
  * Returns null when the sponsorId does not resolve to a known sponsor for
  * the event (triggers a 404 in the page component).
  *
+ * The company's Cvent appointments that this database has no meeting for are added as read-only "cvent" rows.
+ * They count toward the Scheduled number, as they do in a scheduler run.
+ *
  * @param {{ sponsorId: string; eventCode: string }} params
  * @returns {Promise<{ sponsor: SponsorDetail; meetings: MeetingRow[]; timezone: string } | null>}
  */
@@ -185,7 +193,7 @@ export async function getMeetingDetail(params: {
     meetings: MeetingRow[];
     timezone: string;
 } | null> {
-    const [attendees, meetingRows, requestRows, scheduleData, appointments] =
+    const [attendees, meetingRows, requestRows, scheduleData, appointments, activeAppointments] =
         await Promise.all([
             loadAttendees(false, params.eventCode),
             db
@@ -209,6 +217,15 @@ export async function getMeetingDetail(params: {
                 ),
             loadEventScheduleData(params.eventCode),
             getAppointmentsByEvent(params.eventCode),
+            // The active appointments with their participants, for the ones this database has no meeting for.
+            // The page still loads without them when Cvent can't be read.
+            getEventAppointments(params.eventCode).catch((err) => {
+                console.warn(
+                    `getMeetingDetail: could not load Cvent appointments for "${params.eventCode}". ` +
+                        `${err instanceof Error ? err.message : String(err)}`,
+                );
+                return [];
+            }),
         ]);
 
     // A pushed meeting's Cvent timeslot can be missing from listAvailableTimes, for example after it was removed.
@@ -226,6 +243,45 @@ export async function getMeetingDetail(params: {
     const attendeeMap = new Map(attendees.map((a) => [a.salesforceId, a]));
 
     const max = companyMaximumMeetings(company);
+
+    // The company's Cvent appointments this database has no meeting for.
+    // Another environment pushed them, or someone made them in Cvent.
+    // They count toward the maximum, so they are shown read-only.
+    const cventOnly = companyAppointmentsNotInPortal({
+        appointments: activeAppointments,
+        attendees,
+        accountId: company.accountId,
+        knownAppointmentIds: new Set(
+            meetingRows
+                .map((m) => m.cventAppointmentId)
+                .filter((id): id is string => !!id),
+        ),
+    });
+    const cventOnlyRows: MeetingRow[] = cventOnly.map((a, i) => {
+        const delegate = a.delegates[0];
+        return {
+            id: `cvent-${a.appointmentId ?? i}`,
+            delegateSalesforceId: delegate?.salesforceId ?? "",
+            delegateName:
+                a.delegates.map((d) => d.name).join(", ") ||
+                "No delegate found",
+            delegateCompany: a.delegates.map((d) => d.company).join(", "),
+            delegateCancelled: false,
+            matchKind: "admin",
+            mutual: false,
+            rank: null,
+            timeslotId: "",
+            locationId: null,
+            startTime: a.startTime,
+            endTime: a.appointmentId
+                ? (appointmentById.get(a.appointmentId)?.endTime.toISOString() ?? null)
+                : null,
+            location: a.locationName,
+            syncStatus: "synced",
+            source: "cvent",
+            cventAppointmentId: a.appointmentId,
+        };
+    });
 
     const meetings: MeetingRow[] = meetingRows
         .map((m) => {
@@ -267,6 +323,7 @@ export async function getMeetingDetail(params: {
                 cventAppointmentId: m.cventAppointmentId,
             };
         })
+        .concat(cventOnlyRows)
         .sort((a, b) => {
             if (!a.startTime) return 1;
             if (!b.startTime) return -1;
@@ -288,7 +345,8 @@ export async function getMeetingDetail(params: {
             maximum: max.maximum,
             maximumFromTier: max.source === "tier",
             requestCount: requestRows.length,
-            scheduledCount: meetingRows.length,
+            // Appointments only in Cvent count too, the same as in a scheduler run.
+            scheduledCount: meetingRows.length + cventOnlyRows.length,
         },
         meetings,
         timezone: scheduleData.timezone,

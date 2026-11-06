@@ -10,6 +10,7 @@ import { emptyProfile } from "@/lib/attendees/formatProfile";
 const loadAttendees = vi.fn();
 const loadEventScheduleData = vi.fn();
 const getEventSettings = vi.fn();
+const getEventAppointments = vi.fn();
 
 // Every query returns these rows. `.limit()` returns them too.
 let rows: unknown[] = [];
@@ -51,6 +52,7 @@ vi.mock("@/lib/events/settings", () => ({
 }));
 vi.mock("@/lib/cvent/client", () => ({
     getAppointmentsByEvent: async () => [],
+    getEventAppointments: (...a: unknown[]) => getEventAppointments(...a),
     cancelAppointment: vi.fn(),
 }));
 vi.mock("@/lib/cvent/push", () => ({
@@ -179,6 +181,7 @@ beforeEach(() => {
     rows = [];
     loadAttendees.mockResolvedValue(ATTENDEES);
     getEventSettings.mockResolvedValue({ boothLocations: null });
+    getEventAppointments.mockResolvedValue([]);
     loadEventScheduleData.mockResolvedValue({
         timeslots: TIMESLOTS,
         locations: LOCATIONS,
@@ -198,6 +201,46 @@ describe("getMeetingDetail — Salesforce meeting counts", () => {
         loadAttendees.mockResolvedValue([sponsor("d", "acct-dia", { sponsorTier: "diamond" })]);
         const detail = await getMeetingDetail({ sponsorId: "acct-dia", eventCode: "NALES" });
         expect(detail?.sponsor).toMatchObject({ purchased: null, bonus: null, maximum: 8, maximumFromTier: true });
+    });
+});
+
+describe("getMeetingDetail — appointments only in Cvent", () => {
+    // Lakeside pushed one meeting from here. Another environment pushed a second one.
+    const WHITNEY: Attendee = { ...sponsor("whitney", "acct-assemble"), role: "delegate", name: "Whitney Krusee", company: "Assemble" };
+    const APPOINTMENTS = [
+        { id: "appt-here", startTime: "2026-11-10T10:00:00.000Z", participantContactIds: ["cvent-ronnie", "cvent-whitney"], hostContactIds: ["cvent-ronnie"], locationName: "Booth 3" },
+        { id: "appt-other", startTime: "2026-11-10T11:00:00.000Z", participantContactIds: ["cvent-ronnie", "cvent-whitney"], hostContactIds: ["cvent-ronnie"], locationName: "Booth 3" },
+    ];
+
+    test("shows a read-only row for each appointment this database has no meeting for, and counts it", async () => {
+        loadAttendees.mockResolvedValue([...ATTENDEES, WHITNEY]);
+        rows = [{ ...lakesideMeeting("b3-10", "b3"), cventAppointmentId: "appt-here" }];
+        getEventAppointments.mockResolvedValue(APPOINTMENTS);
+
+        const detail = await getMeetingDetail({ sponsorId: "acct-lake", eventCode: "NALES" });
+
+        expect(detail?.meetings.map((m) => [m.source, m.cventAppointmentId])).toEqual([
+            ["portal", "appt-here"],
+            ["cvent", "appt-other"],
+        ]);
+        expect(detail?.meetings[1]).toMatchObject({
+            delegateName: "Whitney Krusee",
+            delegateCompany: "Assemble",
+            startTime: "2026-11-10T11:00:00.000Z",
+            location: "Booth 3",
+            syncStatus: "synced",
+        });
+        expect(detail?.sponsor.scheduledCount).toBe(2);
+    });
+
+    test("still loads the page when Cvent can't be read", async () => {
+        rows = [lakesideMeeting("b3-10", "b3")];
+        getEventAppointments.mockRejectedValue(new Error("Cvent down"));
+
+        const detail = await getMeetingDetail({ sponsorId: "acct-lake", eventCode: "NALES" });
+
+        expect(detail?.meetings).toHaveLength(1);
+        expect(detail?.sponsor.scheduledCount).toBe(1);
     });
 });
 

@@ -2,6 +2,12 @@ import "@/app/frontend.css";
 import { redirect } from "next/navigation";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { isOwnParty } from "@/lib/attendees/self";
+import {
+    partyId,
+    resolveCompanyPackage,
+    sponsorCompaniesByAccountId,
+} from "@/lib/attendees/companies";
+import { companyMaximumMeetings } from "@/lib/attendees/caps";
 import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventSettings } from "@/lib/events/settings";
@@ -29,6 +35,18 @@ export default async function Home() {
     const allDelegates = attendees.filter(
         (a) => a.role === "delegate" && !isOwnParty(a, identity.attendee),
     );
+
+    // The viewer's company maximum, the same number the scheduler and the admin pages use.
+    // A viewer from the local users table may not be in the attendee list, so their own record stands in.
+    const company = sponsorCompaniesByAccountId(attendees).get(
+        partyId(identity.attendee),
+    );
+    const maxMeetings = companyMaximumMeetings(
+        company ?? {
+            tier: identity.attendee.sponsorTier,
+            ...resolveCompanyPackage([identity.attendee]),
+        },
+    ).maximum;
 
     // Delegates who cancelled in Cvent aren't attending, so they're left out of the catalog.
     const delegates = allDelegates.filter((a) => !a.cventCancelled);
@@ -69,6 +87,7 @@ export default async function Home() {
                 delegates={delegates}
                 cancelledDelegates={cancelledDelegates}
                 currentSponsor={identity.attendee}
+                maxMeetings={maxMeetings}
                 eventLogo={eventLogo}
             />
         </div>

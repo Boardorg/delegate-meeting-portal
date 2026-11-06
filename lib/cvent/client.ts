@@ -442,8 +442,8 @@ async function fetchAppointmentsPage(
 /**
  * Lists every appointment for an event, following pagination to the end.
  * Used to resolve a synced meeting's display time and location from the
- * appointment itself, since listAvailableTimes/listLocations only reflect
- * currently open capacity and stop including a slot once it's fully booked.
+ * appointment itself, since a slot in listAvailableTimes/listLocations can't say which appointment holds it.
+ * Full slots are still listed, and availableAppointments is the location's max-at-same-time setting, not the room left.
  *
  * Push also uses it to read an existing appointment's type before editing it in place.
  * Cvent's get-appointment call returns 404 for appointments that do exist, so the list is the only reliable source.
@@ -577,10 +577,23 @@ export const getEventAttendees = cache(
 
 /** An existing Cvent appointment, reduced to what pre-blocking the scheduler needs. */
 export type CventExistingAppointment = {
+    /** Cvent appointment id. Null when Cvent omits it. */
+    id: string | null;
     /** ISO 8601 UTC start time of the appointment. */
     startTime: string;
     /** Cvent contact ids of the appointment's participants (hosts + attendees). */
     participantContactIds: string[];
+    /**
+     * Cvent contact ids of the participants whose `type` is "host".
+     * A rep listed here is busy hosting at this start time.
+     * Cvent rejects a host who is already in another appointment at that time.
+     */
+    hostContactIds: string[];
+    /**
+     * The appointment's location name. Null when Cvent omits it.
+     * Appointments carry only the location's name, not its id.
+     */
+    locationName: string | null;
 };
 
 /**
@@ -589,7 +602,9 @@ export type CventExistingAppointment = {
  * recovered from a response-validation failure (`start` is an ISO string).
  */
 type RawCventAppointment = {
+    id?: string;
     start?: Date | string;
+    location?: { name?: string | null } | null;
     deleted?: boolean;
     /** e.g. "ACTIVE", "CONFIRMED", "CANCELLED" — see AppointmentStatusJson. */
     status?: string;
@@ -624,12 +639,20 @@ export function toExistingAppointments(
         const participantContactIds = (appt.participants ?? [])
             .map((p) => p.attendee?.contact?.id ?? p.attendee?.id)
             .filter((id): id is string => !!id);
+        // The hosts alone, read the same way, so push and the scheduler know which reps are busy.
+        const hostContactIds = (appt.participants ?? [])
+            .filter((p) => p.type?.toLowerCase() === "host")
+            .map((p) => p.attendee?.contact?.id ?? p.attendee?.id)
+            .filter((id): id is string => !!id);
         out.push({
+            id: appt.id ?? null,
             startTime:
                 typeof appt.start === "string"
                     ? appt.start
                     : appt.start.toISOString(),
             participantContactIds,
+            hostContactIds,
+            locationName: appt.location?.name ?? null,
         });
     }
     return out;
@@ -708,6 +731,10 @@ async function fetchExistingAppointmentsPage(
  * contact ids), following pagination to the end. The scheduling engine uses
  * these to avoid re-booking a pair that already meets, or putting an attendee
  * in a time they're already booked. Deleted appointments are skipped.
+ *
+ * Each appointment also carries its `id`, its `hostContactIds` and its `locationName`.
+ * Push's busy-host lookup uses the ids and hosts to leave off reps already hosting at that time.
+ * The scheduler uses the hosts the same way, and the location name to take existing appointments off a slot's room.
  *
  * Mock mode reads the optional data/mock/cvent/appointments.json fixture (raw
  * Cvent appointment records) so reconciliation — including multi-host
@@ -841,7 +868,7 @@ export function buildUpdateAppointmentRequest(
 }
 
 /**
- * Whether to suppress Cvent notifications (invite/update emails) when pushing
+ * Whether to suppress Cvent notifications (invite/update/cancel emails) when pushing
  * appointments. Controlled by CVENT_SUPPRESS_NOTIFICATIONS; defaults to false
  * (notifications sent as configured in Cvent).
  */
@@ -985,5 +1012,10 @@ export async function cancelAppointment(
     if (isMock()) return;
 
     const id = await getAppointmentEventId(eventCode);
-    await getClient().appointments.cancelAppointment({ id, apptId });
+    // Cancelling emails the participants unless notifications are suppressed, the same as create and update.
+    await getClient().appointments.cancelAppointment({
+        id,
+        apptId,
+        suppressNotifications: suppressNotifications(),
+    });
 }

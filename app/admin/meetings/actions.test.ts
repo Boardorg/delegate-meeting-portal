@@ -19,7 +19,7 @@ vi.mock("@/lib/db/client", () => ({
     db: {
         select: () => ({
             from: (table: unknown) => ({
-                where: async () => (table === meetingRequestsTable() ? REQUESTS : []),
+                where: async () => (table === meetingRequestsTable() ? REQUESTS : PUSHED),
             }),
         }),
         delete: (...a: unknown[]) => dbDelete(...a),
@@ -33,16 +33,28 @@ vi.mock("@/lib/attendees/loader", () => ({
 vi.mock("@/lib/cvent/mapper", () => ({
     loadEventScheduleData: (...a: unknown[]) => loadEventScheduleData(...a),
 }));
+// The event's Cvent appointments. None by default.
+const getEventAppointments = vi.fn();
 vi.mock("@/lib/cvent/client", () => ({
-    getEventAppointments: async () => [],
+    getEventAppointments: (...a: unknown[]) => getEventAppointments(...a),
     cancelAppointment: vi.fn(),
 }));
 vi.mock("@/lib/cvent/push", () => ({
     pushMeetingRows: vi.fn(),
     needsSync: vi.fn(),
 }));
+// No manual booth mapping by default, so each sponsor's booth is matched by location name.
+const getEventSettings = vi.fn();
+vi.mock("@/lib/events/settings", () => ({
+    getEventSettings: (...a: unknown[]) => getEventSettings(...a),
+}));
 
-import { runSchedulerForEvent } from "./actions";
+import {
+    countBoothProblemsForEvent,
+    listSponsorsPage,
+    runSchedulerForEvent,
+} from "./actions";
+import { BOOTH_MAPPING_UNAVAILABLE_MESSAGE } from "@/lib/scheduling/boothData";
 import { NO_ATTENDEES_MESSAGE } from "@/lib/scheduling/helpers";
 import { meetingRequests } from "@/lib/db/schema";
 import {
@@ -59,10 +71,14 @@ function meetingRequestsTable(): unknown {
     return meetingRequests;
 }
 
-// One sponsor request from Acme to Dee.
-const REQUESTS = [
+// Meetings already pushed to Cvent, as scheduled_meetings rows. None by default.
+let PUSHED: { attendeeA: string; attendeeB: string; timeslotId: string; cventAppointmentId: string }[] = [];
+
+// One sponsor request from Acme to Dee by default.
+const ONE_REQUEST = [
     { id: 1, requesterId: "acct-acme", targetId: "d1", rank: 5, eventCode: "EVT" },
 ];
+let REQUESTS = ONE_REQUEST;
 
 /**
  * Minimal attendee builder.
@@ -75,7 +91,7 @@ function att(
 ): Attendee {
     return {
         id: partial.salesforceId,
-        cventContactId: "",
+        cventContactId: partial.cventContactId ?? "",
         cventCancelled: partial.cventCancelled,
         salesforceId: partial.salesforceId,
         accountId: partial.accountId ?? "",
@@ -85,7 +101,13 @@ function att(
         role: partial.role,
         company: partial.company ?? "",
         title: "",
-        sponsorTier: partial.role === "sponsor" ? "standard" : null,
+        sponsorTier: partial.sponsorTier ?? (partial.role === "sponsor" ? "standard" : null),
+        opportunityId: partial.opportunityId,
+        boothNo: partial.boothNo,
+        purchasedMeetings: partial.purchasedMeetings,
+        bonusMeetings: partial.bonusMeetings,
+        maximumMeetings: partial.maximumMeetings,
+        meetingsAtOnce: partial.meetingsAtOnce,
         profile: emptyProfile(),
         scheduling: {
             maxSameCompanyMeetings: partial.role === "sponsor" ? null : 2,
@@ -93,6 +115,9 @@ function att(
         },
     };
 }
+
+// Every slot is at loc-1, which is Acme's booth.
+const BOOTH_1 = { id: "loc-1", name: "Booth 1", capacity: Infinity, parentLocationId: null };
 
 const TYPES = [
     { id: "t-s2d", name: "Sponsor to Delegate Meetings" },
@@ -142,9 +167,9 @@ function scheduleWith(kinds: AppointmentTypeKinds | null, slots?: Timeslot[]) {
     ];
     loadEventScheduleData.mockResolvedValue({
         timeslots,
-        locations: [],
+        locations: [BOOTH_1],
         timeslotById: new Map(timeslots.map((t) => [t.id, t])),
-        locationById: new Map(),
+        locationById: new Map([[BOOTH_1.id, BOOTH_1]]),
         timezone: "UTC",
         appointmentTypes: TYPES,
         appointmentTypeKinds: kinds,
@@ -156,8 +181,12 @@ beforeEach(() => {
     vi.stubEnv("USE_MOCK", "false");
     dbDelete.mockReturnValue({ where: async () => undefined });
     dbInsert.mockReturnValue({ values: insertValues });
+    getEventSettings.mockResolvedValue({ boothLocations: null });
+    getEventAppointments.mockResolvedValue([]);
+    PUSHED = [];
+    REQUESTS = ONE_REQUEST;
     loadAttendees.mockResolvedValue([
-        att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme" }),
+        att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1" }),
         att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
     ]);
 });
@@ -226,7 +255,7 @@ describe("runSchedulerForEvent — appointment-type mapping", () => {
 });
 
 describe("runSchedulerForEvent — attendees didn't load", () => {
-    const SPONSOR = att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme" });
+    const SPONSOR = att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1" });
     const DELEGATE = att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" });
 
     /**
@@ -273,5 +302,169 @@ describe("runSchedulerForEvent — attendees didn't load", () => {
         expect(result.ok).toBe(true);
         expect(dbDelete).toHaveBeenCalledTimes(1);
         expect(insertValues).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("runSchedulerForEvent — booths", () => {
+    test("stops and changes nothing when the booth mapping can't be read", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        getEventSettings.mockRejectedValue(new Error("db down"));
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result).toEqual({ ok: false, error: BOOTH_MAPPING_UNAVAILABLE_MESSAGE });
+        expect(dbDelete).not.toHaveBeenCalled();
+        expect(dbInsert).not.toHaveBeenCalled();
+    });
+
+    test("gives a sponsor with no booth no meetings and lists it in the report", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme" }),
+            att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
+        ]);
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.report.meetingsScheduled).toBe(0);
+        expect(result.report.unscheduledRequests.map((u) => u.reason)).toEqual(["no_booth"]);
+        expect(result.report.boothProblems.map((p) => [p.company, p.problem])).toEqual([["Acme", "no_booth"]]);
+    });
+
+    test("uses the manual mapping from Event settings", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        // Acme's booth number 7 matches nothing by name, but is mapped to loc-1 by hand.
+        getEventSettings.mockResolvedValue({ boothLocations: { "7": "loc-1" } });
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "7" }),
+            att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
+        ]);
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok && result.report.meetingsScheduled).toBe(1);
+    });
+});
+
+describe("runSchedulerForEvent — existing meetings count toward the maximum", () => {
+    test("a maximum of 5 with 5 meetings already pushed gets no new meetings", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1", maximumMeetings: 5 }),
+            att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
+        ]);
+        // Five pushed meetings with other delegates, at times the run doesn't use.
+        // Cvent's appointment list is empty here, as in mock mode, so the DB rows are what count.
+        PUSHED = Array.from({ length: 5 }, (_, i) => ({
+            attendeeA: "acct-acme",
+            attendeeB: `d-old-${i}`,
+            timeslotId: `old-${i}`,
+            cventAppointmentId: `appt-${i}`,
+        }));
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.report.meetingsScheduled).toBe(0);
+        expect(result.report.unscheduledRequests.map((u) => u.reason)).toEqual(["cap_reached"]);
+    });
+});
+
+describe("runSchedulerForEvent — pushed meetings listed in both Cvent and the DB", () => {
+    test("counts them once, so a maximum of 5 with 3 pushed books 2 more", async () => {
+        const kinds: AppointmentTypeKinds = { "t-s2d": "sponsor_delegate" };
+        const times = ["2026-01-20T10:00:00Z", "2026-01-20T11:00:00Z", "2026-01-20T12:00:00Z"];
+        scheduleWith(kinds, times.map((t, i) => slot(`ts-${i}`, t, "t-s2d", kinds)));
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1", maximumMeetings: 5, cventContactId: "h-acme" }),
+            ...["d1", "d2", "d3"].map((id) => att({ salesforceId: id, role: "delegate" })),
+        ]);
+        REQUESTS = ["d1", "d2", "d3"].map((d, i) => ({ id: i + 1, requesterId: "acct-acme", targetId: d, rank: 5, eventCode: "EVT" }));
+
+        // The same 3 pushed meetings, as DB rows and as Cvent appointments, at times the run doesn't use.
+        PUSHED = [0, 1, 2].map((i) => ({
+            attendeeA: "acct-acme",
+            attendeeB: `d-old-${i}`,
+            timeslotId: `old-${i}`,
+            cventAppointmentId: `appt-${i}`,
+        }));
+        getEventAppointments.mockResolvedValue(
+            [0, 1, 2].map((i) => ({
+                id: `appt-${i}`,
+                startTime: `2026-01-20T0${i + 6}:00:00Z`,
+                participantContactIds: ["h-acme", `cd-old-${i}`],
+                hostContactIds: ["h-acme"],
+                locationName: "Booth 1",
+            })),
+        );
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok && result.report.meetingsScheduled).toBe(2);
+    });
+});
+
+describe("runSchedulerForEvent — Cvent's appointment list can't be read", () => {
+    test("takes pushed meetings off their slot's room, so a full 1-per-slot booth gets no second meeting", async () => {
+        const kinds: AppointmentTypeKinds = { "t-s2d": "sponsor_delegate" };
+        // One slot at Booth 1, 1 per slot, already holding a pushed Acme meeting.
+        scheduleWith(kinds, [{ ...slot("ts-s2d", "2026-01-20T10:00:00Z", "t-s2d", kinds), capacity: 1 }]);
+        getEventAppointments.mockRejectedValue(new Error("Cvent down"));
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1", meetingsAtOnce: 2, cventContactId: "h1" }),
+            att({ salesforceId: "s2", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1", meetingsAtOnce: 2, cventContactId: "h2" }),
+            att({ salesforceId: "d1", role: "delegate", name: "Dee", company: "Globex" }),
+        ]);
+        PUSHED = [{ attendeeA: "acct-acme", attendeeB: "d-old", timeslotId: "ts-s2d", cventAppointmentId: "appt-old" }];
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.report.meetingsScheduled).toBe(0);
+        expect(result.report.unscheduledRequests.map((u) => u.reason)).toEqual(["no_availability"]);
+    });
+});
+
+describe("countBoothProblemsForEvent", () => {
+    test("counts the companies with a booth problem, for the warning before a run", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1" }),
+            att({ salesforceId: "s2", role: "sponsor", accountId: "acct-beta", company: "Beta" }),
+            att({ salesforceId: "s3", role: "sponsor", accountId: "acct-gamma", company: "Gamma", boothNo: "99" }),
+        ]);
+
+        expect(await countBoothProblemsForEvent("EVT")).toBe(2);
+    });
+
+    test("returns null when the booths can't be checked", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        getEventSettings.mockRejectedValue(new Error("db down"));
+
+        expect(await countBoothProblemsForEvent("EVT")).toBeNull();
+    });
+});
+
+describe("listSponsorsPage — Salesforce meeting counts", () => {
+    test("shows purchased, bonus and maximum with the scheduler's rule, including the tier fallback", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        loadAttendees.mockResolvedValue([
+            att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", purchasedMeetings: 3, bonusMeetings: 2 }),
+            att({ salesforceId: "s2", role: "sponsor", accountId: "acct-beta", company: "Beta", purchasedMeetings: 4, maximumMeetings: 6 }),
+            att({ salesforceId: "s3", role: "sponsor", accountId: "acct-dia", company: "Diamond Co", sponsorTier: "diamond" }),
+            att({ salesforceId: "s4", role: "sponsor", accountId: "acct-exh", company: "Exhibitor", purchasedMeetings: 0 }),
+        ]);
+
+        const page = await listSponsorsPage({ eventCode: "EVT", sortDir: "asc" });
+        const byCompany = new Map(page.rows.map((r) => [r.company, r]));
+
+        expect(byCompany.get("Acme")).toMatchObject({ purchased: 3, bonus: 2, maximum: 5, maximumFromTier: false, requestCount: 1 });
+        expect(byCompany.get("Beta")).toMatchObject({ purchased: 4, bonus: null, maximum: 6, maximumFromTier: false });
+        expect(byCompany.get("Diamond Co")).toMatchObject({ purchased: null, bonus: null, maximum: 8, maximumFromTier: true });
+        expect(byCompany.get("Exhibitor")).toMatchObject({ purchased: 0, maximum: 0, maximumFromTier: false });
     });
 });

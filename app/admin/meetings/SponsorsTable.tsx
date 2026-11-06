@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
     getCoreRowModel,
@@ -30,6 +31,7 @@ import type {
     SponsorsPage,
 } from "./actions";
 import type { SchedulerReport } from "@/lib/scheduling/report";
+import { runBoothWarning } from "@/lib/scheduling/booths";
 import type { SyncReport } from "@/lib/cvent/syncReport";
 
 // ---------------------------------------------------------------------------
@@ -46,9 +48,11 @@ type Props = {
     sortField: SponsorSortField;
     sortDir: "asc" | "desc";
     data: SponsorsPage;
+    /** How many sponsor companies have a booth problem. Null when it couldn't be checked. */
+    boothProblemCount: number | null;
 };
 
-const COL_COUNT = 7;
+const COL_COUNT = 8;
 
 export default function SponsorsTable({
     selectedEvent,
@@ -56,6 +60,7 @@ export default function SponsorsTable({
     sortField,
     sortDir,
     data,
+    boothProblemCount,
 }: Props) {
     const router = useRouter();
     const pathname = usePathname();
@@ -198,8 +203,9 @@ export default function SponsorsTable({
         () => [
             { id: "company", header: "Company" },
             { id: "tier", header: "Tier" },
-            { id: "contracted", header: "Contracted", enableSorting: false },
+            { id: "purchased", header: "Purchased", enableSorting: false },
             { id: "bonus", header: "Bonus", enableSorting: false },
+            { id: "maximum", header: "Maximum", enableSorting: false },
             { id: "requestCount", header: "Requests" },
             { id: "scheduledCount", header: "Scheduled" },
         ],
@@ -297,6 +303,7 @@ export default function SponsorsTable({
                     eventCode={selectedEvent}
                     isPending={isPending}
                     error={runError}
+                    boothProblemCount={boothProblemCount}
                     onConfirm={handleRunEngine}
                     onCancel={() => setShowRunModal(false)}
                 />
@@ -399,13 +406,13 @@ function SponsorRow({
     row: SponsorRow;
     onView: () => void;
 }) {
-    // Calculate the total meetings (contracted + bonus) for both progress bars.
-    const total = row.contracted + row.bonus;
+    // The target for both progress bars is the company's maximum, the same number the scheduler uses.
+    const total = row.maximum;
     const requestPercent = total > 0 ? Math.round((row.requestCount / total) * 100) : 0;
     const scheduledPercent = total > 0 ? Math.round((row.scheduledCount / total) * 100) : 0;
 
-    // Render the sponsor row with company, contact, tier, contracted/bonus totals, and
-    // progress bars for requested vs. scheduled meetings against the total.
+    // Render the sponsor row with company, tier, purchased, bonus and maximum meetings, and
+    // progress bars for requested vs. scheduled meetings against the maximum.
     return (
         <tr className="adm-row adm-row-clickable" onClick={onView}>
             <td>
@@ -414,8 +421,18 @@ function SponsorRow({
             <td>
                 <TierPill tier={row.sponsorTier} />
             </td>
-            <td className="adm-mono">{row.contracted}</td>
-            <td className="adm-mono-dim">{row.bonus > 0 ? `+${row.bonus}` : "—"}</td>
+            <td className="adm-mono">{row.purchased ?? "—"}</td>
+            <td className="adm-mono-dim">
+                {row.bonus !== null && row.bonus > 0 ? `+${row.bonus}` : "—"}
+            </td>
+            <td className="adm-mono">
+                {row.maximum}
+                {row.maximumFromTier && (
+                    <span className="adm-mono-dim" title="All three Salesforce meeting counts are blank, so this is the tier count.">
+                        {" "}from tier
+                    </span>
+                )}
+            </td>
             <td>
                 <ProgressCell count={row.requestCount} total={total} percent={requestPercent} />
             </td>
@@ -588,15 +605,18 @@ function RunEngineModal({
     eventCode,
     isPending,
     error,
+    boothProblemCount,
     onConfirm,
     onCancel,
 }: {
     eventCode: string;
     isPending: boolean;
     error: string | null;
+    boothProblemCount: number | null;
     onConfirm: () => void;
     onCancel: () => void;
 }) {
+    const boothWarning = runBoothWarning(boothProblemCount);
     return (
         <div className="adm-modal-overlay">
             <div className="adm-modal adm-modal-md">
@@ -607,6 +627,13 @@ function RunEngineModal({
                     with fresh engine output. Meetings already pushed to Cvent are
                     preserved and count against per-sponsor caps.
                 </p>
+                {/* Companies with a booth problem get no meetings, so say so before running. */}
+                {boothWarning && (
+                    <div className="adm-modal-warn-at" role="alert" style={{ marginBottom: 16 }}>
+                        {boothWarning} See the{" "}
+                        <Link href="/admin/booths">Sponsor booths</Link> page.
+                    </div>
+                )}
                 {error && <div className="adm-modal-error">{error}</div>}
                 <div className="adm-modal-actions">
                     <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>

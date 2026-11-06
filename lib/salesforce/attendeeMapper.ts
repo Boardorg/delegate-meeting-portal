@@ -36,8 +36,9 @@ export type MeetingDataRecord = {
         Title?: string | null;
         Email?: string | null;
         Phone?: string | null;
-        // Salesforce Account id of the contact's employer. The company key that
-        // groups a sponsor's reps (see lib/attendees/companies.ts).
+        // Salesforce Account id of the contact's employer.
+        // Sponsor reps are grouped by the Opportunity's account instead (Registration__r.AccountId below).
+        // This one can differ, for example a rep whose Contact sits on a sister company.
         AccountId?: string | null;
         Account?: {
             Name?: string | null;
@@ -50,12 +51,25 @@ export type MeetingDataRecord = {
         Dietary_Restrictions__c?: string | null;
         Special_Accommodations__c?: string | null;
     } | null;
+    // The sponsor Opportunity's id (the `Registration__c` lookup).
+    Registration__c?: string | null;
     Registration__r?: {
         Name?: string | null;
         StageName?: string | null;
         Discount_Code__c?: string | null;
         Sponsorship_Package__c?: string | null;
         RecordType?: { Name?: string | null } | null;
+        // The Opportunity's account. This is the sponsor COMPANY, so it is the
+        // key that groups a sponsor's reps (see lib/attendees/companies.ts).
+        AccountId?: string | null;
+        Account?: { Name?: string | null } | null;
+        // Free text, for example "3". Blank when no booth is assigned yet.
+        Booth_No__c?: string | number | null;
+        // Number fields. Each can be blank, which is not the same as 0.
+        Meetings__c?: number | string | null;
+        Cvent_Bonus_Meetings__c?: number | string | null;
+        Cvent_Maximum_Meetings__c?: number | string | null;
+        Cvent_Number_Diaries__c?: number | string | null;
     } | null;
     [key: string]: unknown;
 };
@@ -155,10 +169,39 @@ type FieldMapper<R, K extends keyof Attendee> = (
  * Mapper object shape for one source record type. The mapped type forces a
  * mapper to exist for every Attendee key, so adding a new Attendee field is
  * caught at compile time.
+ * Optional Attendee fields need a mapper too.
+ * The one exception is `cventCancelled`, which lib/attendees/loader.ts sets from Cvent after mapping.
  */
 type AttendeeFieldMappers<R> = {
-    [K in keyof Attendee]: FieldMapper<R, K>;
+    [K in Exclude<keyof Attendee, "cventCancelled">]-?: FieldMapper<R, K>;
 };
+
+/**
+ * Reads a Salesforce number field that can be blank.
+ * Blank, missing and unparseable values all become null, so they can't be mistaken for 0.
+ *
+ * @param {unknown} value - The raw field value.
+ * @returns {number | null} The number, or null when blank.
+ */
+export function numberOrNull(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "string" && value.trim() === "") return null;
+    const n = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Reads the free-text booth number, trimmed.
+ * A blank value becomes null.
+ *
+ * @param {unknown} value - The raw Booth_No__c value.
+ * @returns {string | null} The trimmed booth number, or null.
+ */
+export function boothNoOrNull(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    const t = String(value).trim();
+    return t === "" ? null : t;
+}
 
 /**
  * Maps a sponsor record's nested Account fields into the Attendee `profile`
@@ -256,12 +299,14 @@ export const attendeeFieldMappers: AttendeeFieldMappers<MeetingDataRecord> = {
     // Attendee__c.Id from Salesforce. Coerced to string for safety.
     salesforceId: (record) => String(record.Id ?? ""),
 
-    // Salesforce Account id of the contact's employer. For sponsors this is the
-    // party id that bundles all of a company's reps (lib/attendees/companies.ts).
+    // Salesforce Account id of the sponsor Opportunity, not the rep's Contact.
+    // This is the party id that bundles all of a company's reps
+    // (lib/attendees/companies.ts). A rep whose Contact sits on another account
+    // still joins the company that bought the package.
     accountId: (record, ctx) =>
         ctx.usePlaceholders
             ? `acct-${placeholderId(ctx)}`
-            : String(record.Delegate__r?.AccountId ?? ""),
+            : String(record.Registration__r?.AccountId ?? ""),
 
     // Combine first + last into a single display name.
     name: (record) => {
@@ -281,8 +326,8 @@ export const attendeeFieldMappers: AttendeeFieldMappers<MeetingDataRecord> = {
     // based on which sub-list (delegates vs sponsors) the record came from.
     role: (_record, ctx) => ctx.role,
 
-    // Account.Name on the joined Contact.
-    company: (record) => record.Delegate__r?.Account?.Name ?? "",
+    // The sponsor Opportunity's account name, matching accountId above.
+    company: (record) => record.Registration__r?.Account?.Name ?? "",
 
     // Contact.Title.
     title: (record) => record.Delegate__r?.Title ?? "",
@@ -294,12 +339,34 @@ export const attendeeFieldMappers: AttendeeFieldMappers<MeetingDataRecord> = {
         const packageLabel = record.Registration__r?.Sponsorship_Package__c;
         let packageType: SponsorTier = null;
         if (typeof packageLabel == "string") {
-            packageLabel.toLowerCase().includes("diamond")
-                ? (packageType = "diamond")
-                : (packageType = "standard");
+            packageType = packageLabel.toLowerCase().includes("diamond")
+                ? "diamond"
+                : "standard";
         }
         return packageType;
     },
+
+    // The sponsor Opportunity's id.
+    opportunityId: (record) => record.Registration__c || null,
+
+    // Free-text booth number on the Opportunity, trimmed. Blank becomes null.
+    boothNo: (record) => boothNoOrNull(record.Registration__r?.Booth_No__c),
+
+    // Package meetings. Read from Meetings__c, which ops already fills in.
+    purchasedMeetings: (record) =>
+        numberOrNull(record.Registration__r?.Meetings__c),
+
+    // Extra meetings on top of the package.
+    bonusMeetings: (record) =>
+        numberOrNull(record.Registration__r?.Cvent_Bonus_Meetings__c),
+
+    // The total the sponsor may have, when ops sets it directly.
+    maximumMeetings: (record) =>
+        numberOrNull(record.Registration__r?.Cvent_Maximum_Meetings__c),
+
+    // How many meetings the sponsor may hold at the same time.
+    meetingsAtOnce: (record) =>
+        numberOrNull(record.Registration__r?.Cvent_Number_Diaries__c),
 
     // Delegated to sponsorProfileMapper to keep this object readable.
     profile: sponsorProfileMapper,
@@ -377,6 +444,14 @@ export const delegateFieldMappers: AttendeeFieldMappers<CventAttendeeRecord> = {
     // Delegates have no sponsorship package.
     sponsorTier: () => null,
 
+    // Delegates have no sponsor Opportunity, booth or meeting package.
+    opportunityId: () => null,
+    boothNo: () => null,
+    purchasedMeetings: () => null,
+    bonusMeetings: () => null,
+    maximumMeetings: () => null,
+    meetingsAtOnce: () => null,
+
     // Delegated to delegateProfileMapper to keep this object readable.
     profile: delegateProfileMapper,
 
@@ -425,6 +500,12 @@ function buildAttendee<R>(
         company: mappers.company(record, ctx),
         title: mappers.title(record, ctx),
         sponsorTier: mappers.sponsorTier(record, ctx),
+        opportunityId: mappers.opportunityId(record, ctx),
+        boothNo: mappers.boothNo(record, ctx),
+        purchasedMeetings: mappers.purchasedMeetings(record, ctx),
+        bonusMeetings: mappers.bonusMeetings(record, ctx),
+        maximumMeetings: mappers.maximumMeetings(record, ctx),
+        meetingsAtOnce: mappers.meetingsAtOnce(record, ctx),
         profile: mappers.profile(record, ctx),
         scheduling: mappers.scheduling(record, ctx),
     };

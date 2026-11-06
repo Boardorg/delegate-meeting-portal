@@ -64,3 +64,6 @@ These were learned the hard way. When you learn something new, add it here and a
 - Looking up one appointment by id returns 404, even when it exists. Use the event's appointment list instead.
 - The appointment list spans several pages.
 - Creating an appointment without a `location` fails with `TIMESLOT_NOT_FOUND`, even for a real slot.
+- Cvent rejects a host who is already in another appointment at that time. Tested in `lib/cvent/push.test.ts` ("C2" and "C3") and `lib/cvent/hostSplit.test.ts`.
+- Cancelling an appointment emails its participants unless the call passes `suppressNotifications`. Unpush and Remove both cancel. Tested in `lib/cvent/client.notifications.test.ts`.
+- A slot's `availableAppointments` is the location's max-at-same-time setting, not the room left, and full slots are still listed. Tested in `lib/scheduling/engine.booths.test.ts` ("a slot's room is Cvent's setting minus…").

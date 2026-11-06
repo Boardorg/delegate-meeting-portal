@@ -23,6 +23,7 @@ import {
 } from "./actions";
 import {
     groupSlotOptions,
+    slotLocationWarning,
     slotTypeWarning,
     type SlotOption,
 } from "@/lib/scheduling/slotOptions";
@@ -42,7 +43,8 @@ type Props = {
 
 export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }: Props) {
     const router = useRouter();
-    const total = sponsor.contracted + sponsor.bonus;
+    // The target is the company's maximum, the same number the scheduler uses.
+    const total = sponsor.maximum;
     const listHref = `/admin/meetings`;
 
     const [editTarget, setEditTarget] = useState<MeetingRow | null>(null);
@@ -117,12 +119,18 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
 
                 {/* Stat chips + push all */}
                 <div className="adm-card-row">
-                    <StatChip label="Contracted" value={String(sponsor.contracted)} />
+                    <StatChip
+                        label="Purchased"
+                        value={sponsor.purchased !== null ? String(sponsor.purchased) : "—"}
+                    />
                     <StatChip
                         label="Bonus"
-                        value={sponsor.bonus > 0 ? `+${sponsor.bonus}` : "—"}
+                        value={sponsor.bonus !== null && sponsor.bonus > 0 ? `+${sponsor.bonus}` : "—"}
                     />
-                    <StatChip label="Total Target" value={String(total)} />
+                    <StatChip
+                        label={sponsor.maximumFromTier ? "Maximum (from tier)" : "Maximum"}
+                        value={String(total)}
+                    />
                     <StatChip label="Requests Filed" value={String(sponsor.requestCount)} />
                     <StatChip
                         label="Scheduled"
@@ -438,7 +446,11 @@ function EditMeetingModal({
         getSlotOptions({ meetingId: meeting.id, eventCode })
             .then(({ current, options: opts }) => {
                 setOptions(opts);
-                if (current) setSelectedKey(slotKey(current));
+                // The current slot is preselected only when it is offered.
+                // It isn't when it sits at another company's booth.
+                if (current && opts.some((o) => slotKey(o) === slotKey(current))) {
+                    setSelectedKey(slotKey(current));
+                }
             })
             .catch(() => setLoadError("Failed to load slot options."));
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -457,12 +469,17 @@ function EditMeetingModal({
         startTransition(async () => {
             try {
                 setSaveError(null);
-                await editMeeting({
+                const result = await editMeeting({
                     id: meeting.id,
                     timeslotId: opt.timeslotId,
                     day: opt.day,
                     locationId: opt.locationId,
                 });
+                // The server refuses a slot at another company's booth, and says why.
+                if (!result.ok) {
+                    setSaveError(result.error);
+                    return;
+                }
                 onSaved();
             } catch (e) {
                 setSaveError(e instanceof Error ? e.message : "Failed to save.");
@@ -498,6 +515,9 @@ function EditMeetingModal({
                 )}
 
                 <SlotTypeWarning
+                    option={options?.find((o) => slotKey(o) === selectedKey)}
+                />
+                <SlotLocationWarning
                     option={options?.find((o) => slotKey(o) === selectedKey)}
                 />
 
@@ -588,7 +608,7 @@ function CreateMeetingModal({
         startTransition(async () => {
             try {
                 setSaveError(null);
-                await createMeeting({
+                const result = await createMeeting({
                     eventCode,
                     sponsorId,
                     delegateId: selected.salesforceId,
@@ -596,6 +616,11 @@ function CreateMeetingModal({
                     day: opt.day,
                     locationId: opt.locationId,
                 });
+                // The server refuses a slot at another company's booth, and says why.
+                if (!result.ok) {
+                    setSaveError(result.error);
+                    return;
+                }
                 onCreated();
             } catch (e) {
                 setSaveError(e instanceof Error ? e.message : "Failed to create meeting.");
@@ -716,6 +741,11 @@ function CreateMeetingModal({
                         option={slotOptions?.find((o) => slotKey(o) === selectedKey)}
                     />
                 )}
+                {selected && !slotsLoading && (
+                    <SlotLocationWarning
+                        option={slotOptions?.find((o) => slotKey(o) === selectedKey)}
+                    />
+                )}
 
                 {saveError && <div className="adm-modal-error">{saveError}</div>}
 
@@ -768,8 +798,14 @@ function SlotSelect({
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
         >
-            {groupSlotOptions(options).map((g) => (
-                <optgroup key={g.label} label={g.label}>
+            {/* Nothing is chosen yet, for example when the current slot is at another company's booth. */}
+            {value === "" && (
+                <option value="" disabled>
+                    Choose a time slot
+                </option>
+            )}
+            {groupSlotOptions(options).map((g, i) => (
+                <optgroup key={`${i}-${g.label}`} label={g.label}>
                     {g.options.map((o) => (
                         <option key={o.timeslotId} value={o.timeslotId}>
                             Day {o.day} – {fmtTime(o.startTime, timezone)}
@@ -792,6 +828,23 @@ function SlotSelect({
  */
 function SlotTypeWarning({ option }: { option: SlotOption | undefined }) {
     const warning = slotTypeWarning(option);
+    if (!warning) return null;
+    return (
+        <div className="adm-modal-warn-at adm-field-mb-lg" role="alert">
+            {warning}
+        </div>
+    );
+}
+
+/**
+ * Warns when the chosen slot isn't at the sponsor's own booth, naming its location.
+ * Renders nothing for a slot at the sponsor's booth.
+ *
+ * @param {{ option: SlotOption | undefined }} props
+ * @returns {JSX.Element | null} The warning, or nothing.
+ */
+function SlotLocationWarning({ option }: { option: SlotOption | undefined }) {
+    const warning = slotLocationWarning(option);
     if (!warning) return null;
     return (
         <div className="adm-modal-warn-at adm-field-mb-lg" role="alert">

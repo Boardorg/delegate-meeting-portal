@@ -25,12 +25,18 @@ import type { Attendee, SponsorTier } from "@/types";
  * back to its own salesforceId, so it behaves as its own single-rep company
  * instead of collapsing every account-less sponsor under an empty key.
  *
+ * For sponsors the Account id is the sponsor Opportunity's account.
+ * When that Opportunity has no account, its reps are grouped by the Opportunity id instead.
+ * Only a rep with neither falls back to its own salesforceId.
+ *
  * @param {Attendee} attendee - The attendee.
  * @returns {string} The party id.
  */
 export function partyId(attendee: Attendee): string {
     if (attendee.role === "sponsor") {
-        return attendee.accountId || attendee.salesforceId;
+        return (
+            attendee.accountId || attendee.opportunityId || attendee.salesforceId
+        );
     }
     return attendee.salesforceId;
 }
@@ -47,6 +53,77 @@ export interface SponsorCompany {
     tier: SponsorTier;
     /** All reps belonging to this company. */
     reps: Attendee[];
+    /**
+     * The sponsor Opportunity the values below come from.
+     * Null when no rep has one.
+     */
+    opportunityId: string | null;
+    /**
+     * True when the reps are on more than one Opportunity for the event.
+     * The company then gets no meetings until that is fixed (see lib/scheduling/booths.ts).
+     */
+    multipleOpportunities: boolean;
+    /** Booth number from the Opportunity, trimmed. Null when blank. */
+    boothNo: string | null;
+    /** Meetings__c on the Opportunity. Null when blank. */
+    purchasedMeetings: number | null;
+    /** Cvent_Bonus_Meetings__c on the Opportunity. Null when blank. */
+    bonusMeetings: number | null;
+    /** Cvent_Maximum_Meetings__c on the Opportunity. Null when blank. */
+    maximumMeetings: number | null;
+    /** Cvent_Number_Diaries__c on the Opportunity. Null when blank. */
+    meetingsAtOnce: number | null;
+}
+
+/** The Opportunity-level values a company resolves once from its reps. */
+export type CompanyPackage = Pick<
+    SponsorCompany,
+    | "opportunityId"
+    | "multipleOpportunities"
+    | "boothNo"
+    | "purchasedMeetings"
+    | "bonusMeetings"
+    | "maximumMeetings"
+    | "meetingsAtOnce"
+>;
+
+/**
+ * Orders reps by Salesforce id, so anything picked from them is the same on every load.
+ *
+ * @param {Attendee[]} reps - The reps.
+ * @returns {Attendee[]} A new, sorted array.
+ */
+export function repsBySalesforceId(reps: Attendee[]): Attendee[] {
+    return [...reps].sort((a, b) => a.salesforceId.localeCompare(b.salesforceId));
+}
+
+/**
+ * Resolves a company's Opportunity, booth and meeting counts from its reps.
+ * Reps of one company share one Opportunity, so they all carry the same values.
+ * The values come from the first rep, by Salesforce id, that has an Opportunity.
+ * When the reps are on more than one Opportunity the company is marked, and the values are only for display.
+ *
+ * @param {Attendee[]} reps - The company's reps.
+ * @returns {CompanyPackage} The resolved values.
+ */
+export function resolveCompanyPackage(reps: Attendee[]): CompanyPackage {
+    const sorted = repsBySalesforceId(reps);
+    const opportunityIds = new Set(
+        sorted
+            .map((r) => r.opportunityId)
+            .filter((id): id is string => !!id),
+    );
+    const source = sorted.find((r) => !!r.opportunityId) ?? sorted[0];
+    const boothNo = source?.boothNo?.trim();
+    return {
+        opportunityId: source?.opportunityId ?? null,
+        multipleOpportunities: opportunityIds.size > 1,
+        boothNo: boothNo ? boothNo : null,
+        purchasedMeetings: source?.purchasedMeetings ?? null,
+        bonusMeetings: source?.bonusMeetings ?? null,
+        maximumMeetings: source?.maximumMeetings ?? null,
+        meetingsAtOnce: source?.meetingsAtOnce ?? null,
+    };
 }
 
 /**
@@ -66,6 +143,7 @@ export function resolveCompanyTier(reps: Attendee[]): SponsorTier {
 /**
  * Groups sponsor attendees into companies keyed by party id (Account id).
  * Non-sponsors are ignored. Each company's tier is resolved across its reps.
+ * So are its Opportunity, booth and meeting counts (see resolveCompanyPackage).
  *
  * @param {Attendee[]} attendees - The full attendee list.
  * @returns {Map<string, SponsorCompany>} Companies keyed by party id.
@@ -86,14 +164,37 @@ export function sponsorCompaniesByAccountId(
                 name: a.company,
                 tier: a.sponsorTier,
                 reps: [a],
+                ...resolveCompanyPackage([a]),
             });
         }
     }
     // Resolve each company's tier once all reps are collected.
+    // Its Opportunity values are resolved the same way.
     for (const company of map.values()) {
         company.tier = resolveCompanyTier(company.reps);
+        Object.assign(company, resolveCompanyPackage(company.reps));
     }
     return map;
+}
+
+/**
+ * The company's reps who can host a Cvent appointment, ordered by Salesforce id.
+ * A rep can host when they have a Cvent contact id and haven't cancelled in Cvent.
+ * A contact id shared by two reps is only listed once.
+ *
+ * @param {SponsorCompany} company - The company.
+ * @returns {Attendee[]} The reps who can host.
+ */
+export function hostingReps(company: SponsorCompany): Attendee[] {
+    const seen = new Set<string>();
+    const out: Attendee[] = [];
+    for (const r of repsBySalesforceId(company.reps)) {
+        if (r.cventCancelled || !r.cventContactId) continue;
+        if (seen.has(r.cventContactId)) continue;
+        seen.add(r.cventContactId);
+        out.push(r);
+    }
+    return out;
 }
 
 /**

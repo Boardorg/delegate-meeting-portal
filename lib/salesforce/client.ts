@@ -230,6 +230,18 @@ const MEETING_DATA_FIELDS = [
     "Registration__r.Discount_Code__c",
     "Registration__r.RecordType.Name",
     "Registration__r.Sponsorship_Package__c",
+    // The sponsor Opportunity itself. A sponsor company is the Opportunity's
+    // account, not the rep's Contact account (see lib/salesforce/attendeeMapper.ts).
+    "Registration__c",
+    "Registration__r.AccountId",
+    "Registration__r.Account.Name",
+    // The company's booth and meeting package, read on every attendee load.
+    // Booth_No__c is free text. The four counts are numbers and can be blank.
+    "Registration__r.Booth_No__c",
+    "Registration__r.Meetings__c",
+    "Registration__r.Cvent_Bonus_Meetings__c",
+    "Registration__r.Cvent_Maximum_Meetings__c",
+    "Registration__r.Cvent_Number_Diaries__c",
 ] as const;
 
 // Discount codes that mark an Opportunity as a test/placeholder and should be

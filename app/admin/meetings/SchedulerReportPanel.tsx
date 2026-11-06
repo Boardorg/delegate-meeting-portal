@@ -86,7 +86,7 @@ export default function SchedulerReportPanel({
 
             {/* Appointment types with no meeting kind. Their slots were not used this run. */}
             {report.unmappedAppointmentTypes.length > 0 && (
-                <div className="adm-modal-warn-at" style={{ marginTop: 12 }}>
+                <div className="adm-modal-warn-at" style={{ marginTop: 12, marginBottom: 16 }}>
                     {report.unmappedAppointmentTypes.length === 1
                         ? "This Cvent appointment type isn't mapped to a meeting kind, so its slots weren't used: "
                         : "These Cvent appointment types aren't mapped to a meeting kind, so their slots weren't used: "}
@@ -98,7 +98,7 @@ export default function SchedulerReportPanel({
 
             {/* Sponsor companies that got no meetings because of their booth or package. */}
             {report.boothProblems.length > 0 && (
-                <div className="adm-modal-warn-at" style={{ marginTop: 12 }}>
+                <div className="adm-modal-warn-at" style={{ marginTop: 12, marginBottom: 16 }}>
                     {report.boothProblems.length === 1
                         ? "This sponsor got no meetings because of its booth or package: "
                         : "These sponsors got no meetings because of their booth or package: "}

@@ -868,7 +868,7 @@ export function buildUpdateAppointmentRequest(
 }
 
 /**
- * Whether to suppress Cvent notifications (invite/update emails) when pushing
+ * Whether to suppress Cvent notifications (invite/update/cancel emails) when pushing
  * appointments. Controlled by CVENT_SUPPRESS_NOTIFICATIONS; defaults to false
  * (notifications sent as configured in Cvent).
  */
@@ -1012,5 +1012,10 @@ export async function cancelAppointment(
     if (isMock()) return;
 
     const id = await getAppointmentEventId(eventCode);
-    await getClient().appointments.cancelAppointment({ id, apptId });
+    // Cancelling emails the participants unless notifications are suppressed, the same as create and update.
+    await getClient().appointments.cancelAppointment({
+        id,
+        apptId,
+        suppressNotifications: suppressNotifications(),
+    });
 }

@@ -46,6 +46,8 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
     // The target is the company's maximum, the same number the scheduler uses.
     const total = sponsor.maximum;
     const listHref = `/admin/meetings`;
+    // Meetings in Cvent that this portal's database doesn't have.
+    const cventOnlyCount = meetings.filter((m) => m.source === "cvent").length;
 
     const [editTarget, setEditTarget] = useState<MeetingRow | null>(null);
     const [showCreate, setShowCreate] = useState(false);
@@ -189,6 +191,15 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                 </button>
             </div>
 
+            {/* Rows that are only in Cvent, so nobody expects to change them here. */}
+            {cventOnlyCount > 0 && (
+                <p className="adm-help-note">
+                    {cventOnlyCount === 1
+                        ? "1 meeting was already in Cvent. It counts toward the maximum and is read-only here. To change it, you'll need to do so in Cvent."
+                        : `${cventOnlyCount} meetings were already in Cvent. They count toward the maximum and are read-only here. To change them, you'll need to do so in Cvent.`}
+                </p>
+            )}
+
             {/* Meeting table */}
             {meetings.length === 0 ? (
                 <div className="adm-empty adm-empty-lg">
@@ -301,7 +312,8 @@ function MeetingTableRow({
             <td>
                 <div className="adm-party-name">{m.delegateName}</div>
                 <div className="adm-chip-mt">
-                    <MatchKindChip kind={m.matchKind} />
+                    {/* A Cvent-only row has no match kind, since the portal didn't schedule it. */}
+                    {!isCvent && <MatchKindChip kind={m.matchKind} />}
                     {m.delegateCancelled && (
                         <>
                             {" "}

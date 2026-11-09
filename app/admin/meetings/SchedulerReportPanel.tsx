@@ -15,6 +15,8 @@ import type {
     SchedulerReport,
 } from "@/lib/scheduling/report";
 import { StatChip } from "./_components/StatChip";
+import Link from "next/link";
+import { BOOTH_PROBLEM_LABEL } from "@/lib/scheduling/booths";
 
 // ---------------------------------------------------------------------------
 // SchedulerReportPanel — post-run summary shown above the meetings table.
@@ -37,12 +39,14 @@ const REASON_LABEL: Record<SchedulerFailureReason, string> = {
     cap_reached: "Cap reached",
     no_availability: "No availability",
     company_diversity: "Company diversity limit",
+    no_booth_slots: "No sponsor timeslots at booth in Cvent",
     self_request: "Self request",
     not_an_attendee: "Not in attendee list",
     attendee_cancelled: "Cancelled in Cvent",
     already_scheduled: "Already meets in Cvent",
     no_pass_match: "No matching pass",
     conflict_existing: "Conflicts with pushed meeting",
+    ...BOOTH_PROBLEM_LABEL,
 };
 
 export default function SchedulerReportPanel({
@@ -82,13 +86,30 @@ export default function SchedulerReportPanel({
 
             {/* Appointment types with no meeting kind. Their slots were not used this run. */}
             {report.unmappedAppointmentTypes.length > 0 && (
-                <div className="adm-modal-warn-at" style={{ marginTop: 12 }}>
+                <div className="adm-modal-warn-at" style={{ marginTop: 12, marginBottom: 16 }}>
                     {report.unmappedAppointmentTypes.length === 1
                         ? "This Cvent appointment type isn't mapped to a meeting kind, so its slots weren't used: "
                         : "These Cvent appointment types aren't mapped to a meeting kind, so their slots weren't used: "}
                     {report.unmappedAppointmentTypes.join(", ")}. Choose a
                     meeting kind for each one in Event settings, or set it to
                     Ignore.
+                </div>
+            )}
+
+            {/* Sponsor companies that got no meetings because of their booth or package. */}
+            {report.boothProblems.length > 0 && (
+                <div className="adm-modal-warn-at" style={{ marginTop: 12, marginBottom: 16 }}>
+                    {report.boothProblems.length === 1
+                        ? "This sponsor got no meetings because of its booth or package: "
+                        : "These sponsors got no meetings because of their booth or package: "}
+                    {report.boothProblems
+                        .map(
+                            (p) =>
+                                `${p.company} (${BOOTH_PROBLEM_LABEL[p.problem]})`,
+                        )
+                        .join(", ")}
+                    . Fix them in Salesforce or on the{" "}
+                    <Link href="/admin/booths">Sponsor booths</Link> page.
                 </div>
             )}
 

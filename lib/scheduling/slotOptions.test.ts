@@ -5,10 +5,14 @@ import {
     bookedIntervals,
     buildSlotOptions,
     groupSlotOptions,
+    isOtherCompanysBooth,
+    slotLocationWarning,
     slotTypeWarning,
     sortSlotOptions,
+    sponsorBoothFilter,
     type SlotOption,
 } from "./slotOptions";
+import type { CompanyBooth } from "./booths";
 
 // Appointment types as NALES names them, with the kind the event maps each to.
 const TYPE: Record<string, { name: string; kind: MeetingKind }> = {
@@ -132,6 +136,105 @@ describe("groupSlotOptions", () => {
             label: "Unknown appointment type",
             options: [unknown],
         });
+    });
+});
+
+describe("buildSlotOptions — sponsor booths", () => {
+    const BOOTHS = new Map<string, Location>([
+        ["b2", { id: "b2", name: "Booth 2", capacity: Infinity, parentLocationId: null }],
+        ["b3", { id: "b3", name: "Booth 3", capacity: Infinity, parentLocationId: null }],
+        ["b4", { id: "b4", name: "Booth 4", capacity: Infinity, parentLocationId: null }],
+        ["tbl", { id: "tbl", name: "Table 1A", capacity: 2, parentLocationId: null }],
+    ]);
+
+    /**
+     * Builds a sponsor slot at a location.
+     *
+     * @param {string} id - The slot id.
+     * @param {string} startTime - ISO start time.
+     * @param {string} locationId - The location.
+     * @returns {Timeslot} The slot.
+     */
+    function at(id: string, startTime: string, locationId: string): Timeslot {
+        return { ...slot(id, 1, startTime, "s2d"), locationId };
+    }
+
+    const SLOTS = [
+        at("b2-09", "2026-01-20T09:00:00.000Z", "b2"),
+        at("tbl-09", "2026-01-20T09:00:00.000Z", "tbl"),
+        at("b4-09", "2026-01-20T09:00:00.000Z", "b4"),
+        at("b3-11", "2026-01-20T11:00:00.000Z", "b3"),
+        at("b3-10", "2026-01-20T10:00:00.000Z", "b3"),
+    ];
+
+    /**
+     * Builds the booths of three companies: Lakeside at Booth 3, and two others at Booths 2 and 4.
+     *
+     * @returns {Map<string, CompanyBooth>} The booths.
+     */
+    function booths(): Map<string, CompanyBooth> {
+        /**
+         * One company's booth.
+         *
+         * @param {string} accountId - The company.
+         * @param {string} locationId - Its booth location.
+         * @returns {CompanyBooth} The booth.
+         */
+        const b = (accountId: string, locationId: string): CompanyBooth => ({
+            accountId,
+            boothNo: locationId,
+            location: BOOTHS.get(locationId)!,
+            source: "automatic",
+            manualLocationId: null,
+            automaticLocation: BOOTHS.get(locationId)!,
+            problems: [],
+        });
+        return new Map([
+            ["acct-lakeside", b("acct-lakeside", "b3")],
+            ["acct-montopolis", b("acct-montopolis", "b2")],
+            ["acct-match", b("acct-match", "b4")],
+        ]);
+    }
+
+    test("puts the sponsor's own booth slots first and never offers another company's booth", () => {
+        const filter = sponsorBoothFilter("acct-lakeside", booths());
+        const options = buildSlotOptions(SLOTS, BOOTHS, [], [], filter);
+
+        expect(options.map((o) => o.timeslotId)).toEqual(["b3-10", "b3-11", "tbl-09"]);
+        expect(options.map((o) => o.ownBooth)).toEqual([true, true, false]);
+    });
+
+    test("groups the own booth slots under a label naming the booth", () => {
+        const filter = sponsorBoothFilter("acct-lakeside", booths());
+        const groups = groupSlotOptions(buildSlotOptions(SLOTS, BOOTHS, [], [], filter));
+
+        expect(groups.map((g) => [g.label, g.options.length])).toEqual([
+            ["Sponsor to Delegate Meetings at Booth 3 (this sponsor's booth)", 2],
+            ["Sponsor to Delegate Meetings", 1],
+        ]);
+    });
+
+    test("warns, naming the location, for a slot that isn't at the sponsor's booth", () => {
+        const filter = sponsorBoothFilter("acct-lakeside", booths());
+        const byId = new Map(buildSlotOptions(SLOTS, BOOTHS, [], [], filter).map((o) => [o.timeslotId, o]));
+
+        expect(slotLocationWarning(byId.get("tbl-09"))).toBe(
+            "This slot is at Table 1A, not at this sponsor's booth.",
+        );
+        expect(slotLocationWarning(byId.get("b3-10"))).toBeNull();
+    });
+
+    test("a sponsor with no booth is offered every slot except other companies' booths, each with a warning", () => {
+        const filter = sponsorBoothFilter("acct-no-booth", booths());
+        const options = buildSlotOptions(SLOTS, BOOTHS, [], [], filter);
+
+        expect(options.map((o) => o.timeslotId)).toEqual(["tbl-09"]);
+        expect(slotLocationWarning(options[0])).not.toBeNull();
+    });
+
+    test("with no booth filter every slot is offered, as before", () => {
+        expect(buildSlotOptions(SLOTS, BOOTHS, [], [])).toHaveLength(5);
+        expect(isOtherCompanysBooth({ locationId: "b2" }, undefined)).toBe(false);
     });
 });
 

@@ -33,6 +33,12 @@ export const ADMIN_NAV: AdminNavItem[] = [
         children: [],
     },
     {
+        label: "Sponsor booths",
+        href: "/admin/booths",
+        icon: "🏷️",
+        children: [],
+    },
+    {
         label: "Event settings",
         href: "/admin/event-settings",
         icon: "⚙️",

@@ -116,6 +116,27 @@ describe("toExistingAppointments", () => {
         ]);
         expect(out[0].participantContactIds).toEqual(["reg-only", "d1"]);
     });
+
+    test("reads the hosts apart from the attendees, plus the id and location name", () => {
+        const out = toExistingAppointments([
+            {
+                id: "appt-1",
+                start: "2025-01-15T09:00:00Z",
+                status: "ACTIVE",
+                location: { name: "Booth 13" },
+                participants: [
+                    { type: "host", attendee: { contact: { id: "h1" } } },
+                    { type: "HOST", attendee: { id: "reg-only" } },
+                    { type: "attendee", attendee: { contact: { id: "d1" } } },
+                ],
+            },
+        ]);
+        expect(out[0]).toMatchObject({
+            id: "appt-1",
+            hostContactIds: ["h1", "reg-only"],
+            locationName: "Booth 13",
+        });
+    });
 });
 
 describe("toAppointmentsPage — appointment type", () => {

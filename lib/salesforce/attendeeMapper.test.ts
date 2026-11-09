@@ -95,6 +95,50 @@ describe('attendeeFieldMappers.sponsorTier', () => {
     });
 });
 
+// Sponsors take their company, booth and meeting counts from the Opportunity, not the Contact.
+describe('attendeeFieldMappers — the sponsor Opportunity', () => {
+    const ctx = makeContext({ role: 'sponsor' });
+    const record: MeetingDataRecord = {
+        Delegate__r: { AccountId: '001-2u', Account: { Name: '2U' } },
+        Registration__c: '006-edx',
+        Registration__r: {
+            AccountId: '001-edx',
+            Account: { Name: 'edX Enterprise' },
+            Booth_No__c: ' 3 ',
+            Meetings__c: 4,
+            Cvent_Bonus_Meetings__c: '1',
+            Cvent_Maximum_Meetings__c: null,
+            Cvent_Number_Diaries__c: 2,
+        },
+    };
+
+    test("uses the Opportunity's account as the company, not the Contact's", () => {
+        expect(attendeeFieldMappers.accountId(record, ctx)).toBe('001-edx');
+        expect(attendeeFieldMappers.company(record, ctx)).toBe('edX Enterprise');
+    });
+
+    test('reads the Opportunity id, booth and counts, with purchased from Meetings__c', () => {
+        expect(attendeeFieldMappers.opportunityId(record, ctx)).toBe('006-edx');
+        expect(attendeeFieldMappers.boothNo(record, ctx)).toBe('3');
+        expect(attendeeFieldMappers.purchasedMeetings(record, ctx)).toBe(4);
+        expect(attendeeFieldMappers.bonusMeetings(record, ctx)).toBe(1);
+        expect(attendeeFieldMappers.maximumMeetings(record, ctx)).toBeNull();
+        expect(attendeeFieldMappers.meetingsAtOnce(record, ctx)).toBe(2);
+    });
+
+    test('reads blank values as null', () => {
+        expect(attendeeFieldMappers.boothNo({ Registration__r: { Booth_No__c: '  ' } }, ctx)).toBeNull();
+        expect(attendeeFieldMappers.purchasedMeetings({ Registration__r: { Meetings__c: '' } }, ctx)).toBeNull();
+        expect(attendeeFieldMappers.opportunityId({}, ctx)).toBeNull();
+    });
+
+    test('gives delegates no Opportunity values', () => {
+        expect(delegateFieldMappers.opportunityId({}, ctx)).toBeNull();
+        expect(delegateFieldMappers.boothNo({}, ctx)).toBeNull();
+        expect(delegateFieldMappers.maximumMeetings({}, ctx)).toBeNull();
+    });
+});
+
 // Maps Account fields into the sponsor profile. Sponsors have no intake form, so
 // only the three Account-derived fields can ever be populated — and the two
 // numeric ones get bucketed here so AttendeeProfile stays string-only.

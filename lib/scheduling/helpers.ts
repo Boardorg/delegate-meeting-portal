@@ -135,6 +135,60 @@ export function computeMutualPairs(requests: MeetingRequest[]): Set<string> {
 }
 
 /**
+ * The start times a party is already booked at.
+ * A set lists each busy start time once.
+ * A map gives how many meetings the party already has at each start time.
+ */
+export type BusyTimes = ReadonlySet<string> | ReadonlyMap<string, number>;
+
+/**
+ * How many meetings a party already has at a start time.
+ *
+ * @param {BusyTimes} busy - The party's busy times.
+ * @param {string} startTime - The start time to check.
+ * @returns {number} The count, 0 when the party is free then.
+ */
+export function busyCountAt(busy: BusyTimes, startTime: string): number {
+	if (busy instanceof Map) return busy.get(startTime) ?? 0;
+	return (busy as ReadonlySet<string>).has(startTime) ? 1 : 0;
+}
+
+/**
+ * Optional limits on which timeslot findAvailableTimeslot may pick.
+ */
+export type SlotLimits = {
+	/**
+	 * The only location the meeting may use, such as a sponsor company's booth.
+	 * Leave it out to allow any location.
+	 */
+	locationId?: string;
+	/** How many meetings the first party may hold at one start time. Defaults to 1. */
+	limitA?: number;
+	/** How many meetings the second party may hold at one start time. Defaults to 1. */
+	limitB?: number;
+	/**
+	 * An extra check on the first party at a start time, on top of its limit.
+	 * A sponsor company uses it to need a free rep for a second or later meeting then.
+	 * Leave it out to allow every start time under the limit.
+	 */
+	canBookA?: (startTime: string) => boolean;
+	/** The same extra check for the second party. */
+	canBookB?: (startTime: string) => boolean;
+};
+
+/**
+ * The key that matches a slot to Cvent appointments at the same place and time.
+ * Appointments carry only a location name, so the key is the name, lowercased and trimmed, plus the start time.
+ *
+ * @param {string} locationName - The location's name.
+ * @param {string} startTime - The ISO start time.
+ * @returns {string} The key.
+ */
+export function slotRoomKey(locationName: string, startTime: string): string {
+	return `${locationName.trim().toLowerCase()}|${new Date(startTime).getTime()}`;
+}
+
+/**
  * Finds the first event-global timeslot on a given day that can host a meeting
  * between two attendees: both attendees must be free at that start time and the
  * timeslot must have remaining capacity. Timeslots are scanned in array order,
@@ -143,22 +197,31 @@ export function computeMutualPairs(requests: MeetingRequest[]): Set<string> {
  * Only timeslots of the given meeting kind are considered.
  * A sponsor meeting must land in a `sponsor_delegate` slot, even when a slot of another kind is free and earlier.
  *
+ * A party counts as free at a start time while it has fewer meetings then than its at-once limit.
+ * The limit is 1 unless `limits` says otherwise, so by default a party is busy once it has one meeting.
+ * When `limits.locationId` is set, only timeslots at that location are considered.
+ *
  * @param {Timeslot[]} timeslots - The event's global timeslots.
  * @param {1 | 2} day - The event day to search within.
- * @param {Set<string>} busyA - Start times the first attendee is already booked at.
- * @param {Set<string>} busyB - Start times the second attendee is already booked at.
+ * @param {BusyTimes} busyA - Start times the first attendee is already booked at.
+ * @param {BusyTimes} busyB - Start times the second attendee is already booked at.
  * @param {Map<string, number>} remaining - Remaining capacity by timeslot id.
  * @param {MeetingKind} kind - The meeting kind the timeslot must be mapped to.
+ * @param {SlotLimits} [limits] - The allowed location and each party's at-once limit.
  * @returns {Timeslot | null} The first bookable timeslot, or null if none.
  */
 export function findAvailableTimeslot(
 	timeslots: Timeslot[],
 	day: 1 | 2,
-	busyA: Set<string>,
-	busyB: Set<string>,
+	busyA: BusyTimes,
+	busyB: BusyTimes,
 	remaining: Map<string, number>,
 	kind: MeetingKind,
+	limits: SlotLimits = {},
 ): Timeslot | null {
+
+	const limitA = limits.limitA ?? 1;
+	const limitB = limits.limitB ?? 1;
 
 	for (const ts of timeslots) {
 
@@ -167,8 +230,16 @@ export function findAvailableTimeslot(
 		if (ts.kind !== kind) continue;
 		if ((remaining.get(ts.id) ?? 0) <= 0) continue;
 
-		// Either attendee already has a meeting at this start time.
-		if (busyA.has(ts.startTime) || busyB.has(ts.startTime)) continue;
+		// Not at the one location this meeting may use.
+		if (limits.locationId !== undefined && ts.locationId !== limits.locationId) continue;
+
+		// Either attendee already has as many meetings at this start time as they may hold.
+		if (busyCountAt(busyA, ts.startTime) >= limitA) continue;
+		if (busyCountAt(busyB, ts.startTime) >= limitB) continue;
+
+		// Either party's extra check rules out this start time.
+		if (limits.canBookA && !limits.canBookA(ts.startTime)) continue;
+		if (limits.canBookB && !limits.canBookB(ts.startTime)) continue;
 
 		return ts;
 	}
@@ -222,4 +293,100 @@ export function wouldViolateCompanyDiversity(
 
 	// Return true if adding this meeting would meet or exceed the cap.
 	return sameCompanyCount >= maxSameCompany;
+}
+
+/** The fields of a meeting the reconciliation reads. */
+type ReconcileMeeting = { attendeeA: string; attendeeB: string; timeslotId: string };
+
+/**
+ * The key reconciliation groups a meeting's time by.
+ * It is the slot's start time when the slot is known.
+ * A pushed meeting's slot can be missing from Cvent's list, for example after it was removed, so the slot id stands in then.
+ *
+ * @param {ReconcileMeeting} m - The meeting.
+ * @param {Map<string, Pick<Timeslot, 'startTime'>>} timeslotById - The event's timeslots.
+ * @returns {string} The time key.
+ */
+function reconcileTimeKey(
+	m: ReconcileMeeting,
+	timeslotById: Map<string, Pick<Timeslot, 'startTime'>>,
+): string {
+	const start = timeslotById.get(m.timeslotId)?.startTime;
+	return start ? `time:${new Date(start).getTime()}` : `slot:${m.timeslotId}`;
+}
+
+/**
+ * Drops fresh engine meetings that clash with meetings already pushed to Cvent.
+ * A fresh meeting is dropped when its pair is already pushed.
+ * It is also dropped when either party would then hold more meetings at that time than it may.
+ * A delegate may hold 1 at a time, and a sponsor company up to its meetings-at-once limit.
+ * Kept fresh meetings count toward the limit too, in schedule order.
+ *
+ * @param {M[]} schedule - The engine's fresh meetings.
+ * @param {ReconcileMeeting[]} pushed - Meetings already pushed to Cvent.
+ * @param {Map<string, Pick<Timeslot, 'startTime'>>} timeslotById - The event's timeslots.
+ * @param {(partyId: string) => number} atOnceOf - How many meetings a party may hold at one time.
+ * @returns {{ kept: M[]; droppedPairs: Set<string> }} The meetings to keep, and the pair keys of those dropped.
+ */
+export function reconcileWithPushed<M extends ReconcileMeeting>(
+	schedule: M[],
+	pushed: ReconcileMeeting[],
+	timeslotById: Map<string, Pick<Timeslot, 'startTime'>>,
+	atOnceOf: (partyId: string) => number,
+): { kept: M[]; droppedPairs: Set<string> } {
+
+	// Pairs already pushed, and how many meetings each party has at each time.
+	const pushedPairs = new Set<string>();
+	const counts = new Map<string, number>();
+
+	/**
+	 * The count key for one party at one meeting's time.
+	 *
+	 * @param {string} party - The party id.
+	 * @param {ReconcileMeeting} m - The meeting.
+	 * @returns {string} The key.
+	 */
+	const countKey = (party: string, m: ReconcileMeeting): string =>
+		`${party}@${reconcileTimeKey(m, timeslotById)}`;
+
+	/**
+	 * Counts one more meeting for a party at a meeting's time.
+	 *
+	 * @param {string} party - The party id.
+	 * @param {ReconcileMeeting} m - The meeting.
+	 */
+	const add = (party: string, m: ReconcileMeeting): void => {
+		const k = countKey(party, m);
+		counts.set(k, (counts.get(k) ?? 0) + 1);
+	};
+
+	for (const row of pushed) {
+		pushedPairs.add(pairKey(row.attendeeA, row.attendeeB));
+		add(row.attendeeA, row);
+		add(row.attendeeB, row);
+	}
+
+	const kept: M[] = [];
+	const droppedPairs = new Set<string>();
+	for (const m of schedule) {
+		const pair = pairKey(m.attendeeA, m.attendeeB);
+
+		/**
+		 * Whether a party already holds as many meetings at this meeting's time as it may.
+		 *
+		 * @param {string} party - The party id.
+		 * @returns {boolean} True when one more meeting then would be too many.
+		 */
+		const full = (party: string): boolean =>
+			(counts.get(countKey(party, m)) ?? 0) >= atOnceOf(party);
+
+		if (pushedPairs.has(pair) || full(m.attendeeA) || full(m.attendeeB)) {
+			droppedPairs.add(pair);
+			continue;
+		}
+		kept.push(m);
+		add(m.attendeeA, m);
+		add(m.attendeeB, m);
+	}
+	return { kept, droppedPairs };
 }

@@ -10,6 +10,7 @@ import {
     unique,
 } from "drizzle-orm/pg-core";
 import type { AppointmentTypeKinds } from "@/lib/events/meetingKinds";
+import type { BoothLocations } from "@/lib/scheduling/booths";
 
 // ---------------------------------------------------------------------------
 // Drizzle schema
@@ -241,6 +242,15 @@ export const eventSettings = pgTable("event_settings", {
     appointmentTypeKinds: jsonb(
         "appointment_type_kinds",
     ).$type<AppointmentTypeKinds>(),
+
+    // Maps a sponsor booth number to a Cvent location id, set on the Sponsor booths page.
+    // For example { "3": "a1c30445-..." }.
+    // Booth numbers are stored trimmed.
+    // Salesforce still decides which company has which booth number.
+    // A booth number with no entry uses the automatic match by location name.
+    // Null when nothing is mapped yet.
+    // See lib/scheduling/booths.ts.
+    boothLocations: jsonb("booth_locations").$type<BoothLocations>(),
 
     createdAt: timestamp("created_at", { withTimezone: true })
         .notNull()

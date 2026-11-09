@@ -1,6 +1,7 @@
 import { emptyPage } from "@/lib/admin/pagination";
 import { getActiveEventCode } from "@/lib/admin/globalState";
 import {
+    countBoothProblemsForEvent,
     listSponsorsPage,
     type SponsorRow,
     type SponsorSortField,
@@ -67,6 +68,11 @@ export default async function AdminMeetingsPage({
           })
         : emptyPage<SponsorRow>();
 
+    // How many companies have a booth problem, for the warning before a scheduler run.
+    const boothProblemCount = selectedEvent
+        ? await countBoothProblemsForEvent(selectedEvent)
+        : 0;
+
     // Render the sponsor table with the fetched data and query parameters.
     return (
         <SponsorsTable
@@ -75,6 +81,7 @@ export default async function AdminMeetingsPage({
             sortField={sortField}
             sortDir={sortDir}
             data={data}
+            boothProblemCount={boothProblemCount}
         />
     );
 }

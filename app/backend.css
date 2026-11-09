@@ -168,6 +168,16 @@
 .adm-row td {
     color: var(--text);
 }
+/* A row with a problem, tinted so its note reads as part of it. */
+.adm-row-flagged td {
+    background: rgba(185, 32, 37, 0.04);
+}
+/* A short problem note inside a cell, under the cell's main text. */
+.adm-cell-note {
+    margin-top: 4px;
+    color: var(--red, #b92025);
+    font-size: 12px;
+}
 .adm-row-new td {
     background: rgba(0, 112, 243, 0.04);
 }

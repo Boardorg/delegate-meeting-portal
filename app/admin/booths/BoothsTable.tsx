@@ -105,10 +105,10 @@ export default function BoothsTable({
 }
 
 /**
- * One company row, with its problems and warnings underneath.
+ * One company row. Its problems and warnings show under the company name.
  *
  * @param {{ row: BoothTableRow; eventCode: string; locationOptions: LocationOption[]; disabled: boolean }} props
- * @returns {JSX.Element} The row and its notes.
+ * @returns {JSX.Element} The row.
  */
 function BoothTableRowView({
     row,
@@ -127,9 +127,18 @@ function BoothTableRowView({
     ];
     return (
         <>
-            <tr className="adm-row">
+            <tr className={notes.length > 0 ? "adm-row adm-row-flagged" : "adm-row"}>
                 <td>
                     <div className="adm-party-name">{row.company}</div>
+                    {/* The note sits in the company's own cell so it can't be read as part of the next row. */}
+                    {notes.length > 0 && (
+                        <div className="adm-cell-note">
+                            {row.problems.length > 0 && (
+                                <strong>No meetings until fixed: </strong>
+                            )}
+                            {notes.join(" ")}
+                        </div>
+                    )}
                     {row.opportunityUrl ? (
                         <a
                             href={row.opportunityUrl}
@@ -181,16 +190,6 @@ function BoothTableRowView({
                 </td>
                 <td className="adm-mono">{row.meetingsAtOnce ?? "—"}</td>
             </tr>
-            {notes.length > 0 && (
-                <tr className="adm-row-error">
-                    <td colSpan={COL_COUNT}>
-                        {row.problems.length > 0 && (
-                            <strong>No meetings until fixed: </strong>
-                        )}
-                        {notes.join(" ")}
-                    </td>
-                </tr>
-            )}
         </>
     );
 }

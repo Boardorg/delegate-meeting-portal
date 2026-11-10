@@ -97,7 +97,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
         <div className="adm-page">
             {/* Breadcrumb */}
             <nav className="adm-breadcrumb">
-                <Link href={listHref}>Manage Meetings</Link>
+                <Link href={listHref}>Sponsor Meetings</Link>
                 <span className="adm-breadcrumb-sep">›</span>
                 <span>{sponsor.company}</span>
             </nav>

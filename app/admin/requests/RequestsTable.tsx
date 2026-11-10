@@ -402,7 +402,7 @@ export default function RequestsTable({
     return (
         <div className="adm-page">
             <div className="adm-page-head">
-                <h1 className="adm-page-title">Meeting requests</h1>
+                <h1 className="adm-page-title">Sponsor Meeting Requests</h1>
                 <button
                     type="button"
                     className="adm-new-btn adm-new-btn-primary"

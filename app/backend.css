@@ -27,7 +27,8 @@
 .admin-sidebar {
     flex: 1;
     overflow-y: auto;
-    padding: 4px;
+    /* The top matches the divider's spacing, so the gap under the event picker's rule is the same. */
+    padding: 10px 4px 4px;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -87,6 +88,71 @@
     flex-direction: column;
     gap: 2px;
     margin-top: 2px;
+}
+/* A group heading with no page of its own, such as "Sponsor Meetings". */
+.admin-sidebar-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 12px 4px;
+    font-family: var(--body);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--t3);
+}
+/* Sets apart pages that apply to every event, such as Users. */
+.admin-sidebar-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 10px 12px;
+}
+/* "+ New Event", under the event picker. */
+/* A small pill, sized down from .adm-new-btn, which it also uses. Both classes are named so this wins over .adm-new-btn, which comes later in the file. */
+.adm-new-btn.admin-new-event-link {
+    align-self: flex-start;
+    padding: 5px 12px;
+    font-size: 12px;
+    text-decoration: none;
+    /* Blue, like the text link it replaced. */
+    background: var(--blue-s);
+    border-color: var(--blue-b);
+    color: var(--blue);
+}
+.adm-new-btn.admin-new-event-link:hover:not(:disabled) {
+    background: rgba(47, 143, 224, 0.18);
+}
+
+/* ── Overview page (/admin) ── */
+/* The page's 16px gap spaces every block, so the note and cards drop their own margins.
+   Both classes are named so these win over .adm-help-note and .adm-card, which come later in the file. */
+.adm-help-note.adm-overview-intro {
+    margin: 0;
+}
+.adm-card.adm-overview-card {
+    margin: 0;
+}
+.adm-overview-card .adm-card-head {
+    align-items: center;
+    margin-bottom: 12px;
+}
+.adm-overview-card-title {
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+}
+.adm-overview-link {
+    font-size: 13px;
+    color: var(--blue);
+    text-decoration: none;
+}
+.adm-overview-link:hover {
+    text-decoration: underline;
+}
+.adm-overview-warning + .adm-overview-warning {
+    margin-top: 8px;
 }
 .admin-main {
     flex: 1;

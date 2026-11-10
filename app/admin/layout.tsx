@@ -69,7 +69,11 @@ export default async function AdminLayout({
             />
             <div className="admin-shell">
                 <div className="admin-sidebar-col">
-                    <EventSwitcher events={events} activeEventCode={activeEventCode} />
+                    <EventSwitcher
+                        events={events}
+                        activeEventCode={activeEventCode}
+                        newEventHref="/admin/event-settings?new=1"
+                    />
                     <AdminSidebar items={ADMIN_NAV} />
                 </div>
                 <main className="admin-main">{children}</main>

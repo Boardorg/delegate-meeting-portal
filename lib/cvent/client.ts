@@ -62,7 +62,7 @@ async function requireEventSettings(eventCode: string) {
     if (!settings) {
         throw new Error(
             `No Cvent settings configured for event "${eventCode}". ` +
-                "Add them in Admin → Event settings.",
+                "Add them in Admin → Event Settings.",
         );
     }
     return settings;
@@ -81,7 +81,7 @@ async function getAppointmentEventId(eventCode: string): Promise<string> {
     if (!cventAppointmentEventId) {
         throw new Error(
             `Event "${eventCode}" has no Cvent Appointment Event ID set ` +
-                "(Admin → Event settings).",
+                "(Admin → Event Settings).",
         );
     }
     return cventAppointmentEventId;
@@ -560,7 +560,7 @@ export const getEventAttendees = cache(
         const { cventEventId } = await requireEventSettings(eventCode);
         if (!cventEventId) {
             throw new Error(
-                `Event "${eventCode}" has no Cvent Event ID set (Admin → Event settings).`,
+                `Event "${eventCode}" has no Cvent Event ID set (Admin → Event Settings).`,
             );
         }
 

@@ -1,6 +1,6 @@
 # Spec: Admin menu and event overview
 
-Status: **Draft** (when approved: **Approved by <name>, <YYYY-MM-DD>**)
+Status: **Approved by Peter, 2026-11-10**
 Author: Peter Wiley
 Branch: `feat/admin-menu-and-overview`
 Process: [agent pipeline](../agent-pipeline.md)

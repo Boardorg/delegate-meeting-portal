@@ -19,8 +19,8 @@ import {
     removeMeeting,
     type DelegateOption,
     type MeetingRow,
-    type SyncStatus,
 } from "./actions";
+import type { SyncStatus } from "@/lib/cvent/syncStatus";
 import {
     groupSlotOptions,
     slotLocationWarning,

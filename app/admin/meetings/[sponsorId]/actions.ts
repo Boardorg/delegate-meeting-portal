@@ -6,7 +6,6 @@ import { db } from "@/lib/db/client";
 import {
     meetingRequests,
     scheduledMeetings,
-    type ScheduledMeetingRow,
 } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
@@ -19,6 +18,7 @@ import {
     getEventAppointments,
 } from "@/lib/cvent/client";
 import { companyAppointmentsNotInPortal } from "@/lib/cvent/cventOnly";
+import { getSyncStatus, type SyncStatus } from "@/lib/cvent/syncStatus";
 import { companyMaximumMeetings } from "@/lib/attendees/caps";
 import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import {
@@ -44,8 +44,6 @@ import type { SponsorDetail } from "@/types";
 // the attendee data source.
 // ---------------------------------------------------------------------------
 
-/** Derived Cvent sync status for a single meeting row. */
-export type SyncStatus = "synced" | "modified" | "not_pushed";
 
 /** One row in the per-sponsor meeting table. */
 export type MeetingRow = {
@@ -76,18 +74,6 @@ export type MeetingRow = {
     source: MeetingSource;
     cventAppointmentId: string | null;
 };
-
-/**
- * Derives the Cvent sync status for a DB meeting row.
- * Not pushed if cventAppointmentId is null. Modified if the meeting was
- * edited after it was last pushed. Synced otherwise.
- */
-function getSyncStatus(m: ScheduledMeetingRow): SyncStatus {
-    if (!m.cventAppointmentId) return "not_pushed";
-    if (m.lastModifiedAt && m.lastPushedAt && m.lastModifiedAt > m.lastPushedAt)
-        return "modified";
-    return "synced";
-}
 
 /** The result of saving a meeting from the Edit or Create Meeting window. */
 export type MeetingSaveResult = { ok: true } | { ok: false; error: string };

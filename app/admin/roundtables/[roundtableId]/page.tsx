@@ -4,7 +4,7 @@ import { getRoundtableDetail } from "./actions";
 import RoundtableDetailView from "./RoundtableDetail";
 
 // ---------------------------------------------------------------------------
-// /admin/roundtables/[roundtableId] — one roundtable.
+// /admin/roundtables/[roundtableId]: one roundtable.
 //
 // Mirrors /admin/meetings/[sponsorId]. The roundtableId param is the roundtable's id, URL-encoded.
 // ---------------------------------------------------------------------------

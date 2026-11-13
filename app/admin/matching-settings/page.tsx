@@ -5,7 +5,7 @@ import { roundtableSlots } from "@/lib/matching/roundtables";
 import MatchingSettingsForm, { type CventRoundtable } from "./MatchingSettingsForm";
 
 // ---------------------------------------------------------------------------
-// /admin/matching-settings — the delegate matching settings for the selected event.
+// /admin/matching-settings: the delegate matching settings for the selected event.
 //
 // Admins set the D2D and roundtable question priorities, the meeting caps, and seats and
 // alternates per table. The page also lists the roundtables found in Cvent, so admins can

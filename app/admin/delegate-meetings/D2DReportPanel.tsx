@@ -5,7 +5,7 @@ import { D2D_UNMATCHED_LABEL } from "@/lib/matching/d2dReport";
 import { StatChip } from "../meetings/_components/StatChip";
 
 // ---------------------------------------------------------------------------
-// D2DReportPanel — the summary shown after "Run D2D Matching".
+// D2DReportPanel: the summary shown after "Run D2D Matching".
 //
 // Mirrors SchedulerReportPanel on the sponsor page: headline counts, then the weak matches
 // and the unmatched delegates. Pure presentation over the serializable D2DReport.

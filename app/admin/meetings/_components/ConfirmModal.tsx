@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 // ---------------------------------------------------------------------------
-// ConfirmModal — the confirmation dialog behind the meeting pages' header buttons.
+// ConfirmModal: the confirmation dialog behind the meeting pages' header buttons.
 //
 // Shared by Sponsor Meetings, Delegate Meetings and Roundtables, so "Run", "Push All to Cvent",
 // "Clear All Unsynced" and "Unpush All Synced" confirm the same way on every page.

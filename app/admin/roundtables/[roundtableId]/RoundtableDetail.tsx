@@ -17,7 +17,7 @@ import {
 } from "./actions";
 
 // ---------------------------------------------------------------------------
-// RoundtableDetail — one roundtable, for /admin/roundtables/[roundtableId].
+// RoundtableDetail: one roundtable, for /admin/roundtables/[roundtableId].
 //
 // Mirrors MeetingDetail on a sponsor's page.
 // Admins type the theme title and discussion prompt, and move delegates between tables,

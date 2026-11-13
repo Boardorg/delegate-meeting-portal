@@ -10,7 +10,7 @@ import {
 import DelegatesTable from "./DelegatesTable";
 
 // ---------------------------------------------------------------------------
-// /admin/delegate-meetings — the delegate list for D2D one-on-ones.
+// /admin/delegate-meetings: the delegate list for D2D one-on-ones.
 //
 // Mirrors /admin/meetings: event, search, sort and page live in the URL,
 // so each change re-runs the query server-side.

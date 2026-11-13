@@ -5,7 +5,7 @@ import { fmtTime, fmtWeekday } from "@/lib/format";
 import { StatChip } from "../meetings/_components/StatChip";
 
 // ---------------------------------------------------------------------------
-// RoundtableReportPanel — the summary shown after "Run Roundtable Grouping".
+// RoundtableReportPanel: the summary shown after "Run Roundtable Grouping".
 //
 // Mirrors SchedulerReportPanel on the sponsor page: headline counts, each table with its
 // short or weak flags and what it shares, then the unassigned delegates.

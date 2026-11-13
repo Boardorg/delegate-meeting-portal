@@ -32,7 +32,7 @@ import type { D2DReport } from "@/lib/matching/d2dReport";
 import type { SyncReport } from "@/lib/cvent/syncReport";
 
 // ---------------------------------------------------------------------------
-// DelegatesTable — the delegate list for /admin/delegate-meetings.
+// DelegatesTable: the delegate list for /admin/delegate-meetings.
 //
 // Mirrors SponsorsTable on the Sponsor Meetings page: the same header buttons and confirmations,
 // the same report panels, and search, sort and page kept in the URL.

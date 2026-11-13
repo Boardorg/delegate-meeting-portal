@@ -4,7 +4,7 @@ import { getDelegateMeetingDetail } from "./actions";
 import DelegateMeetingDetail from "./DelegateMeetingDetail";
 
 // ---------------------------------------------------------------------------
-// /admin/delegate-meetings/[delegateId] — one delegate's meetings.
+// /admin/delegate-meetings/[delegateId]: one delegate's meetings.
 //
 // Mirrors /admin/meetings/[sponsorId]. The delegateId param is the delegate's Salesforce id, URL-encoded.
 // ---------------------------------------------------------------------------

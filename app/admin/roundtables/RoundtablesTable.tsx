@@ -16,7 +16,7 @@ import {
 } from "./actions";
 
 // ---------------------------------------------------------------------------
-// RoundtablesTable — the roundtable list for /admin/roundtables.
+// RoundtablesTable: the roundtable list for /admin/roundtables.
 //
 // Mirrors SponsorsTable on the Sponsor Meetings page: the same header buttons and confirmations
 // and the same report panels. Clicking a table opens it.

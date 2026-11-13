@@ -21,7 +21,7 @@ import {
 } from "./actions";
 
 // ---------------------------------------------------------------------------
-// DelegateMeetingDetail — one delegate's meetings, for /admin/delegate-meetings/[delegateId].
+// DelegateMeetingDetail: one delegate's meetings, for /admin/delegate-meetings/[delegateId].
 //
 // Mirrors MeetingDetail on a sponsor's page.
 // D2D meetings can be moved to another D2D slot, removed or pushed.

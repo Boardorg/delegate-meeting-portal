@@ -12,7 +12,7 @@ import {
 import { saveMatchingSettings } from "./actions";
 
 // ---------------------------------------------------------------------------
-// MatchingSettingsForm — the form on /admin/matching-settings.
+// MatchingSettingsForm: the form on /admin/matching-settings.
 //
 // Each question list can be reordered by dragging or with the arrow buttons.
 // Higher questions count for more, and a turned-off question doesn't count at all.

@@ -4,7 +4,7 @@ import { listRoundtables, type RoundtablesOverview } from "./actions";
 import RoundtablesTable from "./RoundtablesTable";
 
 // ---------------------------------------------------------------------------
-// /admin/roundtables — the roundtable list for the selected event.
+// /admin/roundtables: the roundtable list for the selected event.
 //
 // Mirrors /admin/meetings. One row per roundtable, with the unassigned delegates below.
 // ---------------------------------------------------------------------------

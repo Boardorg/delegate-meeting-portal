@@ -247,12 +247,13 @@ export default function SchedulerReportPanel({
                         none of the scheduling passes, so it was never
                         considered. Meetings are placed in priority order:
                         mutual sponsor–delegate pairs, high-interest (rank ≥ 4)
-                        sponsor→delegate and delegate→sponsor requests, all
-                        remaining sponsor→delegate requests, then mutual and
-                        remaining delegate–delegate requests on day 2. Requests
+                        sponsor→delegate and delegate→sponsor requests, then all
+                        remaining sponsor→delegate requests. Requests
                         outside these rules — most commonly a low-interest
                         (rank &lt; 4) delegate→sponsor request or a
                         sponsor→sponsor request — are never scheduled.
+                        Delegate meetings come from D2D matching on the
+                        Delegate Meetings page instead.
                     </p>
                 )}
             </div>

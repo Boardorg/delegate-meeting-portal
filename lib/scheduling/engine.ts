@@ -125,7 +125,7 @@ export function sponsorPassCap(
     return Math.max(1, Math.ceil((maximum * num) / den));
 }
 
-// Defines the seven passes of the scheduling algorithm with their specific rules and caps.
+// Defines the five passes of the scheduling algorithm with their specific rules and caps.
 const PASSES: PassConfig[] = [
     {
         // Pass 1: Mutual sponsor <-> delegate requests only. Both parties requested each other.
@@ -191,26 +191,8 @@ const PASSES: PassConfig[] = [
         filter: (req, tgt) =>
             req.role === "sponsor" && tgt.role === "delegate",
     },
-    {
-        // Pass 6: Mutual delegate <-> delegate requests on Day 2 only.
-        passNumber: 6,
-        day: 2,
-        kind: "delegate_delegate",
-        delegateCap: 2,
-        sponsorCap: () => 0,
-        filter: (req, tgt, _rank, mutual) =>
-            mutual && req.role === "delegate" && tgt.role === "delegate",
-    },
-    {
-        // Pass 7: All remaining delegate <-> delegate requests on Day 2, any rank.
-        passNumber: 7,
-        day: 2,
-        kind: "delegate_delegate",
-        delegateCap: 2,
-        sponsorCap: () => 0,
-        filter: (req, tgt) =>
-            req.role === "delegate" && tgt.role === "delegate",
-    },
+    // Delegates never make requests in the portal, so there are no request-based D2D passes.
+    // D2D meetings come from profile matching instead (see lib/matching/d2d.ts).
 ];
 
 /**
@@ -241,8 +223,6 @@ const PASS_KIND = new Map(PASSES.map((p) => [p.passNumber, p.kind]));
  * Sponsor meetings count across every day.
  * A diamond sponsor can have Day 2 sponsor meetings, and they must still fit the package.
  * The same goes for a delegate's sponsor-meeting cap.
- *
- * Delegate-to-delegate meetings still count on the pass's day only, so their day rule is unchanged.
  *
  * @param {ScheduledMeeting[]} meetings - All meetings scheduled so far.
  * @param {string} attendeeId - The attendee to count for.
@@ -344,7 +324,7 @@ function addBusy(busy: Map<string, number>, startTime: string): void {
 /**
  * Runs the full multi-pass scheduling algorithm against a set of attendees and requests.
  *
- * Meetings are scheduled across seven passes in priority order. Caps are cumulative —
+ * Meetings are scheduled across five passes in priority order. Caps are cumulative —
  * each pass raises the ceiling without resetting counts. Availability is event-global:
  * before confirming any meeting, the engine finds a timeslot where both attendees are
  * free and capacity remains, then marks them busy at that time and decrements the
@@ -367,7 +347,6 @@ function addBusy(busy: Map<string, number>, startTime: string): void {
  * Sponsor passes (1 to 5) use `sponsor_delegate` slots on Day 1.
  * A diamond sponsor's pair may use a Day 2 `sponsor_delegate` slot when no Day 1 slot works.
  * Sponsor-meeting caps count across both days, so a diamond sponsor still stays within the package.
- * Passes 6 and 7 use `delegate_delegate` slots on Day 2.
  *
  * The engine avoids conflicting with meetings that already exist in Cvent when
  * the caller passes `preexisting`: those pairs are treated as already scheduled

@@ -15,7 +15,7 @@ export type AttendeeRecordSF = {
 
 /**
  * Attendee role. Determines scheduling rules, day eligibility, and meeting caps.
- * - `delegate`: Event attendee; eligible for sponsor meetings on Day 1 and peer meetings on Day 2.
+ * - `delegate`: Event attendee; eligible for sponsor meetings, D2D meetings and roundtables.
  * - `sponsor`: Paying sponsor. Eligible for delegate meetings on Day 1, and on Day 2 for diamond sponsors when Day 1 is full.
  */
 export type AttendeeRole = "delegate" | "sponsor";

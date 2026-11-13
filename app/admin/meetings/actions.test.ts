@@ -620,7 +620,7 @@ describe("runSchedulerForEvent: D2D meetings and roundtables", () => {
 
 describe("sponsor bulk actions only touch sponsor meetings", () => {
     /**
-     * Renders a drizzle condition and returns its bound values.
+     * Renders a drizzle condition as SQL text and returns it with its bound values.
      *
      * @param {SQL} cond - The condition.
      * @returns {{ sql: string; params: unknown[] }} The SQL text and its values.

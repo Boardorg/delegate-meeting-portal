@@ -43,7 +43,7 @@ vi.mock("@/lib/cvent/unpush", () => ({
     unpushMeetingRows: vi.fn(async () => ({ unpushed: 0, alreadyGone: 0, failures: [], notes: [] })),
 }));
 
-import { clearUnsyncedD2DForEvent, runD2DForEvent, unpushAllD2DForEvent } from "./actions";
+import { clearUnsyncedD2DForEvent, listDelegatesPage, runD2DForEvent, unpushAllD2DForEvent } from "./actions";
 import { NO_D2D_SLOTS_MESSAGE } from "@/lib/matching/d2d";
 
 /**
@@ -118,6 +118,7 @@ function row(partial: Partial<ScheduledMeetingRow>): ScheduledMeetingRow {
  *
  * @param {ScheduledMeetingRow[]} rows - The event's meetings.
  * @param {Timeslot[]} timeslots - The event's slots.
+ * @param {{ roundtableId: string; delegateId: string; timeslotId: string }[]} [seats] - Delegates seated at a roundtable, each at its table's slot. None by default.
  * @returns {MatchingContext} The data.
  */
 function context(
@@ -305,5 +306,24 @@ describe("D2D bulk actions only touch D2D meetings", () => {
         const cond = selectWhere.mock.calls[0][0];
         expect(sqlParams(cond)).toEqual(["EVT", "portal", "delegate_delegate"]);
         expect(sqlText(cond)).toContain('"cvent_appointment_id" is not null');
+    });
+});
+
+describe("listDelegatesPage: roundtable seats", () => {
+    test("shows a seated delegate who has a D2D meeting with the seated_at_roundtable reason, and leaves out a seated delegate without one", async () => {
+        loadMatchingContext.mockResolvedValue(
+            context([row({ attendeeA: "d1", attendeeB: "d2" })], [slot("t1", "09:00")], [
+                { roundtableId: "rt", delegateId: "d1", timeslotId: "t9" },
+                { roundtableId: "rt", delegateId: "d3", timeslotId: "t9" },
+            ]),
+        );
+
+        const page = await listDelegatesPage({ eventCode: "EVT" });
+
+        const byId = new Map(page.rows.map((r) => [r.delegateId, r]));
+        expect(byId.get("d1")?.exclusion).toBe("seated_at_roundtable");
+        expect(byId.get("d2")?.exclusion).toBeNull();
+        expect(byId.has("d3")).toBe(false);
+        expect(byId.get("d4")?.exclusion).toBeNull();
     });
 });

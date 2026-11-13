@@ -8,6 +8,9 @@ import {
     dayOfStart,
     delegateMeetingCounts,
     keptD2DMeetings,
+    mergeBusyTimes,
+    seatedBusyTimes,
+    seatedDelegateIds,
     slotRoomLeft,
     type MeetingRef,
 } from "./delegateMeetings";
@@ -129,10 +132,39 @@ describe("keptD2DMeetings and dayOfStart", () => {
         );
         expect(kept).toEqual([
             { attendeeA: "d1", attendeeB: "d2", day: 1 },
-            { attendeeA: "d3", attendeeB: "cvent:solo", day: 2 },
-            { attendeeA: "d1", attendeeB: "d2", day: 1 },
+            { attendeeA: "d3", attendeeB: "cvent:solo", day: 2, others: [] },
+            { attendeeA: "d1", attendeeB: "cvent:pair", day: 1, others: ["d2"] },
+            { attendeeA: "d2", attendeeB: "cvent:pair", day: 1, others: ["d1"] },
         ]);
         expect(dayOfStart("2027-01-25T10:00:00Z", SLOTS)).toBe(2);
+    });
+
+    test("counts a Cvent-only appointment with three delegates as one meeting for each, as delegateMeetingCounts does", () => {
+        const cventOnly = cventOnlyForDelegates(
+            [appt("trio", "2027-01-20T12:00:00Z", ["c-d1", "c-d2", "c-d3"])],
+            PEOPLE,
+            new Set(),
+        );
+        const kept = keptD2DMeetings([], cventOnly, SLOTS);
+        const perDelegate = new Map<string, number>();
+        for (const m of kept) perDelegate.set(m.attendeeA, (perDelegate.get(m.attendeeA) ?? 0) + 1);
+        expect([...perDelegate.entries()]).toEqual([["d1", 1], ["d2", 1], ["d3", 1]]);
+        expect(delegateMeetingCounts([], cventOnly).get("d1")).toEqual({ s2d: 0, d2d: 1 });
+    });
+});
+
+describe("seatedBusyTimes, seatedDelegateIds and mergeBusyTimes", () => {
+    test("makes seated roundtable delegates busy at their table's time, and leaves alternates free", () => {
+        const seats = [
+            { roundtableId: "rt", delegateId: "d1", role: "seated" as const },
+            { roundtableId: "rt", delegateId: "d2", role: "alternate" as const },
+        ];
+        const busy = seatedBusyTimes(seats, [{ id: "rt", timeslotId: "t2" }], new Map(SLOTS.map((s) => [s.id, s])));
+        expect([...busy.get("d1")!]).toEqual([Date.parse(SLOTS[1].startTime)]);
+        expect(busy.has("d2")).toBe(false);
+        expect([...seatedDelegateIds(seats)]).toEqual(["d1"]);
+        const merged = mergeBusyTimes(new Map([["d1", new Set([1])]]), busy);
+        expect([...merged.get("d1")!].sort()).toEqual([1, Date.parse(SLOTS[1].startTime)].sort());
     });
 });
 

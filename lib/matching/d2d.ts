@@ -43,7 +43,16 @@ export type D2DMatch = ScheduledMeeting & {
 };
 
 /** A D2D meeting kept from before the run, so it counts toward caps and the Day 1 rule. */
-export type ExistingD2D = { attendeeA: string; attendeeB: string; day: number };
+export type ExistingD2D = {
+    attendeeA: string;
+    attendeeB: string;
+    day: number;
+    /**
+     * Other delegates in the same appointment, who already meet attendeeA.
+     * They are never paired again, but this entry counts as one meeting only.
+     */
+    others?: string[];
+};
 
 /** Everything the D2D engine needs. */
 export type D2DInput = {
@@ -176,6 +185,7 @@ export function runD2DMatching(input: D2DInput): D2DResult {
     const existingPairs = new Set<string>();
     for (const m of input.existingD2D) {
         existingPairs.add(pairKey(m.attendeeA, m.attendeeB));
+        for (const other of m.others ?? []) existingPairs.add(pairKey(m.attendeeA, other));
         for (const id of [m.attendeeA, m.attendeeB]) {
             d2dCount.set(id, (d2dCount.get(id) ?? 0) + 1);
             if (m.day === 1) day1Count.set(id, (day1Count.get(id) ?? 0) + 1);

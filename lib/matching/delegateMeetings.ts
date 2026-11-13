@@ -155,6 +155,69 @@ export function busyStartTimes(
     return out;
 }
 
+/** The parts of a roundtable seat these helpers read. */
+export type SeatRef = { roundtableId: string; delegateId: string; role: "seated" | "alternate" };
+
+/** The parts of a roundtable these helpers read. */
+export type RoundtableRef = { id: string; timeslotId: string };
+
+/**
+ * The delegates seated at a roundtable, pushed or not.
+ * Alternates aren't seated, so they are left out.
+ *
+ * @param {SeatRef[]} seats - The event's roundtable seats.
+ * @returns {Set<string>} The seated delegates' Salesforce ids.
+ */
+export function seatedDelegateIds(seats: SeatRef[]): Set<string> {
+    return new Set(seats.filter((s) => s.role === "seated").map((s) => s.delegateId));
+}
+
+/**
+ * The start times seated roundtable delegates are busy at, as epoch ms.
+ * A roundtable is a meeting at its table's time, so each seated delegate is busy then.
+ * Alternates aren't seated, so they stay free.
+ *
+ * @param {SeatRef[]} seats - The event's roundtable seats.
+ * @param {RoundtableRef[]} tables - The event's roundtables.
+ * @param {Map<string, Pick<Timeslot, "startTime">>} timeslotById - The event's timeslots.
+ * @returns {Map<string, Set<number>>} Busy start times by Salesforce id.
+ */
+export function seatedBusyTimes(
+    seats: SeatRef[],
+    tables: RoundtableRef[],
+    timeslotById: Map<string, Pick<Timeslot, "startTime">>,
+): Map<string, Set<number>> {
+    const slotByTable = new Map(tables.map((t) => [t.id, t.timeslotId]));
+    const out = new Map<string, Set<number>>();
+    for (const s of seats) {
+        if (s.role !== "seated") continue;
+        const start = timeslotById.get(slotByTable.get(s.roundtableId) ?? "")?.startTime;
+        if (!start) continue;
+        const set = out.get(s.delegateId) ?? new Set<number>();
+        set.add(startMs(start));
+        out.set(s.delegateId, set);
+    }
+    return out;
+}
+
+/**
+ * Joins busy-time maps, keeping every time from each.
+ *
+ * @param {Map<string, Set<number>>[]} maps - The busy times to join.
+ * @returns {Map<string, Set<number>>} A new map with every party's times.
+ */
+export function mergeBusyTimes(...maps: Map<string, Set<number>>[]): Map<string, Set<number>> {
+    const out = new Map<string, Set<number>>();
+    for (const m of maps) {
+        for (const [id, times] of m) {
+            const set = out.get(id) ?? new Set<number>();
+            for (const t of times) set.add(t);
+            out.set(id, set);
+        }
+    }
+    return out;
+}
+
 /**
  * The event day of a start time, from the timeslots on the same date.
  * A date with no timeslot counts as Day 2, so the Day 1 rule never relies on it.
@@ -173,7 +236,8 @@ export function dayOfStart(startTime: string, timeslots: Timeslot[]): number {
 /**
  * D2D meetings a run keeps, as the engine needs them.
  * Pushed portal D2D meetings, plus delegate-only appointments only in Cvent.
- * A Cvent appointment with one known delegate is paired with a stand-in id, so it still counts toward their cap.
+ * A Cvent appointment counts as one meeting for each delegate in it, as delegateMeetingCounts counts it.
+ * So each delegate gets one entry with a stand-in partner, and the others in it are listed so they aren't paired again.
  *
  * @param {(MeetingRef & { day: number })[]} keptRows - The D2D rows the run keeps.
  * @param {CventOnlyForDelegates[]} cventOnly - From cventOnlyForDelegates.
@@ -189,9 +253,10 @@ export function keptD2DMeetings(
     for (const c of cventOnly) {
         if (c.hasSponsor) continue;
         const day = dayOfStart(c.appointment.startTime, timeslots);
-        const [first, ...rest] = c.delegateIds;
-        const others = rest.length ? rest : [`cvent:${c.appointment.id ?? c.appointment.startTime}`];
-        for (const other of others) out.push({ attendeeA: first, attendeeB: other, day });
+        const standIn = `cvent:${c.appointment.id ?? c.appointment.startTime}`;
+        for (const id of c.delegateIds) {
+            out.push({ attendeeA: id, attendeeB: standIn, day, others: c.delegateIds.filter((o) => o !== id) });
+        }
     }
     return out;
 }

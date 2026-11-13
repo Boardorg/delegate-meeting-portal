@@ -1,6 +1,6 @@
 # Spec: Delegate-to-delegate and roundtable matching
 
-Status: **Draft** (when approved: **Approved by <name>, <YYYY-MM-DD>**)
+Status: **Approved by Mark, 2026-11-13**
 Author: Peter Wiley
 Branch: `feat/d2d-and-roundtable-matching`
 Process: [agent pipeline](../agent-pipeline.md)

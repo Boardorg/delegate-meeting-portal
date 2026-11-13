@@ -15,7 +15,7 @@ export type AttendeeRecordSF = {
 
 /**
  * Attendee role. Determines scheduling rules, day eligibility, and meeting caps.
- * - `delegate`: Event attendee; eligible for sponsor meetings, D2D meetings and roundtables.
+ * - `delegate`: Event attendee. Eligible for sponsor meetings, D2D meetings and roundtables.
  * - `sponsor`: Paying sponsor. Eligible for delegate meetings on Day 1, and on Day 2 for diamond sponsors when Day 1 is full.
  */
 export type AttendeeRole = "delegate" | "sponsor";
@@ -410,8 +410,9 @@ export interface ScheduledMeeting {
     attendeeA: string;
 
     /**
-     * Party id of the second participant — the delegate on a sponsor↔delegate
-     * meeting, or the other delegate on a D2D meeting. See the invariant on `attendeeA`.
+     * Party id of the second participant.
+     * It is the delegate on a sponsor↔delegate meeting, or the other delegate on a D2D meeting.
+     * See the invariant on `attendeeA`.
      */
     attendeeB: string;
 

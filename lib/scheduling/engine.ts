@@ -324,8 +324,8 @@ function addBusy(busy: Map<string, number>, startTime: string): void {
 /**
  * Runs the full multi-pass scheduling algorithm against a set of attendees and requests.
  *
- * Meetings are scheduled across five passes in priority order. Caps are cumulative —
- * each pass raises the ceiling without resetting counts. Availability is event-global:
+ * Meetings are scheduled across five passes in priority order. Caps are cumulative.
+ * Each pass raises the ceiling without resetting counts. Availability is event-global:
  * before confirming any meeting, the engine finds a timeslot where both attendees are
  * free and capacity remains, then marks them busy at that time and decrements the
  * timeslot's remaining capacity. Each meeting's location defaults to the booked

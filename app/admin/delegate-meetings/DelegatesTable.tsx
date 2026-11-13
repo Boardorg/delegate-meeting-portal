@@ -184,11 +184,21 @@ export default function DelegatesTable({ selectedEvent, query, sortField, sortDi
         [],
     );
 
+    /**
+     * Puts a header click's new sort order in the URL, back on page 1.
+     *
+     * @param {Updater<SortingState>} updater - The new sorting, or a function that makes it.
+     */
     const onSortingChange: OnChangeFn<SortingState> = (updater) => {
         const next = typeof updater === "function" ? updater(sorting) : updater;
         const s = next[0] ?? { id: sortField, desc: false };
         router.push(hrefWith({ sort: s.id as DelegateSortField, dir: s.desc ? "desc" : "asc", page: 1 }));
     };
+    /**
+     * Puts the chosen page in the URL.
+     *
+     * @param {Updater<PaginationState>} updater - The new pagination, or a function that makes it.
+     */
     const onPaginationChange: OnChangeFn<PaginationState> = (updater) => {
         const next = typeof updater === "function" ? updater(pagination) : updater;
         router.push(hrefWith({ page: next.pageIndex + 1 }));

@@ -124,6 +124,7 @@ function context(rows: ScheduledMeetingRow[], timeslots: Timeslot[]): MatchingCo
         settings: DEFAULT_MATCHING_SETTINGS,
         rows,
         roundtableRows: [],
+        seatRows: [],
         appointments: [],
         cventOnly,
         counts: delegateMeetingCounts(rows, cventOnly),

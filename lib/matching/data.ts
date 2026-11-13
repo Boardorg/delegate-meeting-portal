@@ -2,9 +2,11 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
+    roundtableSeats,
     roundtables,
     scheduledMeetings,
     type RoundtableRow,
+    type RoundtableSeatRow,
     type ScheduledMeetingRow,
 } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
@@ -34,6 +36,8 @@ export type MatchingContext = {
     rows: ScheduledMeetingRow[];
     /** Every roundtable for the event. */
     roundtableRows: RoundtableRow[];
+    /** Every roundtable seat and alternate for the event. */
+    seatRows: RoundtableSeatRow[];
     /** The event's active Cvent appointments. Null when Cvent couldn't be read. */
     appointments: CventExistingAppointment[] | null;
     /** Cvent appointments this database has no meeting or roundtable for, with their delegates. */
@@ -69,12 +73,13 @@ export async function loadMatchingSettings(eventCode: string): Promise<MatchingS
  * @returns {Promise<MatchingContext>} The data.
  */
 export async function loadMatchingContext(eventCode: string): Promise<MatchingContext> {
-    const [attendees, scheduleData, settings, rows, roundtableRows, appointments] = await Promise.all([
+    const [attendees, scheduleData, settings, rows, roundtableRows, seatRows, appointments] = await Promise.all([
         loadAttendees(false, eventCode),
         loadEventScheduleData(eventCode),
         loadMatchingSettings(eventCode),
         db.select().from(scheduledMeetings).where(eq(scheduledMeetings.eventCode, eventCode)),
         db.select().from(roundtables).where(eq(roundtables.eventCode, eventCode)),
+        db.select().from(roundtableSeats).where(eq(roundtableSeats.eventCode, eventCode)),
         getEventAppointments(eventCode).catch((err) => {
             console.warn(
                 `loadMatchingContext: could not load Cvent appointments for "${eventCode}". ` +
@@ -97,6 +102,7 @@ export async function loadMatchingContext(eventCode: string): Promise<MatchingCo
         settings,
         rows,
         roundtableRows,
+        seatRows,
         appointments,
         cventOnly,
         counts: delegateMeetingCounts(rows, cventOnly),

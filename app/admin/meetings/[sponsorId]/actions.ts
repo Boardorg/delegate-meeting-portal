@@ -476,6 +476,8 @@ export async function editMeeting(params: {
             and(
                 eq(scheduledMeetings.id, params.id),
                 eq(scheduledMeetings.source, "portal"),
+                // Only sponsor meetings. D2D meetings are changed from the Delegate Meetings pages.
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         )
         .limit(1);
@@ -501,6 +503,8 @@ export async function editMeeting(params: {
             and(
                 eq(scheduledMeetings.id, params.id),
                 eq(scheduledMeetings.source, "portal"),
+                // Only sponsor meetings. D2D meetings are changed from the Delegate Meetings pages.
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         );
     revalidatePath("/admin/meetings", "layout");
@@ -532,6 +536,8 @@ export async function removeMeeting(params: { id: string }): Promise<void> {
             and(
                 eq(scheduledMeetings.id, params.id),
                 eq(scheduledMeetings.source, "portal"),
+                // Only sponsor meetings. D2D meetings are changed from the Delegate Meetings pages.
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         )
         .limit(1);
@@ -546,6 +552,8 @@ export async function removeMeeting(params: { id: string }): Promise<void> {
             and(
                 eq(scheduledMeetings.id, params.id),
                 eq(scheduledMeetings.source, "portal"),
+                // Only sponsor meetings. D2D meetings are changed from the Delegate Meetings pages.
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         );
     revalidatePath("/admin/meetings", "layout");
@@ -570,6 +578,8 @@ export async function pushMeeting(params: {
             and(
                 eq(scheduledMeetings.id, params.id),
                 eq(scheduledMeetings.source, "portal"),
+                // Only sponsor meetings. D2D meetings are changed from the Delegate Meetings pages.
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         );
 
@@ -582,6 +592,7 @@ export async function pushMeeting(params: {
                   and(
                       eq(scheduledMeetings.eventCode, params.eventCode),
                       eq(scheduledMeetings.source, "portal"),
+                      eq(scheduledMeetings.kind, "sponsor_delegate"),
                       eq(scheduledMeetings.attendeeA, rows[0].attendeeA),
                   ),
               )
@@ -622,6 +633,7 @@ export async function pushAllForSponsor(params: {
             and(
                 eq(scheduledMeetings.eventCode, params.eventCode),
                 eq(scheduledMeetings.source, "portal"),
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
                 // The company (account id) is always the A side of its meetings.
                 eq(scheduledMeetings.attendeeA, params.sponsorId),
             ),

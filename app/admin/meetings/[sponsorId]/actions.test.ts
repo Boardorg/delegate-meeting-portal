@@ -1,6 +1,8 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import type { Attendee, Location, Timeslot } from "@/types";
 import { emptyProfile } from "@/lib/attendees/formatProfile";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // The per-sponsor page: its meeting counts, and the slots the Edit and Create
@@ -26,14 +28,34 @@ function whereResult() {
 
 const dbUpdate = vi.fn();
 const dbInsert = vi.fn();
+// Every where condition, from selects, updates and deletes, so a test can read what they filtered on.
+const whereConds = vi.fn<(cond: SQL) => void>();
 
 vi.mock("@/lib/db/client", () => ({
     db: {
-        select: () => ({ from: () => ({ where: whereResult }) }),
+        select: () => ({
+            from: () => ({
+                where: (cond: SQL) => {
+                    whereConds(cond);
+                    return whereResult();
+                },
+            }),
+        }),
         update: (...a: unknown[]) => {
             dbUpdate(...a);
-            return { set: () => ({ where: async () => undefined }) };
+            return {
+                set: () => ({
+                    where: async (cond: SQL) => {
+                        whereConds(cond);
+                    },
+                }),
+            };
         },
+        delete: () => ({
+            where: async (cond: SQL) => {
+                whereConds(cond);
+            },
+        }),
         insert: (...a: unknown[]) => {
             dbInsert(...a);
             return { values: async () => undefined };
@@ -56,7 +78,7 @@ vi.mock("@/lib/cvent/client", () => ({
     cancelAppointment: vi.fn(),
 }));
 vi.mock("@/lib/cvent/push", () => ({
-    pushMeetingRows: vi.fn(),
+    pushMeetingRows: vi.fn(async () => ({ total: 0, pushed: 0, failed: 0, results: [] })),
     needsSync: vi.fn(),
 }));
 
@@ -66,6 +88,8 @@ import {
     getMeetingDetail,
     getNewMeetingSlots,
     getSlotOptions,
+    pushMeeting,
+    removeMeeting,
 } from "./actions";
 
 /**
@@ -373,5 +397,43 @@ describe("Edit and Create Meeting saves — the server refuses another company's
 
         expect(result.ok).toBe(false);
         expect(dbInsert).not.toHaveBeenCalled();
+    });
+});
+
+describe("Edit, Remove and Push on a sponsor's page only act on sponsor meetings", () => {
+    /**
+     * The bound values of every where condition so far.
+     *
+     * @returns {unknown[][]} One list of values per condition.
+     */
+    function boundValues(): unknown[][] {
+        return whereConds.mock.calls.map(([cond]) => new PgDialect().sqlToQuery(cond).params);
+    }
+
+    test("Remove looks up and deletes the meeting only as a sponsor meeting", async () => {
+        rows = [];
+
+        await removeMeeting({ id: "d2d-1" });
+
+        expect(boundValues().length).toBe(2);
+        for (const params of boundValues()) expect(params).toEqual(["d2d-1", "portal", "sponsor_delegate"]);
+    });
+
+    test("Push looks up the meeting only as a sponsor meeting", async () => {
+        rows = [];
+
+        await pushMeeting({ id: "d2d-1", eventCode: "EVT" });
+
+        expect(boundValues()[0]).toEqual(["d2d-1", "portal", "sponsor_delegate"]);
+    });
+
+    test("Edit finds nothing to change for a meeting that isn't a sponsor meeting", async () => {
+        rows = [];
+
+        const result = await editMeeting({ id: "d2d-1", timeslotId: "t1", day: 1, locationId: null });
+
+        expect(result).toEqual({ ok: false, error: "Error: meeting not found" });
+        expect(boundValues()[0]).toEqual(["d2d-1", "portal", "sponsor_delegate"]);
+        expect(dbUpdate).not.toHaveBeenCalled();
     });
 });

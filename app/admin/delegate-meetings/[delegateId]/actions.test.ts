@@ -37,10 +37,10 @@ vi.mock("@/lib/db/client", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { moveD2DMeeting, removeD2DMeeting } from "./actions";
+import { getDelegateMeetingDetail, moveD2DMeeting, removeD2DMeeting } from "./actions";
 
 /**
- * Builds a delegate.
+ * Builds a delegate with a completed Networking Profile.
  *
  * @param {string} id - The Salesforce id, also used for the Cvent contact id.
  * @returns {Attendee} The delegate.
@@ -58,6 +58,7 @@ function delegate(id: string): Attendee {
         company: id,
         title: "",
         sponsorTier: null,
+        networkingProfileComplete: true,
         profile: emptyProfile(),
         scheduling: { maxSameCompanyMeetings: 2, requestedSponsorAccountIds: [] },
     };
@@ -251,5 +252,17 @@ describe("removeD2DMeeting", () => {
         expect(await removeD2DMeeting({ id: "m1" })).toEqual({ ok: true });
         expect(cancelAppointment).not.toHaveBeenCalled();
         expect(dbDelete).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("getDelegateMeetingDetail: roundtable seats", () => {
+    test("shows the seated_at_roundtable reason for a delegate seated at a roundtable", async () => {
+        loadMatchingContext.mockResolvedValue(context([], [{ roundtableId: "rt", delegateId: "d3", timeslotId: "t3" }]));
+
+        const seated = await getDelegateMeetingDetail({ delegateId: "d3", eventCode: "EVT" });
+        const free = await getDelegateMeetingDetail({ delegateId: "d1", eventCode: "EVT" });
+
+        expect(seated?.delegate.exclusion).toBe("seated_at_roundtable");
+        expect(free?.delegate.exclusion).toBeNull();
     });
 });

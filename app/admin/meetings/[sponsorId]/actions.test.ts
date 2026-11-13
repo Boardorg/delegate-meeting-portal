@@ -88,6 +88,7 @@ import {
     getMeetingDetail,
     getNewMeetingSlots,
     getSlotOptions,
+    pushAllForSponsor,
     pushMeeting,
     removeMeeting,
 } from "./actions";
@@ -425,6 +426,23 @@ describe("Edit, Remove and Push on a sponsor's page only act on sponsor meetings
         await pushMeeting({ id: "d2d-1", eventCode: "EVT" });
 
         expect(boundValues()[0]).toEqual(["d2d-1", "portal", "sponsor_delegate"]);
+    });
+
+    test("Push looks up the company's other meetings for the host split only among sponsor meetings", async () => {
+        rows = [{ id: "m1", eventCode: "EVT", attendeeA: "acct-x", attendeeB: "d1", source: "portal", kind: "sponsor_delegate" }];
+
+        await pushMeeting({ id: "m1", eventCode: "EVT" });
+
+        expect(boundValues()).toHaveLength(2);
+        expect(boundValues()[1]).toEqual(["EVT", "portal", "sponsor_delegate", "acct-x"]);
+    });
+
+    test("Push All on a sponsor's page reads only that company's sponsor meetings", async () => {
+        rows = [];
+
+        await pushAllForSponsor({ sponsorId: "acct-x", eventCode: "EVT" });
+
+        expect(boundValues()[0]).toEqual(["EVT", "portal", "sponsor_delegate", "acct-x"]);
     });
 
     test("Edit finds nothing to change for a meeting that isn't a sponsor meeting", async () => {

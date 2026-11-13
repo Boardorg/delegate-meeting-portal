@@ -308,6 +308,27 @@ describe("runD2DMatching", () => {
     });
 });
 
+describe("runD2DMatching: Cvent-only appointments with several delegates", () => {
+    test("never pairs again the delegates who are already together in one Cvent appointment", () => {
+        // a, b and c are in one delegate-only appointment made in Cvent, as keptD2DMeetings lists it.
+        const existingD2D = [
+            { attendeeA: "a", attendeeB: "cvent:trio", day: 1, others: ["b", "c"] },
+            { attendeeA: "b", attendeeB: "cvent:trio", day: 1, others: ["a", "c"] },
+            { attendeeA: "c", attendeeB: "cvent:trio", day: 1, others: ["a", "b"] },
+        ];
+        const result = runD2DMatching(input({
+            attendees: [delegate("a"), delegate("b"), delegate("c"), delegate("d")],
+            existingD2D,
+            timeslots: MANY_SLOTS,
+        }));
+        const trio = new Set(["a", "b", "c"]);
+        expect(result.meetings.length).toBeGreaterThan(0);
+        for (const m of result.meetings) {
+            expect(trio.has(m.attendeeA) && trio.has(m.attendeeB)).toBe(false);
+        }
+    });
+});
+
 describe("runD2DMatching: roundtable seats", () => {
     test("never pairs a delegate seated at a roundtable", () => {
         const result = runD2DMatching(input({

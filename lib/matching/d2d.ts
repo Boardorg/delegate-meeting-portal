@@ -119,6 +119,16 @@ export function d2dOrderWarning(s2dMeetingCount: number): string | null {
     );
 }
 
+/** Shown when a D2D or roundtable run stops because no delegates were loaded. */
+export const NO_DELEGATES_MESSAGE =
+    "No delegates were found for this event, so nothing was changed. " +
+    "Cvent may be unreachable. Try again in a few minutes.";
+
+/** Shown when a D2D run stops because no slot is mapped to delegate_delegate. */
+export const NO_D2D_SLOTS_MESSAGE =
+    "No Delegate to Delegate slots were found for this event, so nothing was changed. " +
+    "Map the D2D appointment type in Event Settings and check that Cvent is reachable.";
+
 /**
  * Turns an ISO time into epoch ms, the key busy times use.
  *

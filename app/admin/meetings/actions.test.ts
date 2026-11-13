@@ -1,4 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 import type { Attendee, Timeslot } from "@/types";
 import type { AppointmentTypeKinds } from "@/lib/events/meetingKinds";
 import { emptyProfile } from "@/lib/attendees/formatProfile";
@@ -251,6 +253,19 @@ describe("runSchedulerForEvent — appointment-type mapping", () => {
         // The meeting went into the sponsor slot, not the earlier Delegate Group slot.
         const inserted = insertValues.mock.calls[0][0] as { timeslotId: string }[];
         expect(inserted.map((m) => m.timeslotId)).toEqual(["ts-s2d"]);
+    });
+
+    test("only replaces unpushed sponsor meetings, so D2D meetings survive an S2D re-run", async () => {
+        scheduleWith({ "t-s2d": "sponsor_delegate" });
+        const where = vi.fn<(cond: SQL) => Promise<void>>(async () => undefined);
+        dbDelete.mockReturnValue({ where });
+
+        await runSchedulerForEvent("EVT");
+
+        const sql = new PgDialect().sqlToQuery(where.mock.calls[0][0]);
+        expect(sql.sql).toContain('"kind" = $');
+        expect(sql.params).toContain("sponsor_delegate");
+        expect(sql.sql).toContain('"cvent_appointment_id" is null');
     });
 });
 

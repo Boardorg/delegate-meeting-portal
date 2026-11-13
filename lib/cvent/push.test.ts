@@ -66,6 +66,7 @@ vi.mock("@/lib/db/client", () => ({
 import {
     appointmentCode,
     appointmentTypeWarning,
+    pushDelegateMeetingRows,
     pushMeetingRows,
     sameAppointmentType,
     sameStartTime,
@@ -781,5 +782,87 @@ describe("pushMeetingRows — reps split across same-time meetings", () => {
 
         expect(summary.pushed).toBe(1);
         expect(summary.results.find((r) => r.meetingId === "m-b")?.reason).toBe("host_not_in_cvent");
+    });
+});
+
+describe("pushDelegateMeetingRows", () => {
+    /**
+     * A D2D meeting row between delegates d1-sf (host) and d2-sf.
+     *
+     * @param {Partial<ScheduledMeetingRow>} [overrides] - Fields to change.
+     * @returns {ScheduledMeetingRow} The row.
+     */
+    function d2dRow(overrides: Partial<ScheduledMeetingRow> = {}): ScheduledMeetingRow {
+        return row({
+            id: "d2d-1",
+            kind: "delegate_delegate",
+            attendeeA: "d1-sf",
+            attendeeB: "d2-sf",
+            matchKind: "profile_match",
+            rank: null,
+            ...overrides,
+        });
+    }
+
+    beforeEach(() => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", name: "Dee", cventContactId: "cd1" }),
+            att({ id: "d2", role: "delegate", salesforceId: "d2-sf", name: "Eve", cventContactId: "cd2" }),
+        ]);
+    });
+
+    test("makes attendee A the host and attendee B the attendee", async () => {
+        const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect(summary.pushed).toBe(1);
+        expect(lastInput().hostContactIds).toEqual(["cd1"]);
+        expect(lastInput().attendeeContactIds).toEqual(["cd2"]);
+        expect(lastInput().subject).toBe("Dee & Eve");
+        expect(lastInput().code).toBe("d2d-1");
+        expect(dbUpdate).toHaveBeenCalled();
+    });
+
+    test("fails without calling Cvent when the host already hosts another appointment then", async () => {
+        getEventAppointments.mockResolvedValue([
+            { id: "other", startTime: "2025-01-15T09:00:00Z", participantContactIds: ["cd1"], hostContactIds: ["cd1"], locationName: null },
+        ]);
+
+        const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect(summary.pushed).toBe(0);
+        expect(summary.results[0].reason).toBe("host_not_in_cvent");
+        expect(createAppointment).not.toHaveBeenCalled();
+    });
+
+    test("skips a meeting with a delegate who cancelled in Cvent", async () => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+            att({ id: "d2", role: "delegate", salesforceId: "d2-sf", cventContactId: "cd2", cventCancelled: true }),
+        ]);
+
+        const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect(summary.results[0].reason).toBe("attendee_cancelled");
+        expect(createAppointment).not.toHaveBeenCalled();
+    });
+
+    test("replaces an edited meeting and cancels the old appointment", async () => {
+        const edited = d2dRow({
+            cventAppointmentId: "appt-old",
+            lastPushedAt: new Date("2025-01-01T00:00:00Z"),
+            lastModifiedAt: new Date("2025-01-02T00:00:00Z"),
+        });
+
+        const summary = await pushDelegateMeetingRows("EVT", [edited]);
+
+        expect(summary.results[0]).toMatchObject({ ok: true, kind: "update" });
+        expect(cancelAppointment).toHaveBeenCalledWith("EVT", "appt-old");
+        expect(lastInput().code).toBe(`d2d-1-${new Date("2025-01-01T00:00:00Z").getTime()}`);
+    });
+
+    test("warns when the meeting sits in a slot that isn't delegate_delegate", async () => {
+        const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect(summary.results[0].warning).toBe("Pushed as Sponsor to Delegate Meetings.");
     });
 });

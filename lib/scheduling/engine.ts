@@ -300,7 +300,7 @@ function startKey(startTime: string): string {
  * @param {BusyTimes | undefined} busy - The party's busy times, as a set or a count map.
  * @returns {Map<string, number>} A new count per start time.
  */
-function toBusyCounts(busy: BusyTimes | undefined): Map<string, number> {
+export function toBusyCounts(busy: BusyTimes | undefined): Map<string, number> {
 	const counts = new Map<string, number>();
 	if (!busy) return counts;
 	if (busy instanceof Map) {

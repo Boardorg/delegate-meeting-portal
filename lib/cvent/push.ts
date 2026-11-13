@@ -22,6 +22,8 @@ import {
     getEventAppointments,
 } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
+import type { CventAppointmentInput } from "@/lib/cvent/client";
+import type { MeetingKind } from "@/lib/events/meetingKinds";
 import type { Timeslot } from "@/types";
 import {
     classifyPushError,
@@ -36,6 +38,7 @@ import {
 // reports, per meeting, whether it succeeded and why not. Used by both the
 // event-wide and per-sponsor push actions so their behavior stays identical
 // and callers get structured results to show in the UI.
+// The Delegate Meetings pages push D2D meetings through pushDelegateMeetingRows, which shares the same send step.
 // ---------------------------------------------------------------------------
 
 /**
@@ -123,27 +126,32 @@ function describePushError(err: unknown): string {
  * Say Cvent creates the appointment but the portal fails to save it.
  * The retry sends the same code, and Cvent rejects it with APPT_CODE_ALREADY_EXISTS instead of booking it twice.
  *
- * @param {ScheduledMeetingRow} row - The meeting being pushed.
+ * @param {Pick<ScheduledMeetingRow, "id" | "lastPushedAt">} row - The meeting being pushed.
  * @returns {string} The appointment code.
  */
-export function appointmentCode(row: ScheduledMeetingRow): string {
+export function appointmentCode(
+    row: Pick<ScheduledMeetingRow, "id" | "lastPushedAt">,
+): string {
     return row.lastPushedAt
         ? `${row.id}-${row.lastPushedAt.getTime()}`
         : row.id;
 }
 
 /**
- * The warning for a sponsor meeting pushed from a slot that isn't `sponsor_delegate`.
+ * The warning for a meeting pushed from a slot that isn't its own kind.
+ * A sponsor meeting expects a `sponsor_delegate` slot and a D2D meeting a `delegate_delegate` slot.
  * Push still sends it with the slot's appointment type, so Cvent files it under that type.
  * This happens after an admin override, or for a meeting made before the mapping existed.
  *
  * @param {Pick<Timeslot, "kind" | "appointmentTypeId" | "appointmentTypeName">} timeslot - The meeting's slot.
- * @returns {string | undefined} The warning, or undefined for a sponsor_delegate slot.
+ * @param {MeetingKind} [expected="sponsor_delegate"] - The kind of slot the meeting belongs in.
+ * @returns {string | undefined} The warning, or undefined for a slot of the expected kind.
  */
 export function appointmentTypeWarning(
     timeslot: Pick<Timeslot, "kind" | "appointmentTypeId" | "appointmentTypeName">,
+    expected: MeetingKind = "sponsor_delegate",
 ): string | undefined {
-    if (timeslot.kind === "sponsor_delegate") return undefined;
+    if (timeslot.kind === expected) return undefined;
     return `Pushed as ${timeslot.appointmentTypeName ?? timeslot.appointmentTypeId}.`;
 }
 
@@ -538,117 +546,33 @@ export async function pushMeetingRows(
             ? undefined
             : `${target?.name ?? row.attendeeB} isn't linked in Cvent, so the appointment was created without them as a participant.`;
 
-        const code = appointmentCode(row);
-
-        const input = {
-            subject: label,
-            startTime: new Date(timeslot.startTime),
-            endTime: new Date(timeslot.endTime),
-            hostContactIds,
-            appointmentTypeId: timeslot.appointmentTypeId,
-            locationId: row.locationId,
-            attendeeContactIds,
-            code,
-        };
-
-        try {
-            let cventAppointmentId: string;
-            // True when the old appointment was edited in place instead of replaced.
-            let updatedInPlace = false;
-            try {
-                cventAppointmentId = await createAppointment(eventCode, input);
-            } catch (createErr) {
-                // A replacement at the same time as the old appointment collides with it.
-                // Cvent sees the same people double-booked and rejects the create as unavailable.
-                // In that case we edit the old appointment in place instead.
-                // If the conflict is real, the update fails the same way and that error is reported.
-                if (
-                    !oldAppointmentId ||
-                    classifyPushError(createErr) !== "cvent_no_availability"
-                ) {
-                    throw createErr;
-                }
-
-                // The collision only comes from the old appointment when the meeting stays at the same time.
-                // For a move to another time, or when the old appointment's time can't be found,
-                // the host really is busy, so report the create failure as before.
-                // That means no update, no cancel and no DB write for this row.
-                const existing = await existingAppointmentOf(oldAppointmentId);
-                if (!existing || !sameStartTime(existing.startTime, timeslot.startTime)) {
-                    throw createErr;
-                }
-
-                // Cvent's update can't change an appointment's type.
-                // Only edit in place when the old appointment already has the new slot's type.
-                // Otherwise, or when the type can't be checked, change nothing and say why.
-                // The row stays linked to its old appointment, and the old appointment is not cancelled.
-                const existingType = existing.typeName;
-                if (!sameAppointmentType(existingType, timeslot)) {
-                    results.push({
-                        meetingId: row.id,
-                        label,
-                        ok: false,
-                        kind,
-                        reason: "cvent_type_change",
-                        error: typeChangeMessage(existingType, timeslot),
-                    });
-                    continue;
-                }
-
-                cventAppointmentId = await updateAppointment(
-                    eventCode,
-                    oldAppointmentId,
-                    input,
-                );
-                updatedInPlace = true;
-            }
-
-            // Collect non-fatal notes for an otherwise-successful push.
-            const notes: string[] = [];
-            if (typeWarning) notes.push(typeWarning);
-            if (splitWarning) notes.push(splitWarning);
-            if (busyWarning) notes.push(busyWarning);
-            if (hostWarning) notes.push(hostWarning);
-            if (cancelledHostWarning) notes.push(cancelledHostWarning);
-            if (targetWarning) notes.push(targetWarning);
-
-            // Only cancel the old appointment once the replacement exists.
-            // This can't undo the create, so a failure here is reported as a
-            // warning rather than failing a push that otherwise succeeded.
-            // An in-place update has no old appointment left to cancel.
-            if (oldAppointmentId && !updatedInPlace) {
-                try {
-                    await cancelAppointment(eventCode, oldAppointmentId);
-                } catch (cancelErr) {
-                    notes.push(
-                        `Created the new appointment, but failed to cancel the previous one (${oldAppointmentId}): ${describePushError(cancelErr)}`,
-                    );
-                }
-            }
-
-            await db
-                .update(scheduledMeetings)
-                .set({ cventAppointmentId, lastPushedAt: new Date() })
-                .where(eq(scheduledMeetings.id, row.id));
-
-            results.push({
-                meetingId: row.id,
+        results.push(
+            await sendAppointment({
+                eventCode,
+                row,
                 label,
-                ok: true,
-                kind,
-                cventAppointmentId,
-                warning: notes.length ? notes.join(" ") : undefined,
-            });
-        } catch (err) {
-            results.push({
-                meetingId: row.id,
-                label,
-                ok: false,
-                kind,
-                reason: classifyPushError(err),
-                error: describePushError(err),
-            });
-        }
+                timeslot,
+                input: {
+                    subject: label,
+                    startTime: new Date(timeslot.startTime),
+                    endTime: new Date(timeslot.endTime),
+                    hostContactIds,
+                    appointmentTypeId: timeslot.appointmentTypeId,
+                    locationId: row.locationId,
+                    attendeeContactIds,
+                },
+                // Collect non-fatal notes for an otherwise-successful push.
+                warnings: [
+                    typeWarning,
+                    splitWarning,
+                    busyWarning,
+                    hostWarning,
+                    cancelledHostWarning,
+                    targetWarning,
+                ],
+                existingAppointmentOf,
+            }),
+        );
     }
 
     const pushed = results.filter((r) => r.ok).length;
@@ -658,4 +582,253 @@ export async function pushMeetingRows(
         failed: results.length - pushed,
         results,
     };
+}
+
+/**
+ * Pushes D2D meeting rows to Cvent.
+ *
+ * attendeeA, the delegate with the lower Salesforce id, is the appointment's host.
+ * attendeeB is its attendee.
+ * Each row is sent with its slot's appointment type, which is `delegate_delegate` unless an admin moved it.
+ * Creating, replacing and the in-place fallback work as for sponsor meetings (see sendAppointment).
+ * Failures are captured per row so one bad meeting doesn't stop the batch.
+ *
+ * Cvent rejects a host who is already in another appointment at that time.
+ * So a meeting whose host already hosts a Cvent appointment then fails with a message, and nothing is sent.
+ *
+ * @param {string} eventCode - The event the meetings belong to.
+ * @param {ScheduledMeetingRow[]} rows - The D2D meeting rows to push.
+ * @returns {Promise<PushSummary>} Aggregate counts plus per-meeting results.
+ */
+export async function pushDelegateMeetingRows(
+    eventCode: string,
+    rows: ScheduledMeetingRow[],
+): Promise<PushSummary> {
+    if (rows.length === 0) {
+        return { total: 0, pushed: 0, failed: 0, results: [] };
+    }
+
+    const [scheduleData, attendees] = await Promise.all([
+        loadEventScheduleData(eventCode),
+        loadAttendees(false, eventCode),
+    ]);
+    const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
+
+    // Which delegates already host a Cvent appointment at each time, leaving out the appointments this push replaces.
+    const replacedAppointmentIds = new Set(
+        rows
+            .map((r) => r.cventAppointmentId)
+            .filter((id): id is string => !!id),
+    );
+    const busyHostsAt = await busyHostLookup(eventCode, replacedAppointmentIds);
+    const existingAppointmentOf = existingAppointmentLookup(eventCode);
+
+    const results: PushResult[] = [];
+    for (const row of rows) {
+        const host = attendeeById.get(row.attendeeA);
+        const guest = attendeeById.get(row.attendeeB);
+        const label = `${host?.name ?? row.attendeeA} & ${guest?.name ?? row.attendeeB}`;
+        const kind = row.cventAppointmentId ? "update" : "create";
+        /**
+         * Builds a failed result for this row.
+         *
+         * @param {PushResult["reason"]} reason - Why it failed.
+         * @param {string} error - What to tell the admin.
+         * @returns {PushResult} The failed result.
+         */
+        const fail = (reason: PushResult["reason"], error: string): PushResult => ({
+            meetingId: row.id,
+            label,
+            ok: false,
+            kind,
+            reason,
+            error,
+        });
+
+        const timeslot = scheduleData.timeslotById.get(row.timeslotId);
+        if (!timeslot) {
+            results.push(fail("missing_timeslot", `No Cvent timeslot found for id ${row.timeslotId}.`));
+            continue;
+        }
+        if (!row.locationId) {
+            results.push(fail("missing_location", "The meeting has no location assigned to send to Cvent."));
+            continue;
+        }
+
+        // A delegate who cancelled their Cvent registration can't be an appointment participant.
+        const cancelled = [host, guest].find((d) => d?.cventCancelled);
+        if (cancelled) {
+            results.push(fail("attendee_cancelled", `${cancelled.name} cancelled their Cvent registration. Remove this meeting.`));
+            continue;
+        }
+
+        if (!host?.cventContactId) {
+            results.push(fail(
+                "host_not_in_cvent",
+                `${host?.name ?? row.attendeeA} isn't linked in Cvent, so they can't host this meeting. Confirm they are a Cvent attendee for this event.`,
+            ));
+            continue;
+        }
+
+        // Cvent rejects a host who is already in another appointment at that time.
+        if (busyHostsAt?.(timeslot.startTime).has(host.cventContactId)) {
+            results.push(fail(
+                "host_not_in_cvent",
+                `${host.name} already hosts another Cvent appointment at this time. Move this meeting to another time.`,
+            ));
+            continue;
+        }
+
+        const guestWarning = guest?.cventContactId
+            ? undefined
+            : `${guest?.name ?? row.attendeeB} isn't linked in Cvent, so the appointment was created without them as a participant.`;
+
+        results.push(
+            await sendAppointment({
+                eventCode,
+                row,
+                label,
+                timeslot,
+                input: {
+                    subject: label,
+                    startTime: new Date(timeslot.startTime),
+                    endTime: new Date(timeslot.endTime),
+                    hostContactIds: [host.cventContactId],
+                    appointmentTypeId: timeslot.appointmentTypeId,
+                    locationId: row.locationId,
+                    attendeeContactIds: guest?.cventContactId ? [guest.cventContactId] : [],
+                },
+                warnings: [appointmentTypeWarning(timeslot, "delegate_delegate"), guestWarning],
+                existingAppointmentOf,
+            }),
+        );
+    }
+
+    const pushed = results.filter((r) => r.ok).length;
+    return {
+        total: results.length,
+        pushed,
+        failed: results.length - pushed,
+        results,
+    };
+}
+
+/**
+ * Sends one meeting's appointment to Cvent and saves the result on its row.
+ * Shared by the sponsor and D2D pushes, so creating, replacing and the in-place fallback work the same for both.
+ *
+ * A row not yet synced gets a new appointment.
+ * A row already synced and edited since gets a replacement appointment instead.
+ * The new appointment is created first. The old one is only cancelled after that succeeds.
+ * The code comes from appointmentCode(), since Cvent keeps old codes reserved even after cancellation.
+ *
+ * @param {{ eventCode: string; row: ScheduledMeetingRow; label: string; timeslot: Timeslot; input: Omit<CventAppointmentInput, "code">; warnings: (string | undefined)[]; existingAppointmentOf: (apptId: string) => Promise<ExistingAppointment | null> }} params
+ *   The meeting, its slot, the appointment to send, non-fatal notes for a success, and the lookup for existing appointments.
+ * @returns {Promise<PushResult>} The meeting's outcome.
+ */
+async function sendAppointment(params: {
+    eventCode: string;
+    row: ScheduledMeetingRow;
+    label: string;
+    timeslot: Timeslot;
+    input: Omit<CventAppointmentInput, "code">;
+    warnings: (string | undefined)[];
+    existingAppointmentOf: (apptId: string) => Promise<ExistingAppointment | null>;
+}): Promise<PushResult> {
+    const { eventCode, row, label, timeslot, existingAppointmentOf } = params;
+    const oldAppointmentId = row.cventAppointmentId;
+    const kind = oldAppointmentId ? "update" : "create";
+    const input = { ...params.input, code: appointmentCode(row) };
+
+    try {
+        let cventAppointmentId: string;
+        // True when the old appointment was edited in place instead of replaced.
+        let updatedInPlace = false;
+        try {
+            cventAppointmentId = await createAppointment(eventCode, input);
+        } catch (createErr) {
+            // A replacement at the same time as the old appointment collides with it.
+            // Cvent sees the same people double-booked and rejects the create as unavailable.
+            // In that case we edit the old appointment in place instead.
+            // If the conflict is real, the update fails the same way and that error is reported.
+            if (
+                !oldAppointmentId ||
+                classifyPushError(createErr) !== "cvent_no_availability"
+            ) {
+                throw createErr;
+            }
+
+            // The collision only comes from the old appointment when the meeting stays at the same time.
+            // For a move to another time, or when the old appointment's time can't be found,
+            // the host really is busy, so report the create failure as before.
+            // That means no update, no cancel and no DB write for this row.
+            const existing = await existingAppointmentOf(oldAppointmentId);
+            if (!existing || !sameStartTime(existing.startTime, timeslot.startTime)) {
+                throw createErr;
+            }
+
+            // Cvent's update can't change an appointment's type.
+            // Only edit in place when the old appointment already has the new slot's type.
+            // Otherwise, or when the type can't be checked, change nothing and say why.
+            // The row stays linked to its old appointment, and the old appointment is not cancelled.
+            const existingType = existing.typeName;
+            if (!sameAppointmentType(existingType, timeslot)) {
+                return {
+                    meetingId: row.id,
+                    label,
+                    ok: false,
+                    kind,
+                    reason: "cvent_type_change",
+                    error: typeChangeMessage(existingType, timeslot),
+                };
+            }
+
+            cventAppointmentId = await updateAppointment(
+                eventCode,
+                oldAppointmentId,
+                input,
+            );
+            updatedInPlace = true;
+        }
+
+        // Collect non-fatal notes for an otherwise-successful push.
+        const notes = params.warnings.filter((w): w is string => !!w);
+
+        // Only cancel the old appointment once the replacement exists.
+        // This can't undo the create, so a failure here is reported as a
+        // warning rather than failing a push that otherwise succeeded.
+        // An in-place update has no old appointment left to cancel.
+        if (oldAppointmentId && !updatedInPlace) {
+            try {
+                await cancelAppointment(eventCode, oldAppointmentId);
+            } catch (cancelErr) {
+                notes.push(
+                    `Created the new appointment, but failed to cancel the previous one (${oldAppointmentId}): ${describePushError(cancelErr)}`,
+                );
+            }
+        }
+
+        await db
+            .update(scheduledMeetings)
+            .set({ cventAppointmentId, lastPushedAt: new Date() })
+            .where(eq(scheduledMeetings.id, row.id));
+
+        return {
+            meetingId: row.id,
+            label,
+            ok: true,
+            kind,
+            cventAppointmentId,
+            warning: notes.length ? notes.join(" ") : undefined,
+        };
+    } catch (err) {
+        return {
+            meetingId: row.id,
+            label,
+            ok: false,
+            kind,
+            reason: classifyPushError(err),
+            error: describePushError(err),
+        };
+    }
 }

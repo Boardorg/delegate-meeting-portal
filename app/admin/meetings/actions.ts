@@ -10,18 +10,15 @@ import {
 } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
-import { getEventAppointments, cancelAppointment } from "@/lib/cvent/client";
+import { getEventAppointments } from "@/lib/cvent/client";
+import { unpushMeetingRows } from "@/lib/cvent/unpush";
 import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
 import { preexistingFromAppointments } from "@/lib/cvent/preexisting";
 import { countAppointmentsNotInPortal } from "@/lib/cvent/cventOnly";
-import {
-    buildSyncReport,
-    isAppointmentAlreadyGone,
-    parseCventError,
-    type SyncReport,
-} from "@/lib/cvent/syncReport";
+import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import {
     runScheduler,
+    toBusyCounts,
     type PreexistingSchedule,
 } from "@/lib/scheduling/engine";
 import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
@@ -313,8 +310,8 @@ export type RunSchedulerResult =
     | { ok: false; error: string };
 
 /**
- * Runs the scheduling engine for an event and replaces all un-pushed portal meetings
- * with the fresh engine output. Meetings already pushed to Cvent are preserved via
+ * Runs the scheduling engine for an event and replaces all un-pushed portal sponsor meetings
+ * with the fresh engine output. D2D meetings are left alone, and their times count as busy. Meetings already pushed to Cvent are preserved via
  * post-reconciliation: the engine runs freely, then any fresh meeting that duplicates
  * or conflicts with a pushed meeting is dropped before insert.
  *
@@ -342,8 +339,8 @@ export async function runSchedulerForEvent(
     const isMock = process.env.USE_MOCK === "true";
     const mockRequestsPath = `${process.cwd()}/data/mock/requests.json`;
 
-    // Load attendees, requests, the event's Cvent availability, and already-pushed meetings.
-    const [attendees, requestRows, scheduleData, pushedRows] =
+    // Load attendees, requests, the event's Cvent availability, already-pushed meetings and D2D meetings.
+    const [attendees, requestRows, scheduleData, pushedRows, d2dRows] =
         await Promise.all([
             loadAttendees(false, eventCode),
             isMock
@@ -362,7 +359,20 @@ export async function runSchedulerForEvent(
                         isNotNull(scheduledMeetings.cventAppointmentId),
                     ),
                 ),
+            db
+                .select()
+                .from(scheduledMeetings)
+                .where(
+                    and(
+                        eq(scheduledMeetings.eventCode, eventCode),
+                        eq(scheduledMeetings.kind, "delegate_delegate"),
+                    ),
+                ),
         ]);
+
+    // D2D meetings not pushed yet. This run keeps them, so their delegates are busy at those times.
+    // Pushed ones are already in pushedRows and in Cvent's appointment list.
+    const unpushedD2D = d2dRows.filter((r) => !r.cventAppointmentId);
 
     // Attendees who cancelled in Cvent are left out, so no new meetings are made with them.
     // Un-pushed meetings are rebuilt from scratch below, so cancelled attendees drop out of those.
@@ -428,6 +438,19 @@ export async function runSchedulerForEvent(
         preexisting.bookedByTimeslotId = byTimeslot;
     }
 
+    // Each engine treats every meeting already scheduled as busy time, so add the unpushed D2D meetings.
+    const busy = new Map(preexisting.busyStartTimesByAttendee ?? []);
+    for (const r of unpushedD2D) {
+        const start = scheduleData.timeslotById.get(r.timeslotId)?.startTime;
+        if (!start) continue;
+        for (const party of [r.attendeeA, r.attendeeB]) {
+            const counts = toBusyCounts(busy.get(party));
+            counts.set(start, (counts.get(start) ?? 0) + 1);
+            busy.set(party, counts);
+        }
+    }
+    preexisting.busyStartTimesByAttendee = busy;
+
     // Run the engine. It avoids the pre-existing Cvent pairs/times; pushed DB
     // meetings are additionally guarded via post-reconciliation below.
     //
@@ -475,18 +498,21 @@ export async function runSchedulerForEvent(
     const { kept: reconciledSchedule, droppedPairs: reconciledOutPairs } =
         reconcileWithPushed(
             schedule,
-            pushedRows,
+            // Unpushed D2D meetings stay too, so they guard their delegates' times the same way.
+            [...pushedRows, ...unpushedD2D],
             scheduleData.timeslotById,
             atOnceOf,
         );
 
-    // Replace all un-pushed portal meetings for this event with the reconciled output.
+    // Replace all un-pushed portal sponsor meetings for this event with the reconciled output.
+    // D2D meetings belong to the D2D run, so they are left alone.
     await db
         .delete(scheduledMeetings)
         .where(
             and(
                 eq(scheduledMeetings.eventCode, eventCode),
                 eq(scheduledMeetings.source, "portal"),
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
                 isNull(scheduledMeetings.cventAppointmentId),
             ),
         );
@@ -547,8 +573,9 @@ export async function runSchedulerForEvent(
  *   failures — an actionable reason per meeting.
  */
 export async function pushAllForEvent(eventCode: string): Promise<SyncReport> {
-    // Load every portal meeting for this event, so the report can distinguish
+    // Load every portal sponsor meeting for this event, so the report can distinguish
     // meetings that still need pushing from ones already synced and up to date.
+    // D2D meetings are pushed from the Delegate Meetings page.
     const portalRows = await db
         .select()
         .from(scheduledMeetings)
@@ -556,6 +583,7 @@ export async function pushAllForEvent(eventCode: string): Promise<SyncReport> {
             and(
                 eq(scheduledMeetings.eventCode, eventCode),
                 eq(scheduledMeetings.source, "portal"),
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         );
 
@@ -636,12 +664,14 @@ export async function clearUnsyncedForEvent(
     // Only un-synced (cventAppointmentId IS NULL) portal rows. Cvent-native
     // rows (source "cvent") are read-only and excluded. RETURNING gives us the
     // deleted count for the report.
+    // Only sponsor meetings. D2D meetings are cleared from the Delegate Meetings page.
     const deleted = await db
         .delete(scheduledMeetings)
         .where(
             and(
                 eq(scheduledMeetings.eventCode, eventCode),
                 eq(scheduledMeetings.source, "portal"),
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
                 isNull(scheduledMeetings.cventAppointmentId),
             ),
         )
@@ -663,6 +693,7 @@ export async function clearUnsyncedForEvent(
  * event, then clears that meeting's cventAppointmentId so it reads as
  * un-synced again. The DB row itself is kept — this only unwinds the push to
  * Cvent, not the schedule.
+ * Only sponsor meetings are unpushed. D2D meetings are unpushed from the Delegate Meetings page.
  *
  * The DB link is cleared only after the Cvent cancel succeeds, so a failed
  * cancel leaves the row pointing at a still-live appointment rather than
@@ -689,6 +720,7 @@ export async function unpushAllForEvent(
             and(
                 eq(scheduledMeetings.eventCode, eventCode),
                 eq(scheduledMeetings.source, "portal"),
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
                 isNotNull(scheduledMeetings.cventAppointmentId),
             ),
         );
@@ -699,61 +731,14 @@ export async function unpushAllForEvent(
     const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
     const companiesByAccountId = sponsorCompaniesByAccountId(attendees);
 
-    const failures: { meetingId: string; label: string; detail: string }[] = [];
-    const notes: { meetingId: string; label: string; detail: string }[] = [];
-    let unpushed = 0;
-    let alreadyGone = 0;
-
-    for (const row of syncedRows) {
-        // Guarded by the query above, but keep the type narrow for the DB call.
-        if (!row.cventAppointmentId) continue;
-        const label = `${companiesByAccountId.get(row.attendeeA)?.name ?? row.attendeeA} & ${
-            attendeeById.get(row.attendeeB)?.name ?? row.attendeeB
-        }`;
-
-        // Unlinks the meeting in the DB so it reads as un-synced (row kept).
-        // lastPushedAt stays so the next push gets a fresh code.
-        const unlink = () =>
-            db
-                .update(scheduledMeetings)
-                .set({ cventAppointmentId: null })
-                .where(eq(scheduledMeetings.id, row.id));
-
-        try {
-            // Cancel in Cvent first, then unlink. Only clear once the cancel
-            // succeeds, so a real failure leaves the row pointing at a live
-            // appointment rather than silently orphaning it.
-            await cancelAppointment(eventCode, row.cventAppointmentId);
-            await unlink();
-            unpushed++;
-        } catch (err) {
-            // If the appointment is already gone in Cvent (cancelled manually or
-            // missing), there's nothing left to cancel — unlink locally anyway
-            // and note it rather than treating it as a failure.
-            if (isAppointmentAlreadyGone(err)) {
-                await unlink();
-                alreadyGone++;
-                notes.push({
-                    meetingId: row.id,
-                    label,
-                    detail: "Already cancelled or missing in Cvent — unsynced locally.",
-                });
-                continue;
-            }
-
-            // A genuine failure: leave the row synced. Prefer Cvent's
-            // human-readable message when present.
-            const base = err instanceof Error ? err.message : String(err);
-            const cventMessage = parseCventError(
-                (err as { body?: string }).body,
-            ).message;
-            failures.push({
-                meetingId: row.id,
-                label,
-                detail: cventMessage ?? base,
-            });
-        }
-    }
+    const { unpushed, alreadyGone, failures, notes } = await unpushMeetingRows(
+        eventCode,
+        syncedRows,
+        (row) =>
+            `${companiesByAccountId.get(row.attendeeA)?.name ?? row.attendeeA} & ${
+                attendeeById.get(row.attendeeB)?.name ?? row.attendeeB
+            }`,
+    );
 
     // Revalidate the admin meetings page to reflect the updated sync status.
     revalidatePath("/admin/meetings");

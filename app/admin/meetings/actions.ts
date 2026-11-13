@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import {
     meetingRequests,
+    roundtableSeats,
+    roundtables,
     scheduledMeetings,
     type NewScheduledMeeting,
 } from "@/lib/db/schema";
@@ -40,6 +42,7 @@ import {
 import { loadCompanyBooths } from "@/lib/scheduling/boothData";
 import { countBoothProblems } from "@/lib/scheduling/booths";
 import { checkAppointmentTypeMapping } from "@/lib/events/meetingKinds";
+import { s2dOrderWarning } from "@/lib/matching/d2d";
 import type { Attendee, MeetingRequest } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -340,7 +343,7 @@ export async function runSchedulerForEvent(
     const mockRequestsPath = `${process.cwd()}/data/mock/requests.json`;
 
     // Load attendees, requests, the event's Cvent availability, already-pushed meetings and D2D meetings.
-    const [attendees, requestRows, scheduleData, pushedRows, d2dRows] =
+    const [attendees, requestRows, scheduleData, pushedRows, d2dRows, roundtableRows, seatRows] =
         await Promise.all([
             loadAttendees(false, eventCode),
             isMock
@@ -368,11 +371,28 @@ export async function runSchedulerForEvent(
                         eq(scheduledMeetings.kind, "delegate_delegate"),
                     ),
                 ),
+            db.select().from(roundtables).where(eq(roundtables.eventCode, eventCode)),
+            db.select().from(roundtableSeats).where(eq(roundtableSeats.eventCode, eventCode)),
         ]);
 
     // D2D meetings not pushed yet. This run keeps them, so their delegates are busy at those times.
     // Pushed ones are already in pushedRows and in Cvent's appointment list.
     const unpushedD2D = d2dRows.filter((r) => !r.cventAppointmentId);
+
+    // A roundtable seat is a meeting at its table's time, pushed or not, so seated delegates are busy then.
+    // Each seat reads as a meeting with a stand-in for the table, so the busy time and reconciliation below cover it.
+    const tableSlot = new Map(roundtableRows.map((r) => [r.id, r.timeslotId]));
+    const seatMeetings = seatRows
+        .filter((s) => s.role === "seated" && tableSlot.has(s.roundtableId))
+        .map((s) => ({
+            attendeeA: s.delegateId,
+            attendeeB: `roundtable:${s.roundtableId}`,
+            timeslotId: tableSlot.get(s.roundtableId)!,
+        }));
+
+    // Scheduling runs S2D first, then D2D, then roundtables.
+    // Running S2D after the others still goes ahead, but the report says so.
+    const orderWarning = s2dOrderWarning(d2dRows.length, seatMeetings.length);
 
     // Attendees who cancelled in Cvent are left out, so no new meetings are made with them.
     // Un-pushed meetings are rebuilt from scratch below, so cancelled attendees drop out of those.
@@ -438,9 +458,9 @@ export async function runSchedulerForEvent(
         preexisting.bookedByTimeslotId = byTimeslot;
     }
 
-    // Each engine treats every meeting already scheduled as busy time, so add the unpushed D2D meetings.
+    // Each engine treats every meeting already scheduled as busy time, so add the unpushed D2D meetings and roundtable seats.
     const busy = new Map(preexisting.busyStartTimesByAttendee ?? []);
-    for (const r of unpushedD2D) {
+    for (const r of [...unpushedD2D, ...seatMeetings]) {
         const start = scheduleData.timeslotById.get(r.timeslotId)?.startTime;
         if (!start) continue;
         for (const party of [r.attendeeA, r.attendeeB]) {
@@ -498,8 +518,8 @@ export async function runSchedulerForEvent(
     const { kept: reconciledSchedule, droppedPairs: reconciledOutPairs } =
         reconcileWithPushed(
             schedule,
-            // Unpushed D2D meetings stay too, so they guard their delegates' times the same way.
-            [...pushedRows, ...unpushedD2D],
+            // Unpushed D2D meetings and roundtable seats stay too, so they guard their delegates' times the same way.
+            [...pushedRows, ...unpushedD2D, ...seatMeetings],
             scheduleData.timeslotById,
             atOnceOf,
         );
@@ -554,6 +574,7 @@ export async function runSchedulerForEvent(
             preexistingPairs: preexisting.pairs ?? new Set(),
             unmappedAppointmentTypes: mapping.unmappedTypeNames,
             companyBooths: booths.booths,
+            orderWarnings: orderWarning ? [orderWarning] : [],
         }),
     };
 }

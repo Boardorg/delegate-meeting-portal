@@ -16,12 +16,20 @@ const loadEventScheduleData = vi.fn();
 const dbDelete = vi.fn();
 const dbInsert = vi.fn();
 const insertValues = vi.fn<(rows: unknown) => Promise<void>>(async () => undefined);
+// Every select's where condition, so a test can read what it filtered on.
+const selectWhere = vi.fn<(cond: SQL) => void>();
 
 vi.mock("@/lib/db/client", () => ({
     db: {
         select: () => ({
             from: (table: unknown) => ({
-                where: async () => (table === meetingRequestsTable() ? REQUESTS : PUSHED),
+                where: async (cond: SQL) => {
+                    selectWhere(cond);
+                    if (table === meetingRequestsTable()) return REQUESTS;
+                    if (table === roundtablesTable()) return ROUNDTABLES;
+                    if (table === roundtableSeatsTable()) return SEATS;
+                    return PUSHED;
+                },
             }),
         }),
         delete: (...a: unknown[]) => dbDelete(...a),
@@ -42,8 +50,8 @@ vi.mock("@/lib/cvent/client", () => ({
     cancelAppointment: vi.fn(),
 }));
 vi.mock("@/lib/cvent/push", () => ({
-    pushMeetingRows: vi.fn(),
-    needsSync: vi.fn(),
+    pushMeetingRows: vi.fn(async () => ({ total: 0, pushed: 0, failed: 0, results: [] })),
+    needsSync: vi.fn(() => true),
 }));
 // No manual booth mapping by default, so each sponsor's booth is matched by location name.
 const getEventSettings = vi.fn();
@@ -52,13 +60,16 @@ vi.mock("@/lib/events/settings", () => ({
 }));
 
 import {
+    clearUnsyncedForEvent,
     countBoothProblemsForEvent,
     listSponsorsPage,
+    pushAllForEvent,
     runSchedulerForEvent,
+    unpushAllForEvent,
 } from "./actions";
 import { BOOTH_MAPPING_UNAVAILABLE_MESSAGE } from "@/lib/scheduling/boothData";
 import { NO_ATTENDEES_MESSAGE } from "@/lib/scheduling/helpers";
-import { meetingRequests } from "@/lib/db/schema";
+import { meetingRequests, roundtableSeats, roundtables } from "@/lib/db/schema";
 import {
     NO_SPONSOR_MAPPING_MESSAGE,
     NO_SPONSOR_SLOTS_MESSAGE,
@@ -72,6 +83,28 @@ import {
 function meetingRequestsTable(): unknown {
     return meetingRequests;
 }
+
+/**
+ * Returns the roundtables table object, read lazily for the same reason.
+ *
+ * @returns {unknown} The drizzle table.
+ */
+function roundtablesTable(): unknown {
+    return roundtables;
+}
+
+/**
+ * Returns the roundtable_seats table object, read lazily for the same reason.
+ *
+ * @returns {unknown} The drizzle table.
+ */
+function roundtableSeatsTable(): unknown {
+    return roundtableSeats;
+}
+
+// The event's roundtables and their seats. None by default.
+let ROUNDTABLES: { id: string; timeslotId: string }[] = [];
+let SEATS: { roundtableId: string; delegateId: string; role: "seated" | "alternate" }[] = [];
 
 // Meetings already pushed to Cvent, as scheduled_meetings rows. None by default.
 let PUSHED: { attendeeA: string; attendeeB: string; timeslotId: string; cventAppointmentId: string }[] = [];
@@ -186,6 +219,8 @@ beforeEach(() => {
     getEventSettings.mockResolvedValue({ boothLocations: null });
     getEventAppointments.mockResolvedValue([]);
     PUSHED = [];
+    ROUNDTABLES = [];
+    SEATS = [];
     REQUESTS = ONE_REQUEST;
     loadAttendees.mockResolvedValue([
         att({ salesforceId: "s1", role: "sponsor", accountId: "acct-acme", company: "Acme", boothNo: "1" }),
@@ -514,5 +549,110 @@ describe("listSponsorsPage — appointments only in Cvent", () => {
         const page = await listSponsorsPage({ eventCode: "EVT" });
 
         expect(page.rows.find((r) => r.company === "Acme")?.scheduledCount).toBe(1);
+    });
+});
+
+describe("runSchedulerForEvent: D2D meetings and roundtables", () => {
+    const KINDS: AppointmentTypeKinds = { "t-s2d": "sponsor_delegate", "t-group": "delegate_group" };
+
+    test("a delegate seated at a roundtable is busy at the table's time, so the sponsor meeting goes elsewhere", async () => {
+        // The 10:00 sponsor slot comes first, so it would win without the seat.
+        scheduleWith(KINDS, [
+            slot("ts-b", "2026-01-20T10:00:00.000Z", "t-s2d", KINDS),
+            slot("ts-a", "2026-01-20T09:00:00.000Z", "t-s2d", KINDS),
+            slot("ts-group", "2026-01-20T10:00:00.000Z", "t-group", KINDS),
+        ]);
+        ROUNDTABLES = [{ id: "rt-1", timeslotId: "ts-group" }];
+        SEATS = [{ roundtableId: "rt-1", delegateId: "d1", role: "seated" }];
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        const inserted = insertValues.mock.calls[0][0] as { timeslotId: string }[];
+        expect(inserted.map((m) => m.timeslotId)).toEqual(["ts-a"]);
+    });
+
+    test("an alternate isn't busy at the table's time", async () => {
+        scheduleWith(KINDS, [
+            slot("ts-b", "2026-01-20T10:00:00.000Z", "t-s2d", KINDS),
+            slot("ts-group", "2026-01-20T10:00:00.000Z", "t-group", KINDS),
+        ]);
+        ROUNDTABLES = [{ id: "rt-1", timeslotId: "ts-group" }];
+        SEATS = [{ roundtableId: "rt-1", delegateId: "d1", role: "alternate" }];
+
+        await runSchedulerForEvent("EVT");
+
+        const inserted = insertValues.mock.calls[0][0] as { timeslotId: string }[];
+        expect(inserted.map((m) => m.timeslotId)).toEqual(["ts-b"]);
+    });
+
+    test("decision 1: warns, but still runs, when roundtables are already grouped", async () => {
+        scheduleWith(KINDS);
+        ROUNDTABLES = [{ id: "rt-1", timeslotId: "ts-group" }];
+        SEATS = [{ roundtableId: "rt-1", delegateId: "dx", role: "seated" }];
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.report.orderWarnings).toHaveLength(1);
+        expect(result.report.orderWarnings[0]).toMatch(/D2D meetings or roundtables are already scheduled/);
+        expect(result.report.meetingsScheduled).toBe(1);
+    });
+
+    test("decision 1: warns when D2D meetings already exist", async () => {
+        scheduleWith(KINDS);
+        PUSHED = [{ attendeeA: "dx", attendeeB: "dy", timeslotId: "ts-group", cventAppointmentId: "a-1" }];
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok && result.report.orderWarnings.length).toBe(1);
+    });
+
+    test("gives no order warning when only sponsor meetings exist", async () => {
+        scheduleWith(KINDS);
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok && result.report.orderWarnings).toEqual([]);
+    });
+});
+
+describe("sponsor bulk actions only touch sponsor meetings", () => {
+    /**
+     * Renders a drizzle condition and returns its bound values.
+     *
+     * @param {SQL} cond - The condition.
+     * @returns {{ sql: string; params: unknown[] }} The SQL text and its values.
+     */
+    function render(cond: SQL): { sql: string; params: unknown[] } {
+        return new PgDialect().sqlToQuery(cond);
+    }
+
+    test("Clear All Unsynced deletes only unpushed sponsor meetings", async () => {
+        const where = vi.fn<(cond: SQL) => { returning: () => Promise<unknown[]> }>(() => ({ returning: async () => [] }));
+        dbDelete.mockReturnValue({ where });
+
+        await clearUnsyncedForEvent("EVT");
+
+        const q = render(where.mock.calls[0][0]);
+        expect(q.sql).toContain('"kind" = $');
+        expect(q.params).toEqual(expect.arrayContaining(["EVT", "sponsor_delegate"]));
+        expect(q.sql).toContain('"cvent_appointment_id" is null');
+    });
+
+    test("Unpush All Synced reads only synced sponsor meetings", async () => {
+        await unpushAllForEvent("EVT");
+
+        const q = render(selectWhere.mock.calls[0][0]);
+        expect(q.params).toEqual(expect.arrayContaining(["EVT", "sponsor_delegate"]));
+        expect(q.sql).toContain('"cvent_appointment_id" is not null');
+    });
+
+    test("Push All to Cvent reads only sponsor meetings", async () => {
+        await pushAllForEvent("EVT");
+
+        const q = render(selectWhere.mock.calls[0][0]);
+        expect(q.params).toEqual(expect.arrayContaining(["EVT", "sponsor_delegate"]));
     });
 });

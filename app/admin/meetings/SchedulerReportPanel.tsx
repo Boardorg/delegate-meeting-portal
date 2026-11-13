@@ -84,6 +84,13 @@ export default function SchedulerReportPanel({
                 </button>
             </div>
 
+            {/* The run happened after D2D meetings or roundtables were made. It still went ahead. */}
+            {report.orderWarnings.map((w) => (
+                <div key={w} className="adm-modal-warn-at" style={{ marginTop: 12, marginBottom: 16 }}>
+                    {w}
+                </div>
+            ))}
+
             {/* Appointment types with no meeting kind. Their slots were not used this run. */}
             {report.unmappedAppointmentTypes.length > 0 && (
                 <div className="adm-modal-warn-at" style={{ marginTop: 12, marginBottom: 16 }}>

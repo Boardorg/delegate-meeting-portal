@@ -434,7 +434,9 @@
                 "001PF0000000001",
                 "001CV0000000002"
             ]
-        }
+        },
+        "networkingProfileComplete": true,
+        "conferenceOnly": false
     },
     {
         "id": "d2",
@@ -476,7 +478,9 @@
             "requestedSponsorAccountIds": [
                 "001OP0000000003"
             ]
-        }
+        },
+        "networkingProfileComplete": true,
+        "conferenceOnly": false
     },
     {
         "id": "d3",
@@ -518,7 +522,9 @@
                 "001HM0000000004",
                 "001VS0000000005"
             ]
-        }
+        },
+        "networkingProfileComplete": true,
+        "conferenceOnly": false
     },
     {
         "id": "d4",
@@ -556,7 +562,9 @@
             "requestedSponsorAccountIds": [
                 "001CV0000000002"
             ]
-        }
+        },
+        "networkingProfileComplete": true,
+        "conferenceOnly": false
     },
     {
         "id": "d5",
@@ -596,7 +604,9 @@
         "scheduling": {
             "maxSameCompanyMeetings": 2,
             "requestedSponsorAccountIds": []
-        }
+        },
+        "networkingProfileComplete": true,
+        "conferenceOnly": false
     },
     {
         "id": "d6",
@@ -626,7 +636,9 @@
                 "001VS0000000005",
                 "001ZZ0000000099"
             ]
-        }
+        },
+        "networkingProfileComplete": false,
+        "conferenceOnly": false
     },
     {
         "id": "d7",
@@ -665,7 +677,9 @@
             "requestedSponsorAccountIds": [
                 "001HM0000000004"
             ]
-        }
+        },
+        "networkingProfileComplete": true,
+        "conferenceOnly": false
     },
     {
         "id": "d8",
@@ -708,6 +722,664 @@
                 "001PF0000000001",
                 "001OP0000000003"
             ]
+        },
+        "networkingProfileComplete": true,
+        "conferenceOnly": false
+    },
+    {
+        "id": "d9",
+        "cventContactId": "cvent-d9-uuid",
+        "salesforceId": "a00PZ00000mk0009AAA",
+        "accountId": "001AH0000000014",
+        "name": "Priya Raman",
+        "email": "priya.raman@example.com",
+        "phone": "+15555550009",
+        "role": "delegate",
+        "company": "Arcturus Health",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "Under $500M",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+                "Data & Insights: Proving L&D's ROI and Business Impact"
+            ],
+            "transformationStage": "No active initiatives",
+            "systemsAndPlatforms": [
+                "SuccessFactors",
+                "Go1"
+            ],
+            "meetingInterests": [
+                "Leadership Development",
+                "Data, Reporting & Learning Analytics"
+            ],
+            "priorityInitiative": "LMS / Learning Tech Stack Consolidation"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d10",
+        "cventContactId": "cvent-d10-uuid",
+        "salesforceId": "a00PZ00000mk0010AAA",
+        "accountId": "001MT0000000015",
+        "name": "Tomas Ekberg",
+        "email": "tomas.ekberg@example.com",
+        "phone": "+15555550010",
+        "role": "delegate",
+        "company": "Meridian Therapeutics",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$500M–$1B",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes",
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It"
+            ],
+            "transformationStage": "Early planning",
+            "systemsAndPlatforms": [
+                "UKG",
+                "Litmos LMS"
+            ],
+            "meetingInterests": [
+                "HiPo & Succession Programs",
+                "Organizational Development"
+            ],
+            "priorityInitiative": "Learning Analytics & ROI Measurement"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d11",
+        "cventContactId": "cvent-d11-uuid",
+        "salesforceId": "a00PZ00000mk0011AAA",
+        "accountId": "001QB0000000016",
+        "name": "Grace Adeyemi",
+        "email": "grace.adeyemi@example.com",
+        "phone": "+15555550011",
+        "role": "delegate",
+        "company": "Quilla Biosystems",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$1B–$5B",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite"
+            ],
+            "transformationStage": "Piloting in key areas",
+            "systemsAndPlatforms": [
+                "SkillJar",
+                "Korn Ferry"
+            ],
+            "meetingInterests": [
+                "Digital Learning Strategy",
+                "Onboarding & New-to-Career Learning"
+            ],
+            "priorityInitiative": "Leadership & Succession Pipeline Investment"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d12",
+        "cventContactId": "cvent-d12-uuid",
+        "salesforceId": "a00PZ00000mk0012AAA",
+        "accountId": "001TL0000000017",
+        "name": "Henrik Dahl",
+        "email": "henrik.dahl@example.com",
+        "phone": "+15555550012",
+        "role": "delegate",
+        "company": "Tessaro Labs",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$5B–$10B",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+                "Data & Insights: Proving L&D's ROI and Business Impact"
+            ],
+            "transformationStage": "Scaling up",
+            "systemsAndPlatforms": [
+                "Oracle",
+                "Cornerstone"
+            ],
+            "meetingInterests": [
+                "Coaching & Mentorship Programs",
+                "Personalized & Skills-Based Learning"
+            ],
+            "priorityInitiative": "Skills Taxonomy & Career Frameworks"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d13",
+        "cventContactId": "cvent-d13-uuid",
+        "salesforceId": "a00PZ00000mk0013AAA",
+        "accountId": "001HP0000000018",
+        "name": "Lucia Ferraro",
+        "email": "lucia.ferraro@example.com",
+        "phone": "+15555550013",
+        "role": "delegate",
+        "company": "Halvorsen Pharma",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "Under $500M",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes",
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It"
+            ],
+            "transformationStage": "Embedded in core operations",
+            "systemsAndPlatforms": [
+                "Workday",
+                "SuccessFactors"
+            ],
+            "meetingInterests": [
+                "Learning Governance & Team Structure",
+                "Leadership Development"
+            ],
+            "priorityInitiative": "Onboarding Experience Redesign"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d14",
+        "cventContactId": "cvent-d14-uuid",
+        "salesforceId": "a00PZ00000mk0014AAA",
+        "accountId": "001NB0000000019",
+        "name": "Marcus Webb",
+        "email": "marcus.webb@example.com",
+        "phone": "+15555550014",
+        "role": "delegate",
+        "company": "Novaline Bio",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": true,
+        "profile": {
+            "annualRevenue": "$500M–$1B",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite"
+            ],
+            "transformationStage": "No active initiatives",
+            "systemsAndPlatforms": [
+                "Go1",
+                "UKG"
+            ],
+            "meetingInterests": [
+                "Data, Reporting & Learning Analytics",
+                "HiPo & Succession Programs"
+            ],
+            "priorityInitiative": "LMS / Learning Tech Stack Consolidation"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d15",
+        "cventContactId": "cvent-d15-uuid",
+        "salesforceId": "a00PZ00000mk0015AAA",
+        "accountId": "001CM0000000020",
+        "name": "Aiko Tanaka",
+        "email": "aiko.tanaka@example.com",
+        "phone": "+15555550015",
+        "role": "delegate",
+        "company": "Corvid Medical",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$1B–$5B",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+                "Data & Insights: Proving L&D's ROI and Business Impact"
+            ],
+            "transformationStage": "Early planning",
+            "systemsAndPlatforms": [
+                "Litmos LMS",
+                "SkillJar"
+            ],
+            "meetingInterests": [
+                "Organizational Development",
+                "Digital Learning Strategy"
+            ],
+            "priorityInitiative": "Learning Analytics & ROI Measurement"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d16",
+        "cventContactId": "cvent-d16-uuid",
+        "salesforceId": "a00PZ00000mk0016AAA",
+        "accountId": "001OL0000000021",
+        "name": "Owen Gallagher",
+        "email": "owen.gallagher@example.com",
+        "phone": "+15555550016",
+        "role": "delegate",
+        "company": "Ostrander Life Sciences",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$5B–$10B",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes",
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It"
+            ],
+            "transformationStage": "Piloting in key areas",
+            "systemsAndPlatforms": [
+                "Korn Ferry",
+                "Oracle"
+            ],
+            "meetingInterests": [
+                "Onboarding & New-to-Career Learning",
+                "Coaching & Mentorship Programs"
+            ],
+            "priorityInitiative": "Leadership & Succession Pipeline Investment"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d17",
+        "cventContactId": "cvent-d17-uuid",
+        "salesforceId": "a00PZ00000mk0017AAA",
+        "accountId": "001AH0000000014",
+        "name": "Sofia Marin",
+        "email": "sofia.marin@example.com",
+        "phone": "+15555550017",
+        "role": "delegate",
+        "company": "Arcturus Health",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "Under $500M",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite"
+            ],
+            "transformationStage": "Scaling up",
+            "systemsAndPlatforms": [
+                "Cornerstone",
+                "Workday"
+            ],
+            "meetingInterests": [
+                "Personalized & Skills-Based Learning",
+                "Learning Governance & Team Structure"
+            ],
+            "priorityInitiative": "Skills Taxonomy & Career Frameworks"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d18",
+        "cventContactId": "cvent-d18-uuid",
+        "salesforceId": "a00PZ00000mk0018AAA",
+        "accountId": "001MT0000000015",
+        "name": "Daniel Okafor",
+        "email": "daniel.okafor@example.com",
+        "phone": "+15555550018",
+        "role": "delegate",
+        "company": "Meridian Therapeutics",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$500M–$1B",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+                "Data & Insights: Proving L&D's ROI and Business Impact"
+            ],
+            "transformationStage": "Embedded in core operations",
+            "systemsAndPlatforms": [
+                "SuccessFactors",
+                "Go1"
+            ],
+            "meetingInterests": [
+                "Leadership Development",
+                "Data, Reporting & Learning Analytics"
+            ],
+            "priorityInitiative": "Onboarding Experience Redesign"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d19",
+        "cventContactId": "cvent-d19-uuid",
+        "salesforceId": "a00PZ00000mk0019AAA",
+        "accountId": "001QB0000000016",
+        "name": "Elena Petrova",
+        "email": "elena.petrova@example.com",
+        "phone": "+15555550019",
+        "role": "delegate",
+        "company": "Quilla Biosystems",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$1B–$5B",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes",
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It"
+            ],
+            "transformationStage": "No active initiatives",
+            "systemsAndPlatforms": [
+                "UKG",
+                "Litmos LMS"
+            ],
+            "meetingInterests": [
+                "HiPo & Succession Programs",
+                "Organizational Development"
+            ],
+            "priorityInitiative": "LMS / Learning Tech Stack Consolidation"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d20",
+        "cventContactId": "cvent-d20-uuid",
+        "salesforceId": "a00PZ00000mk0020AAA",
+        "accountId": "001TL0000000017",
+        "name": "James Whitlock",
+        "email": "james.whitlock@example.com",
+        "phone": "+15555550020",
+        "role": "delegate",
+        "company": "Tessaro Labs",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": false,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$5B–$10B",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite"
+            ],
+            "transformationStage": "Early planning",
+            "systemsAndPlatforms": [
+                "SkillJar",
+                "Korn Ferry"
+            ],
+            "meetingInterests": [
+                "Digital Learning Strategy",
+                "Onboarding & New-to-Career Learning"
+            ],
+            "priorityInitiative": "Learning Analytics & ROI Measurement"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d21",
+        "cventContactId": "cvent-d21-uuid",
+        "salesforceId": "a00PZ00000mk0021AAA",
+        "accountId": "001HP0000000018",
+        "name": "Nadia Haddad",
+        "email": "nadia.haddad@example.com",
+        "phone": "+15555550021",
+        "role": "delegate",
+        "company": "Halvorsen Pharma",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "Under $500M",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+                "Data & Insights: Proving L&D's ROI and Business Impact"
+            ],
+            "transformationStage": "Piloting in key areas",
+            "systemsAndPlatforms": [
+                "Oracle",
+                "Cornerstone"
+            ],
+            "meetingInterests": [
+                "Coaching & Mentorship Programs",
+                "Personalized & Skills-Based Learning"
+            ],
+            "priorityInitiative": "Leadership & Succession Pipeline Investment"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d22",
+        "cventContactId": "cvent-d22-uuid",
+        "salesforceId": "a00PZ00000mk0022AAA",
+        "accountId": "001NB0000000019",
+        "name": "Victor Lindqvist",
+        "email": "victor.lindqvist@example.com",
+        "phone": "+15555550022",
+        "role": "delegate",
+        "company": "Novaline Bio",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$500M–$1B",
+            "budgetaryResponsibility": "$500k–$1M",
+            "companySize": "1,000–5,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "L&D Strategy & Resourcing: Aligning Learning Investment to Business Outcomes",
+                "Talent Mobility & Succession Planning: Building Bench Strength Before You Need It"
+            ],
+            "transformationStage": "Scaling up",
+            "systemsAndPlatforms": [
+                "Workday",
+                "SuccessFactors"
+            ],
+            "meetingInterests": [
+                "Learning Governance & Team Structure",
+                "Leadership Development"
+            ],
+            "priorityInitiative": "Skills Taxonomy & Career Frameworks"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d23",
+        "cventContactId": "cvent-d23-uuid",
+        "salesforceId": "a00PZ00000mk0023AAA",
+        "accountId": "001CM0000000020",
+        "name": "Hannah Cole",
+        "email": "hannah.cole@example.com",
+        "phone": "+15555550023",
+        "role": "delegate",
+        "company": "Corvid Medical",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$1B–$5B",
+            "budgetaryResponsibility": "$1M–$5M",
+            "companySize": "5,000–25,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Onboarding & New-to-Role Learning: Getting New Hires and New Managers Productive Faster",
+                "Coaching & Mentorship Programs: Scaling 1:1 Development Beyond the Executive Suite"
+            ],
+            "transformationStage": "Embedded in core operations",
+            "systemsAndPlatforms": [
+                "Go1",
+                "UKG"
+            ],
+            "meetingInterests": [
+                "Data, Reporting & Learning Analytics",
+                "HiPo & Succession Programs"
+            ],
+            "priorityInitiative": "Onboarding Experience Redesign"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
+        }
+    },
+    {
+        "id": "d24",
+        "cventContactId": "cvent-d24-uuid",
+        "salesforceId": "a00PZ00000mk0024AAA",
+        "accountId": "001OL0000000021",
+        "name": "Rafael Duarte",
+        "email": "rafael.duarte@example.com",
+        "phone": "+15555550024",
+        "role": "delegate",
+        "company": "Ostrander Life Sciences",
+        "title": "Head of Learning & Development",
+        "sponsorTier": null,
+        "networkingProfileComplete": true,
+        "conferenceOnly": false,
+        "profile": {
+            "annualRevenue": "$5B–$10B",
+            "budgetaryResponsibility": "Under $500k",
+            "companySize": "Under 1,000",
+            "industrySectors": [
+                "Healthcare;Pharmaceuticals"
+            ],
+            "interestAreas": [
+                "Leadership Development: Building the Pipeline from Emerging Leader to Executive",
+                "Data & Insights: Proving L&D's ROI and Business Impact"
+            ],
+            "transformationStage": "No active initiatives",
+            "systemsAndPlatforms": [
+                "Litmos LMS",
+                "SkillJar"
+            ],
+            "meetingInterests": [
+                "Organizational Development",
+                "Digital Learning Strategy"
+            ],
+            "priorityInitiative": "LMS / Learning Tech Stack Consolidation"
+        },
+        "scheduling": {
+            "maxSameCompanyMeetings": 2,
+            "requestedSponsorAccountIds": []
         }
     }
 ]

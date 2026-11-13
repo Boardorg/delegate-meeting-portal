@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { AppointmentTypeKinds } from "@/lib/events/meetingKinds";
 import type { BoothLocations } from "@/lib/scheduling/booths";
+import type { StoredMatchingSettings } from "@/lib/matching/settings";
 
 // ---------------------------------------------------------------------------
 // Drizzle schema
@@ -38,18 +39,35 @@ import type { BoothLocations } from "@/lib/scheduling/booths";
  */
 export const userRole = pgEnum("user_role", ["admin", "user", "sponsor"]);
 
-/** How a scheduled meeting was created and which party's request drove it. */
+/**
+ * How a scheduled meeting was created and which party's request drove it.
+ * `profile_match` is a delegate-to-delegate meeting the D2D engine paired from profile answers.
+ */
 export const meetingMatchKind = pgEnum("meeting_match_kind", [
     "mutual",
     "sponsor_choice",
     "delegate_choice",
     "admin",
+    "profile_match",
 ]);
 export type MeetingMatchKind = (typeof meetingMatchKind.enumValues)[number];
 
 /** Where a meeting originates. Cvent-native meetings are read-only in the portal. */
 export const meetingSource = pgEnum("meeting_source", ["portal", "cvent"]);
 export type MeetingSource = (typeof meetingSource.enumValues)[number];
+
+/**
+ * The kinds of meeting stored in scheduled_meetings.
+ * Each scheduler run replaces only the unpushed meetings of its own kind.
+ */
+export type ScheduledMeetingKind = "sponsor_delegate" | "delegate_delegate";
+
+/** Whether a delegate holds a seat at a roundtable or is one of its alternates. */
+export const roundtableSeatRole = pgEnum("roundtable_seat_role", [
+    "seated",
+    "alternate",
+]);
+export type RoundtableSeatRole = (typeof roundtableSeatRole.enumValues)[number];
 
 // ---------------------------------------------------------------------------
 // Tables
@@ -151,11 +169,19 @@ export const scheduledMeetings = pgTable("scheduled_meetings", {
 
     eventCode: text("event_code").notNull(),
 
-    // Party ids (matching MeetingRequest.requesterId/targetId). On a
-    // sponsor↔delegate meeting attendee_a is ALWAYS the sponsor company's
-    // Account id and attendee_b the delegate, regardless of which side
-    // requested it — queries here filter on that. See ScheduledMeeting in
-    // types/index.ts for the invariant.
+    // Which kind of meeting this is.
+    // Rows made before delegate-to-delegate matching are all sponsor meetings, hence the default.
+    kind: text("kind")
+        .$type<ScheduledMeetingKind>()
+        .notNull()
+        .default("sponsor_delegate"),
+
+    // Party ids (matching MeetingRequest.requesterId/targetId).
+    // attendee_a is the sponsor company on an S2D meeting.
+    // That is its Account id, whichever side requested it, and attendee_b is the delegate.
+    // Queries here filter on that.
+    // On a D2D meeting attendee_a is the host delegate and attendee_b the other delegate.
+    // See ScheduledMeeting in types/index.ts for the invariant.
     attendeeA: text("attendee_a").notNull(),
     attendeeB: text("attendee_b").notNull(),
 
@@ -167,7 +193,8 @@ export const scheduledMeetings = pgTable("scheduled_meetings", {
     // are resolved from the event's Cvent timeslots at read time, not stored here.
     timeslotId: text("timeslot_id").notNull(),
 
-    // Engine pass that produced this meeting (1–7). 0 for admin-created.
+    // Engine pass that produced this meeting (1–5 for sponsor meetings). 0 for admin-created.
+    // D2D meetings use D2D_PASS_NUMBER from lib/matching/d2d.ts.
     passNumber: integer("pass_number").notNull(),
 
     mutual: boolean("mutual").notNull(),
@@ -252,6 +279,15 @@ export const eventSettings = pgTable("event_settings", {
     // See lib/scheduling/booths.ts.
     boothLocations: jsonb("booth_locations").$type<BoothLocations>(),
 
+    // Delegate matching settings, set on the Matching Settings page.
+    // Holds the D2D and roundtable question order and on/off switches, the meeting caps,
+    // seats and alternates per table, and the minimum match scores.
+    // Null means the code defaults.
+    // See lib/matching/settings.ts.
+    matchingSettings: jsonb(
+        "matching_settings",
+    ).$type<StoredMatchingSettings>(),
+
     createdAt: timestamp("created_at", { withTimezone: true })
         .notNull()
         .defaultNow(),
@@ -262,3 +298,104 @@ export const eventSettings = pgTable("event_settings", {
 
 export type EventSettingsRow = typeof eventSettings.$inferSelect;
 export type NewEventSettings = typeof eventSettings.$inferInsert;
+
+/**
+ * Delegate group roundtables, one row per table.
+ * Each table is one Cvent timeslot mapped to `delegate_group`, at that timeslot's location.
+ * The roundtable engine creates the rows, and admins add the theme title and discussion prompt.
+ *
+ * Sync status works like scheduled_meetings (see lib/cvent/syncStatus.ts).
+ * Pushing roundtables to Cvent isn't built yet, so the Cvent columns stay null for now.
+ */
+export const roundtables = pgTable(
+    "roundtables",
+    {
+        // The engine generates 'rt-001' style ids with a timestamp suffix, like meetings.
+        id: text("id").primaryKey(),
+
+        eventCode: text("event_code").notNull(),
+
+        // Cvent timeslot id (Timeslot.id) of the table's delegate_group slot.
+        // Start and end times are resolved from the event's Cvent timeslots at read time.
+        timeslotId: text("timeslot_id").notNull(),
+
+        // Cvent location id of the table, from the timeslot. Null when Cvent omits it.
+        locationId: text("location_id"),
+
+        // Typed by an admin after grouping. It becomes the Cvent appointment's subject.
+        themeTitle: text("theme_title"),
+
+        // Optional, typed by an admin. It becomes the Cvent appointment's description.
+        discussionPrompt: text("discussion_prompt"),
+
+        // Null until the roundtable has been pushed to Cvent.
+        cventAppointmentId: text("cvent_appointment_id"),
+
+        // Set when an admin edits the theme, the prompt or the seated delegates.
+        lastModifiedAt: timestamp("last_modified_at", { withTimezone: true }),
+
+        // Time of the last successful push. Null if never pushed.
+        lastPushedAt: timestamp("last_pushed_at", { withTimezone: true }),
+
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .notNull()
+            .defaultNow(),
+    },
+    (t) => [
+        unique("roundtables_event_timeslot_unique").on(
+            t.eventCode,
+            t.timeslotId,
+        ),
+    ],
+);
+
+export type RoundtableRow = typeof roundtables.$inferSelect;
+export type NewRoundtable = typeof roundtables.$inferInsert;
+
+/**
+ * The delegates at each roundtable, seated or alternate.
+ * A delegate has at most one row per event, so they can't be at two tables.
+ * Deleting a roundtable deletes its seats.
+ */
+export const roundtableSeats = pgTable(
+    "roundtable_seats",
+    {
+        id: serial("id").primaryKey(),
+
+        // Repeated from the roundtable so the per-event unique constraint below can use it.
+        eventCode: text("event_code").notNull(),
+
+        roundtableId: text("roundtable_id")
+            .notNull()
+            .references(() => roundtables.id, { onDelete: "cascade" }),
+
+        // The delegate's Salesforce id, the same party id scheduled_meetings uses.
+        delegateId: text("delegate_id").notNull(),
+
+        role: roundtableSeatRole("role").notNull(),
+
+        // Order within the role at the table, starting at 1.
+        position: integer("position").notNull(),
+
+        // Why they were picked, for example "Both: Leadership Development, Workday".
+        // Null for a delegate an admin moved here by hand.
+        reason: text("reason"),
+
+        // Their match score with the table, 0 to 100.
+        // Null for a delegate an admin moved here by hand.
+        score: integer("score"),
+
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .notNull()
+            .defaultNow(),
+    },
+    (t) => [
+        unique("roundtable_seats_event_delegate_unique").on(
+            t.eventCode,
+            t.delegateId,
+        ),
+    ],
+);
+
+export type RoundtableSeatRow = typeof roundtableSeats.$inferSelect;
+export type NewRoundtableSeat = typeof roundtableSeats.$inferInsert;

@@ -104,7 +104,8 @@ export interface Location {
 
 /**
  * Profile attributes used by the browse and filter UI when attendees are submitting meeting requests.
- * These fields are not used by the scheduling engine.
+ * The sponsor scheduling engine doesn't use them.
+ * D2D and roundtable matching compare the multiple-choice answers (see lib/matching/questions.ts).
  *
  * For DELEGATES, all but `industrySectors` come from the event's intake form,
  * landing on CventEvents__Attendee__c (see lib/salesforce/client.ts). Salesforce
@@ -294,7 +295,21 @@ export interface Attendee {
      */
     meetingsAtOnce?: number | null;
 
-    /** Profile attributes used by the browse and filter UI. */
+    /**
+     * True when the delegate's Networking Profile is complete, from `CventEvents_NP_Profile_Complete__c` on the Cvent Attendee.
+     * Only delegates with a complete profile are matched for D2D meetings.
+     * Absent or false for sponsors and for mock data without it.
+     */
+    networkingProfileComplete?: boolean;
+
+    /**
+     * True when the delegate only attends the conference, with no meetings, from `CventEvents_Conference_Only__c` on the Cvent Attendee.
+     * Conference-only delegates get no D2D meetings and no roundtable seat.
+     * Absent or false for sponsors and for mock data without it.
+     */
+    conferenceOnly?: boolean;
+
+    /** Profile attributes used by the browse and filter UI, and for delegate matching. */
     profile: AttendeeProfile;
 
     /**
@@ -386,17 +401,17 @@ export interface ScheduledMeeting {
     /**
      * Party id of the first participant.
      *
-     * INVARIANT: on a sponsor↔delegate meeting this is always the sponsor
-     * COMPANY (its Account id), whichever side actually requested the meeting.
+     * INVARIANT: attendee_a is the sponsor company on an S2D meeting, as its
+     * Account id, whichever side actually requested the meeting.
      * The per-sponsor admin page and the Cvent push both rely on it to tell the
-     * company side from the delegate side. Delegate↔delegate meetings (Day 2)
-     * carry no meaningful orientation.
+     * company side from the delegate side.
+     * On a D2D meeting it is the host delegate, the one with the lower Salesforce id.
      */
     attendeeA: string;
 
     /**
      * Party id of the second participant — the delegate on a sponsor↔delegate
-     * meeting. See the invariant on `attendeeA`.
+     * meeting, or the other delegate on a D2D meeting. See the invariant on `attendeeA`.
      */
     attendeeB: string;
 
@@ -407,7 +422,8 @@ export interface ScheduledMeeting {
     timeslotId: string;
 
     /**
-     * Which algorithm pass produced this meeting (1–7).
+     * Which algorithm pass produced this meeting (1–5 for sponsor meetings).
+     * D2D meetings use D2D_PASS_NUMBER from lib/matching/d2d.ts.
      * Retained on output for auditing, spot-checking, and human review.
      * 0 for admin-created meetings (no engine pass).
      */

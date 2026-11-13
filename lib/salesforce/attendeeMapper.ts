@@ -111,6 +111,9 @@ export type CventAttendeeRecord = {
     CventEvents_NP_One_to_One_Interests__c?: string | null;
     CventEvents_NP_Initiative_Priority__c?: string | null;
     CventEvents_NP_People_to_Meet__c?: string | null;
+    // Formula checkboxes. Salesforce sends them as booleans.
+    CventEvents_NP_Profile_Complete__c?: boolean | null;
+    CventEvents_Conference_Only__c?: boolean | null;
     [key: string]: unknown;
 };
 
@@ -368,6 +371,10 @@ export const attendeeFieldMappers: AttendeeFieldMappers<MeetingDataRecord> = {
     meetingsAtOnce: (record) =>
         numberOrNull(record.Registration__r?.Cvent_Number_Diaries__c),
 
+    // Sponsors have no Networking Profile and are never matched with delegates.
+    networkingProfileComplete: () => false,
+    conferenceOnly: () => false,
+
     // Delegated to sponsorProfileMapper to keep this object readable.
     profile: sponsorProfileMapper,
 
@@ -452,6 +459,11 @@ export const delegateFieldMappers: AttendeeFieldMappers<CventAttendeeRecord> = {
     maximumMeetings: () => null,
     meetingsAtOnce: () => null,
 
+    // Formula checkboxes on the Cvent Attendee. Only a checked box counts.
+    networkingProfileComplete: (record) =>
+        record.CventEvents_NP_Profile_Complete__c === true,
+    conferenceOnly: (record) => record.CventEvents_Conference_Only__c === true,
+
     // Delegated to delegateProfileMapper to keep this object readable.
     profile: delegateProfileMapper,
 
@@ -506,6 +518,8 @@ function buildAttendee<R>(
         bonusMeetings: mappers.bonusMeetings(record, ctx),
         maximumMeetings: mappers.maximumMeetings(record, ctx),
         meetingsAtOnce: mappers.meetingsAtOnce(record, ctx),
+        networkingProfileComplete: mappers.networkingProfileComplete(record, ctx),
+        conferenceOnly: mappers.conferenceOnly(record, ctx),
         profile: mappers.profile(record, ctx),
         scheduling: mappers.scheduling(record, ctx),
     };

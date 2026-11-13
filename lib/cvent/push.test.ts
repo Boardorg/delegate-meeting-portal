@@ -101,6 +101,7 @@ function row(overrides: Partial<ScheduledMeetingRow> = {}): ScheduledMeetingRow 
     return {
         id: "mtg-1",
         eventCode: "EVT",
+        kind: "sponsor_delegate",
         attendeeA: "acct-acme",
         attendeeB: "d1-sf",
         day: 1,

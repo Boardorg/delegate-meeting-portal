@@ -330,6 +330,35 @@ describe('delegateFieldMappers.profile', () => {
     });
 });
 
+// The two Cvent Attendee checkboxes that decide who delegate matching may use.
+describe('delegate matching flags', () => {
+    const ctx = makeContext();
+
+    test('reads Networking Profile Complete and Conference Only from the Cvent Attendee', () => {
+        const record: CventAttendeeRecord = {
+            CventEvents_NP_Profile_Complete__c: true,
+            CventEvents_Conference_Only__c: true,
+        };
+        expect(delegateFieldMappers.networkingProfileComplete(record, ctx)).toBe(true);
+        expect(delegateFieldMappers.conferenceOnly(record, ctx)).toBe(true);
+    });
+
+    test('treats unchecked, blank and missing boxes as false', () => {
+        expect(delegateFieldMappers.networkingProfileComplete({ CventEvents_NP_Profile_Complete__c: false }, ctx)).toBe(false);
+        expect(delegateFieldMappers.networkingProfileComplete({ CventEvents_NP_Profile_Complete__c: null }, ctx)).toBe(false);
+        expect(delegateFieldMappers.conferenceOnly({}, ctx)).toBe(false);
+    });
+
+    test('carries both flags onto the built attendee', () => {
+        const [a] = meetingDataToAttendees(
+            { delegates: [{ Id: 'sf-d1', CventEvents_NP_Profile_Complete__c: true }], sponsors: [] },
+            false,
+        );
+        expect(a.networkingProfileComplete).toBe(true);
+        expect(a.conferenceOnly).toBe(false);
+    });
+});
+
 // Orchestrates all field mappers — verifies role assignment, ordering, and placeholder ID generation.
 describe('meetingDataToAttendees', () => {
     test('assigns delegate role to records in the delegates array', () => {

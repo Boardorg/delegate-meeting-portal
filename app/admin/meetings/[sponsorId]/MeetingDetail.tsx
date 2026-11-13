@@ -875,12 +875,14 @@ function MatchKindChip({ kind }: { kind: MeetingMatchKind }) {
         sponsor_choice:  "adm-chip-sponsor-choice",
         delegate_choice: "adm-chip-delegate-choice",
         admin:           "adm-chip-admin",
+        profile_match:   "adm-chip-sponsor-choice",
     };
     const labelMap: Record<MeetingMatchKind, string> = {
         mutual:          "Mutual",
         sponsor_choice:  "Sponsor choice",
         delegate_choice: "Delegate choice",
         admin:           "Admin created",
+        profile_match:   "Profile match",
     };
     return <span className={`adm-chip ${classMap[kind]}`}>{labelMap[kind]}</span>;
 }

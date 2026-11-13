@@ -198,7 +198,7 @@ describe("runSchedulerForEvent — appointment-type mapping", () => {
         const result = await runSchedulerForEvent("EVT");
 
         expect(result).toEqual({ ok: false, error: NO_SPONSOR_MAPPING_MESSAGE });
-        expect(NO_SPONSOR_MAPPING_MESSAGE).toContain("Event settings");
+        expect(NO_SPONSOR_MAPPING_MESSAGE).toContain("Event Settings");
         expect(dbDelete).not.toHaveBeenCalled();
         expect(dbInsert).not.toHaveBeenCalled();
     });

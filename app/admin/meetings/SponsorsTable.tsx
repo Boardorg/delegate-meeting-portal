@@ -257,7 +257,7 @@ export default function SponsorsTable({
     return (
         <div className="adm-page">
             <div className="adm-page-head">
-                <h1 className="adm-page-title">Manage Meetings</h1>
+                <h1 className="adm-page-title">Sponsor Meetings</h1>
             </div>
 
             <div className="adm-toolbar">
@@ -631,7 +631,7 @@ function RunEngineModal({
                 {boothWarning && (
                     <div className="adm-modal-warn-at" role="alert" style={{ marginBottom: 16 }}>
                         {boothWarning} See the{" "}
-                        <Link href="/admin/booths">Sponsor booths</Link> page.
+                        <Link href="/admin/booths">Sponsor Booths</Link> page.
                     </div>
                 )}
                 {error && <div className="adm-modal-error">{error}</div>}

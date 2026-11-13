@@ -125,7 +125,7 @@ export default function SyncReportPanel({
             {report.failures.length > 0 && (
                 <div style={{ marginTop: 20 }}>
                     <div className="adm-chart-title">
-                        Failed to sync ({report.failures.length})
+                        Failed to Sync ({report.failures.length})
                     </div>
                     <ul className="adm-sync-list">
                         {report.failures.map((f) => (
@@ -153,7 +153,7 @@ export default function SyncReportPanel({
             {report.warnings.length > 0 && (
                 <div style={{ marginTop: 20 }}>
                     <div className="adm-chart-title">
-                        Synced with warnings ({report.warnings.length})
+                        Synced With Warnings ({report.warnings.length})
                     </div>
                     <ul className="adm-sync-list">
                         {report.warnings.map((w) => (

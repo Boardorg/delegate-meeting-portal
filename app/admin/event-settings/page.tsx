@@ -51,22 +51,31 @@ async function loadAppointmentTypes(
 }
 
 /**
- * Renders the Event settings page for the active event.
+ * Renders the Event Settings page for the active event.
+ * Opened with `?new=1` from "+ New Event", it starts in create mode.
  *
+ * @param {{ searchParams: Promise<{ new?: string }> }} props - Route props.
  * @returns {Promise<JSX.Element>} The page element.
  */
-export default async function EventSettingsPage() {
+export default async function EventSettingsPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ new?: string }>;
+}) {
+    const startCreating = (await searchParams).new === "1";
     const { events, activeEventCode } = await getAdminState();
     const active = events.find((e) => e.code === activeEventCode) ?? null;
     const appointmentTypes = active ? await loadAppointmentTypes(active) : null;
 
     // Key on the active code so the form remounts (resetting its inputs from
     // props) whenever the active event changes — no in-component effect needed.
+    // The create flag is in the key too, so "+ New Event" remounts it in create mode.
     return (
         <EventSettingsForm
-            key={active?.code ?? "new"}
+            key={`${active?.code ?? "none"}-${startCreating ? "new" : "edit"}`}
             active={active}
             hasEvents={events.length > 0}
+            startCreating={startCreating}
             appointmentTypes={appointmentTypes}
         />
     );

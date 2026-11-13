@@ -384,13 +384,13 @@ async function requireCventEventId(eventCode: string): Promise<string> {
     if (!settings) {
         throw new Error(
             `No Cvent settings configured for event "${eventCode}". ` +
-                "Add them in Admin → Event settings.",
+                "Add them in Admin → Event Settings.",
         );
     }
     if (!settings.cventEventId) {
         throw new Error(
             `Event "${eventCode}" has no Cvent Event ID set ` +
-                "(Admin → Event settings).",
+                "(Admin → Event Settings).",
         );
     }
     return settings.cventEventId;

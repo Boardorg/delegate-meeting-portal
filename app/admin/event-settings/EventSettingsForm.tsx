@@ -28,6 +28,8 @@ export type AppointmentTypesLoad =
 type Props = {
     active: EventSettingsRow | null;
     hasEvents: boolean;
+    /** True when the page was opened from "+ New Event" (`?new=1`). */
+    startCreating: boolean;
     /** Null when there is no active event. */
     appointmentTypes: AppointmentTypesLoad | null;
 };
@@ -109,15 +111,17 @@ const ID_FIELDS: { key: keyof Draft; label: string; hint: string }[] = [
 export default function EventSettingsForm({
     active,
     hasEvents,
+    startCreating,
     appointmentTypes,
 }: Props) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
 
-    // Create mode is forced when there are no events; otherwise we edit `active`.
-    const [creating, setCreating] = useState(!hasEvents);
+    // Create mode is forced when there are no events, and starts when opened from "+ New Event".
+    // Otherwise we edit `active`.
+    const [creating, setCreating] = useState(!hasEvents || startCreating);
     const [code, setCode] = useState("");
-    const [draft, setDraft] = useState<Draft>(draftFrom(active));
+    const [draft, setDraft] = useState<Draft>(draftFrom(creating ? null : active));
     const [kinds, setKinds] = useState<KindsDraft>(kindsFrom(active));
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [message, setMessage] = useState<{
@@ -134,18 +138,15 @@ export default function EventSettingsForm({
         setDraft((d) => ({ ...d, [key]: value }));
     }
 
-    function beginCreate() {
-        setCreating(true);
-        setCode("");
-        setDraft(draftFrom(null));
-        setConfirmDelete(false);
-        setMessage(null);
-    }
-
+    /**
+     * Leaves create mode and goes back to editing the selected event.
+     * It also drops `?new=1` from the address, so a reload doesn't reopen create mode.
+     */
     function cancelCreate() {
         setCreating(false);
         setDraft(draftFrom(active));
         setMessage(null);
+        router.replace("/admin/event-settings");
     }
 
     function handleSave() {
@@ -163,8 +164,11 @@ export default function EventSettingsForm({
                   : ({ ok: false, error: "Error: no event selected" } as const);
 
             if (res.ok) {
+                const wasCreating = creating;
                 setCreating(false);
                 setMessage({ ok: true, text: `Saved “${res.event.code}”.` });
+                // Drop `?new=1` after creating, so a reload edits the event instead of starting another.
+                if (wasCreating) router.replace("/admin/event-settings");
                 router.refresh();
             } else {
                 setMessage({ ok: false, text: res.error });
@@ -187,32 +191,22 @@ export default function EventSettingsForm({
     }
 
     const title = creating
-        ? "New event"
+        ? "New Event"
         : active
           ? active.name
               ? `${active.name} (${active.code})`
               : active.code
-          : "Event settings";
+          : "Event Settings";
 
     return (
         <div className="adm-page">
             <div className="adm-page-head">
-                <h1 className="adm-page-title">Event settings</h1>
-                {!creating && (
-                    <button
-                        type="button"
-                        className="adm-new-btn adm-new-btn-primary"
-                        onClick={beginCreate}
-                        disabled={pending}
-                    >
-                        + New event
-                    </button>
-                )}
+                <h1 className="adm-page-title">Event Settings</h1>
             </div>
 
             {!creating && !active ? (
                 <div className="adm-empty adm-empty-lg">
-                    No events yet. Click “+ New event” to add one.
+                    No events yet. Click “+ New Event” under the event picker to add one.
                 </div>
             ) : (
                 <div className="adm-card adm-form-card">

@@ -47,7 +47,7 @@ export default function BoothsTable({
     return (
         <div className="adm-page">
             <div className="adm-page-head">
-                <h1 className="adm-page-title">Sponsor booths</h1>
+                <h1 className="adm-page-title">Sponsor Booths</h1>
             </div>
 
             <p className="adm-help-note">
@@ -83,7 +83,7 @@ export default function BoothsTable({
                                 <td colSpan={COL_COUNT} className="adm-empty">
                                     {eventCode
                                         ? "No sponsors found for this event."
-                                        : "No events found. Add an event in Event settings first."}
+                                        : "No events found. Click “+ New Event” under the event picker to add one."}
                                 </td>
                             </tr>
                         ) : (

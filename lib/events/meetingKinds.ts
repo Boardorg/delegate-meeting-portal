@@ -153,12 +153,12 @@ export type MappingCheck =
 /** Shown when a scheduler run stops because no type is mapped to sponsor_delegate. */
 export const NO_SPONSOR_MAPPING_MESSAGE =
     "No Cvent appointment type is mapped to sponsor to delegate meetings for this event. " +
-    "Set the mapping in Event settings, then run the scheduler again. No meetings were changed.";
+    "Set the mapping in Event Settings, then run the scheduler again. No meetings were changed.";
 
 /** Shown when a scheduler run stops because no loaded slot is a sponsor_delegate slot. */
 export const NO_SPONSOR_SLOTS_MESSAGE =
     "No Sponsor to Delegate slots were found for this event, so nothing was changed. " +
-    "Check the appointment type mapping in Event settings and that Cvent is reachable.";
+    "Check the appointment type mapping in Event Settings and that Cvent is reachable.";
 
 /** The parts of a loaded timeslot the pre-run check reads. */
 export type SlotKindRef = { appointmentTypeId: string; kind: MeetingKind };

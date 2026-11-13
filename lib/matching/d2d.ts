@@ -23,7 +23,7 @@ import { sameCompany } from "./company";
 export const D2D_PASS_NUMBER = 6;
 
 /** Why a delegate was left out of D2D matching before any pairing. */
-export type D2DExclusion = "conference_only" | "incomplete_profile" | "cancelled";
+export type D2DExclusion = "conference_only" | "incomplete_profile" | "cancelled" | "seated_at_roundtable";
 
 /** Why an eligible delegate ended up with no D2D meeting. */
 export type D2DUnmatchedReason =
@@ -64,6 +64,11 @@ export type D2DInput = {
     existingD2D: ExistingD2D[];
     /** Start times (epoch ms) each delegate is already booked at, by Salesforce id. */
     busyById: Map<string, Set<number>>;
+    /**
+     * Delegates seated at a roundtable, pushed or not.
+     * Roundtables are for delegates with no meetings, so they aren't paired for D2D.
+     */
+    seatedIds?: Set<string>;
     /** The event's timeslots. Only delegate_delegate slots are used. */
     timeslots: Timeslot[];
     /** How many more meetings each timeslot can take, by timeslot id. A slot missing here uses its capacity. */
@@ -114,17 +119,44 @@ export function totalMeetingCap(s2dCount: number, settings: D2DSettings): number
 }
 
 /**
- * The warning shown when D2D runs before any S2D meetings exist.
- * The run still goes ahead.
+ * The warnings shown when D2D runs out of order. The run still goes ahead.
+ * One is for running before any S2D meetings exist.
+ * The other is for running after roundtables are already grouped.
  *
  * @param {number} s2dMeetingCount - The event's S2D meetings, in the portal and in Cvent.
- * @returns {string | null} The warning, or null.
+ * @param {number} [seatedCount=0] - How many delegates are seated at a roundtable.
+ * @returns {string | null} The warnings in one message, or null when the order is fine.
  */
-export function d2dOrderWarning(s2dMeetingCount: number): string | null {
-    if (s2dMeetingCount > 0) return null;
+export function d2dOrderWarning(s2dMeetingCount: number, seatedCount = 0): string | null {
+    const parts: string[] = [];
+    if (s2dMeetingCount === 0) {
+        parts.push(
+            "No sponsor meetings are scheduled yet. Scheduling runs S2D first, then D2D, then roundtables. " +
+                "Every delegate is treated as having no sponsor meetings, so they get the lower meeting cap.",
+        );
+    }
+    if (seatedCount > 0) {
+        parts.push(
+            "Roundtables are already grouped. Delegates seated at a roundtable won't get D2D meetings. " +
+                "Re-run roundtable grouping afterwards if needed.",
+        );
+    }
+    return parts.length ? parts.join(" ") : null;
+}
+
+/**
+ * The warning shown when the S2D run happens after D2D meetings or roundtables exist.
+ * The run still goes ahead, and those meetings and seats count as busy time.
+ *
+ * @param {number} d2dMeetingCount - The event's D2D meetings in the portal.
+ * @param {number} seatedCount - How many delegates are seated at a roundtable.
+ * @returns {string | null} The warning, or null when the order is fine.
+ */
+export function s2dOrderWarning(d2dMeetingCount: number, seatedCount: number): string | null {
+    if (d2dMeetingCount === 0 && seatedCount === 0) return null;
     return (
-        "No sponsor meetings are scheduled yet. Scheduling runs S2D first, then D2D, then roundtables. " +
-        "Every delegate is treated as having no sponsor meetings, so they get the lower meeting cap."
+        "D2D meetings or roundtables are already scheduled. Scheduling runs S2D first, then D2D, then roundtables. " +
+        "Their times count as busy, so re-run D2D matching and roundtable grouping afterwards if needed."
     );
 }
 
@@ -172,7 +204,8 @@ export function runD2DMatching(input: D2DInput): D2DResult {
     const excluded: D2DResult["excluded"] = [];
     for (const a of input.attendees) {
         if (a.role !== "delegate" || !a.salesforceId) continue;
-        const reason = d2dExclusion(a);
+        const reason =
+            d2dExclusion(a) ?? (input.seatedIds?.has(a.salesforceId) ? "seated_at_roundtable" : null);
         if (reason) excluded.push({ delegateId: a.salesforceId, reason });
         else eligible.push(a);
     }

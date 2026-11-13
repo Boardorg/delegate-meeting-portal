@@ -16,7 +16,7 @@ export type D2DReport = {
     /** Delegates who could be matched. */
     eligible: number;
     /** Delegates left out, by reason. */
-    excluded: { conferenceOnly: number; incompleteProfile: number; cancelled: number };
+    excluded: { conferenceOnly: number; incompleteProfile: number; cancelled: number; seatedAtRoundtable: number };
     /** New D2D meetings this run made. */
     created: number;
     /** Pushed D2D meetings the run kept. */
@@ -59,10 +59,11 @@ export function buildD2DReport(params: {
      */
     const name = (id: string): string => byId.get(id)?.name ?? id;
     const { result } = params;
-    const excluded = { conferenceOnly: 0, incompleteProfile: 0, cancelled: 0 };
+    const excluded = { conferenceOnly: 0, incompleteProfile: 0, cancelled: 0, seatedAtRoundtable: 0 };
     for (const e of result.excluded) {
         if (e.reason === "conference_only") excluded.conferenceOnly++;
         else if (e.reason === "incomplete_profile") excluded.incompleteProfile++;
+        else if (e.reason === "seated_at_roundtable") excluded.seatedAtRoundtable++;
         else excluded.cancelled++;
     }
     const matched = new Set(result.meetings.flatMap((m) => [m.attendeeA, m.attendeeB]));

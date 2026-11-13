@@ -21,11 +21,15 @@ import {
 } from "@/lib/matching/d2d";
 import {
     busyStartTimes,
+    mergeBusyTimes,
+    seatedBusyTimes,
+    seatedDelegateIds,
     keptD2DMeetings,
     slotRoomLeft,
 } from "@/lib/matching/delegateMeetings";
 import { buildD2DReport, type D2DReport } from "@/lib/matching/d2dReport";
 import type { MaintenanceReport } from "@/app/admin/meetings/actions";
+import type { Attendee } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Server actions for /admin/delegate-meetings, the D2D list page.
@@ -87,8 +91,19 @@ function delegateRow(ctx: MatchingContext, delegateId: string): DelegateRow | nu
         d2dCount: counts.d2d,
         d2dCap: Math.max(0, totalMeetingCap(counts.s2d, ctx.settings.d2d) - counts.s2d),
         sync,
-        exclusion: d2dExclusion(a),
+        exclusion: matchExclusion(ctx, a),
     };
+}
+
+/**
+ * Why a delegate can't be matched for D2D, counting a roundtable seat too.
+ *
+ * @param {MatchingContext} ctx - The event's matching data.
+ * @param {Attendee} a - The delegate.
+ * @returns {D2DExclusion | null} The reason, or null when they can be matched.
+ */
+function matchExclusion(ctx: MatchingContext, a: Attendee): D2DExclusion | null {
+    return d2dExclusion(a) ?? (seatedDelegateIds(ctx.seatRows).has(a.salesforceId) ? "seated_at_roundtable" : null);
 }
 
 /**
@@ -109,7 +124,7 @@ export async function listDelegatesPage(params: {
 
     const ids = new Set<string>();
     for (const a of ctx.attendees) {
-        if (a.role === "delegate" && a.salesforceId && !d2dExclusion(a)) ids.add(a.salesforceId);
+        if (a.role === "delegate" && a.salesforceId && !matchExclusion(ctx, a)) ids.add(a.salesforceId);
     }
     for (const [id, c] of ctx.counts) if (c.d2d > 0) ids.add(id);
 
@@ -143,7 +158,7 @@ export async function listDelegatesPage(params: {
 }
 
 /**
- * The warning to show before a D2D run, when no S2D meetings exist yet.
+ * The warning to show before a D2D run, when no S2D meetings exist yet or roundtables are already grouped.
  *
  * @param {string} eventCode - The event.
  * @returns {Promise<string | null>} The warning, or null.
@@ -152,7 +167,7 @@ export async function d2dRunWarning(eventCode: string): Promise<string | null> {
     const ctx = await loadMatchingContext(eventCode);
     let s2d = 0;
     for (const c of ctx.counts.values()) s2d += c.s2d;
-    return d2dOrderWarning(s2d);
+    return d2dOrderWarning(s2d, seatedDelegateIds(ctx.seatRows).size);
 }
 
 /**
@@ -164,8 +179,9 @@ export type RunD2DResult = { ok: true; report: D2DReport } | { ok: false; error:
 /**
  * Runs D2D matching for an event and replaces its unpushed D2D meetings with the fresh output.
  * Pushed D2D meetings are kept, and count toward caps and busy times.
- * Every S2D meeting and every Cvent appointment counts as busy time, so no delegate is double-booked.
- * The run still goes ahead when no S2D meetings exist, but the report warns about it.
+ * Every S2D meeting, every roundtable seat and every Cvent appointment counts as busy time, so no delegate is double-booked.
+ * Delegates seated at a roundtable aren't paired, since roundtables are for delegates with no meetings.
+ * The run still goes ahead when no S2D meetings exist or roundtables are already grouped, but the report warns about it.
  *
  * It stops before changing anything when no delegates loaded or no slot is mapped to delegate_delegate.
  *
@@ -193,7 +209,8 @@ export async function runD2DForEvent(eventCode: string): Promise<RunD2DResult> {
         s2dTotal += c.s2d;
     }
     const warnings: string[] = [];
-    const orderWarning = d2dOrderWarning(s2dTotal);
+    const seatedIds = seatedDelegateIds(ctx.seatRows);
+    const orderWarning = d2dOrderWarning(s2dTotal, seatedIds.size);
     if (orderWarning) warnings.push(orderWarning);
     if (!ctx.appointments) {
         warnings.push("Cvent's appointment list couldn't be read, so appointments made in Cvent weren't counted as busy.");
@@ -203,12 +220,11 @@ export async function runD2DForEvent(eventCode: string): Promise<RunD2DResult> {
         attendees: ctx.attendees,
         s2dCountById,
         existingD2D: keptD2DMeetings(keptD2D, ctx.cventOnly, scheduleData.timeslots),
-        busyById: busyStartTimes(
-            [...s2dRows, ...keptD2D],
-            scheduleData.timeslotById,
-            ctx.appointments ?? [],
-            ctx.attendees,
+        busyById: mergeBusyTimes(
+            busyStartTimes([...s2dRows, ...keptD2D], scheduleData.timeslotById, ctx.appointments ?? [], ctx.attendees),
+            seatedBusyTimes(ctx.seatRows, ctx.roundtableRows, scheduleData.timeslotById),
         ),
+        seatedIds,
         timeslots: d2dSlots,
         slotRemaining: slotRoomLeft(d2dSlots, scheduleData.locations, ctx.appointments, keptD2D),
         settings: ctx.settings.d2d,

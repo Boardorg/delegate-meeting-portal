@@ -308,9 +308,26 @@ describe("runD2DMatching", () => {
     });
 });
 
+describe("runD2DMatching: roundtable seats", () => {
+    test("never pairs a delegate seated at a roundtable", () => {
+        const result = runD2DMatching(input({
+            attendees: [delegate("a"), delegate("b"), delegate("c")],
+            seatedIds: new Set(["a"]),
+            timeslots: MANY_SLOTS,
+        }));
+        expect(result.meetings.flatMap((m) => [m.attendeeA, m.attendeeB])).not.toContain("a");
+        expect(result.excluded).toEqual([{ delegateId: "a", reason: "seated_at_roundtable" }]);
+    });
+});
+
 describe("d2dOrderWarning", () => {
     test("criterion 22: warns when no S2D meetings exist, and says nothing once they do", () => {
         expect(d2dOrderWarning(0)).toMatch(/No sponsor meetings are scheduled yet/);
         expect(d2dOrderWarning(3)).toBeNull();
+    });
+
+    test("warns when roundtables are already grouped", () => {
+        expect(d2dOrderWarning(3, 2)).toMatch(/Roundtables are already grouped/);
+        expect(d2dOrderWarning(0, 2)).toMatch(/No sponsor meetings.*Roundtables are already grouped/);
     });
 });

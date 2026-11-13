@@ -16,21 +16,34 @@ import { cventOnlyForDelegates, delegateMeetingCounts } from "@/lib/matching/del
 const loadMatchingContext = vi.fn();
 const deleteWhere = vi.fn<(cond: SQL) => Promise<void>>(async () => undefined);
 const insertValues = vi.fn<(rows: unknown) => Promise<void>>(async () => undefined);
+const selectWhere = vi.fn<(cond: SQL) => void>();
 
 vi.mock("@/lib/matching/data", () => ({
     loadMatchingContext: (...a: unknown[]) => loadMatchingContext(...a),
 }));
 vi.mock("@/lib/db/client", () => ({
     db: {
-        delete: () => ({ where: (cond: SQL) => deleteWhere(cond) }),
+        delete: () => ({
+            where: (cond: SQL) => Object.assign(deleteWhere(cond), { returning: async () => [] }),
+        }),
+        select: () => ({
+            from: () => ({
+                where: async (cond: SQL) => {
+                    selectWhere(cond);
+                    return [];
+                },
+            }),
+        }),
         insert: () => ({ values: (rows: unknown) => insertValues(rows) }),
     },
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/cvent/push", () => ({ needsSync: vi.fn(), pushDelegateMeetingRows: vi.fn() }));
-vi.mock("@/lib/cvent/unpush", () => ({ unpushMeetingRows: vi.fn() }));
+vi.mock("@/lib/cvent/unpush", () => ({
+    unpushMeetingRows: vi.fn(async () => ({ unpushed: 0, alreadyGone: 0, failures: [], notes: [] })),
+}));
 
-import { runD2DForEvent } from "./actions";
+import { clearUnsyncedD2DForEvent, runD2DForEvent, unpushAllD2DForEvent } from "./actions";
 import { NO_D2D_SLOTS_MESSAGE } from "@/lib/matching/d2d";
 
 /**
@@ -107,7 +120,11 @@ function row(partial: Partial<ScheduledMeetingRow>): ScheduledMeetingRow {
  * @param {Timeslot[]} timeslots - The event's slots.
  * @returns {MatchingContext} The data.
  */
-function context(rows: ScheduledMeetingRow[], timeslots: Timeslot[]): MatchingContext {
+function context(
+    rows: ScheduledMeetingRow[],
+    timeslots: Timeslot[],
+    seats: { roundtableId: string; delegateId: string; timeslotId: string }[] = [],
+): MatchingContext {
     const attendees = ["d1", "d2", "d3", "d4"].map(delegate);
     const cventOnly = cventOnlyForDelegates([], attendees, new Set());
     return {
@@ -123,8 +140,29 @@ function context(rows: ScheduledMeetingRow[], timeslots: Timeslot[]): MatchingCo
         },
         settings: DEFAULT_MATCHING_SETTINGS,
         rows,
-        roundtableRows: [],
-        seatRows: [],
+        roundtableRows: seats.map((s) => ({
+            id: s.roundtableId,
+            eventCode: "EVT",
+            timeslotId: s.timeslotId,
+            locationId: null,
+            themeTitle: null,
+            discussionPrompt: null,
+            cventAppointmentId: null,
+            lastModifiedAt: null,
+            lastPushedAt: null,
+            createdAt: new Date(0),
+        })),
+        seatRows: seats.map((s, i) => ({
+            id: i + 1,
+            eventCode: "EVT",
+            roundtableId: s.roundtableId,
+            delegateId: s.delegateId,
+            role: "seated" as const,
+            position: 1,
+            reason: null,
+            score: null,
+            createdAt: new Date(0),
+        })),
         appointments: [],
         cventOnly,
         counts: delegateMeetingCounts(rows, cventOnly),
@@ -139,6 +177,16 @@ function context(rows: ScheduledMeetingRow[], timeslots: Timeslot[]): MatchingCo
  */
 function sqlText(cond: SQL): string {
     return new PgDialect().sqlToQuery(cond).sql;
+}
+
+/**
+ * Renders a drizzle condition and returns its bound values.
+ *
+ * @param {SQL} cond - The condition.
+ * @returns {unknown[]} The values, in order.
+ */
+function sqlParams(cond: SQL): unknown[] {
+    return new PgDialect().sqlToQuery(cond).params;
 }
 
 beforeEach(() => {
@@ -169,6 +217,7 @@ describe("runD2DForEvent", () => {
         expect(where).toContain('"kind" = $');
         expect(where).toContain('"cvent_appointment_id" is null');
         expect(where).toContain('"source" = $');
+        expect(sqlParams(deleteWhere.mock.calls[0][0])).toEqual(["EVT", "portal", "delegate_delegate"]);
 
         // The new meetings are D2D, never repeat the pushed pair, and avoid its time for d1 and d2.
         const inserted = insertValues.mock.calls[0][0] as ScheduledMeetingRow[];
@@ -220,5 +269,41 @@ describe("runD2DForEvent", () => {
 
         expect(result).toEqual({ ok: false, error: NO_D2D_SLOTS_MESSAGE });
         expect(deleteWhere).not.toHaveBeenCalled();
+    });
+});
+
+describe("runD2DForEvent: roundtable seats", () => {
+    test("decisions 1 and 3: a delegate seated at a roundtable isn't paired, and the run warns", async () => {
+        const slots = [slot("t1", "09:00"), slot("t2", "10:00")];
+        loadMatchingContext.mockResolvedValue(context([], slots, [{ roundtableId: "rt", delegateId: "d1", timeslotId: "t9" }]));
+
+        const result = await runD2DForEvent("EVT");
+
+        const inserted = insertValues.mock.calls[0][0] as ScheduledMeetingRow[];
+        expect(inserted.some((m) => m.attendeeA === "d1" || m.attendeeB === "d1")).toBe(false);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.report.excluded.seatedAtRoundtable).toBe(1);
+        expect(result.report.warnings.join(" ")).toMatch(/Roundtables are already grouped/);
+    });
+});
+
+describe("D2D bulk actions only touch D2D meetings", () => {
+    test("Clear All Unsynced deletes only this event's unpushed D2D meetings", async () => {
+        await clearUnsyncedD2DForEvent("EVT");
+
+        const cond = deleteWhere.mock.calls[0][0];
+        expect(sqlParams(cond)).toEqual(["EVT", "portal", "delegate_delegate"]);
+        expect(sqlText(cond)).toContain('"cvent_appointment_id" is null');
+    });
+
+    test("Unpush All Synced reads only this event's synced D2D meetings", async () => {
+        loadMatchingContext.mockResolvedValue(context([], []));
+
+        await unpushAllD2DForEvent("EVT");
+
+        const cond = selectWhere.mock.calls[0][0];
+        expect(sqlParams(cond)).toEqual(["EVT", "portal", "delegate_delegate"]);
+        expect(sqlText(cond)).toContain('"cvent_appointment_id" is not null');
     });
 });

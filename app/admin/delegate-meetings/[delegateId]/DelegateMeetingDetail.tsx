@@ -41,6 +41,7 @@ const EXCLUSION_LABEL: Record<NonNullable<DelegateDetail["exclusion"]>, string> 
     conference_only: "Conference only, so no D2D meetings",
     incomplete_profile: "Networking Profile not complete, so no D2D matching",
     cancelled: "Cancelled in Cvent",
+    seated_at_roundtable: "Seated at a roundtable",
 };
 
 /**

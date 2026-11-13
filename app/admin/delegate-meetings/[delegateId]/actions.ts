@@ -17,6 +17,7 @@ import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
 import { loadMatchingContext, type MatchingContext } from "@/lib/matching/data";
 import { d2dExclusion, startMs, totalMeetingCap, type D2DExclusion } from "@/lib/matching/d2d";
 import { buildAnswerScales } from "@/lib/matching/questions";
+import { seatedDelegateIds } from "@/lib/matching/delegateMeetings";
 import { explainMatch, scorePair } from "@/lib/matching/score";
 import {
     bookedIntervals,
@@ -194,7 +195,9 @@ export async function getDelegateMeetingDetail(params: {
             s2dCount: counts.s2d,
             d2dCount: counts.d2d,
             d2dCap: Math.max(0, totalMeetingCap(counts.s2d, ctx.settings.d2d) - counts.s2d),
-            exclusion: d2dExclusion(me),
+            exclusion:
+                d2dExclusion(me) ??
+                (seatedDelegateIds(ctx.seatRows).has(me.salesforceId) ? "seated_at_roundtable" : null),
         },
         meetings,
         timezone: ctx.scheduleData.timezone,
@@ -202,7 +205,7 @@ export async function getDelegateMeetingDetail(params: {
 }
 
 /**
- * The times a party is busy, from portal meetings other than one, and from Cvent appointments.
+ * The times a party is busy, from portal meetings other than one, their roundtable seat, and Cvent appointments.
  * Cvent appointments carry no end time, so each blocks the instant it starts.
  *
  * @param {MatchingContext} ctx - The event's matching data.
@@ -224,6 +227,13 @@ function busyIntervals(ctx: MatchingContext, partyId: string, exceptMeetingId: s
         if (moving?.cventAppointmentId && appt.id === moving.cventAppointmentId) continue;
         const ms = startMs(appt.startTime);
         out.push({ start: ms, end: ms + 1 });
+    }
+    // A roundtable seat is a meeting at the table's whole slot.
+    const slotByTable = new Map(ctx.roundtableRows.map((r) => [r.id, r.timeslotId]));
+    for (const seat of ctx.seatRows) {
+        if (seat.delegateId !== partyId || seat.role !== "seated") continue;
+        const ts = ctx.scheduleData.timeslotById.get(slotByTable.get(seat.roundtableId) ?? "");
+        if (ts) out.push({ start: startMs(ts.startTime), end: startMs(ts.endTime) });
     }
     return out;
 }

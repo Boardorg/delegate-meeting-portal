@@ -91,7 +91,7 @@ export default function SchedulerReportPanel({
                         ? "This Cvent appointment type isn't mapped to a meeting kind, so its slots weren't used: "
                         : "These Cvent appointment types aren't mapped to a meeting kind, so their slots weren't used: "}
                     {report.unmappedAppointmentTypes.join(", ")}. Choose a
-                    meeting kind for each one in Event settings, or set it to
+                    meeting kind for each one in Event Settings, or set it to
                     Ignore.
                 </div>
             )}
@@ -109,7 +109,7 @@ export default function SchedulerReportPanel({
                         )
                         .join(", ")}
                     . Fix them in Salesforce or on the{" "}
-                    <Link href="/admin/booths">Sponsor booths</Link> page.
+                    <Link href="/admin/booths">Sponsor Booths</Link> page.
                 </div>
             )}
 
@@ -146,7 +146,7 @@ export default function SchedulerReportPanel({
 
             <div style={{ marginTop: 20 }}>
                 <div className="adm-chart-title">
-                    Requests by interest level
+                    Requests by Interest Level
                 </div>
                 <div style={{ width: "100%", height: 260 }}>
                     <ResponsiveContainer>
@@ -201,7 +201,7 @@ export default function SchedulerReportPanel({
 
             <div style={{ marginTop: 20 }}>
                 <div className="adm-chart-title">
-                    Unscheduled requests ({report.unscheduledRequests.length})
+                    Unscheduled Requests ({report.unscheduledRequests.length})
                 </div>
                 {report.unscheduledRequests.length === 0 ? (
                     <div className="adm-empty">

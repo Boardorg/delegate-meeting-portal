@@ -26,6 +26,8 @@ export type AdminNavItem = {
     icon?: ReactNode;
     /** Optional nested links shown when the section is expanded. */
     children?: AdminNavItem[];
+    /** Draws a divider above this row, to set apart pages that apply to every event. */
+    dividerAbove?: boolean;
 };
 
 /**
@@ -45,7 +47,9 @@ export type AdminSidebarProps = {
  * @returns {boolean} Whether the link is active for the current path.
  */
 function isActive(pathname: string, href: string | undefined): boolean {
-    if (!href || href === "/admin") return false;
+    if (!href) return false;
+    // The Overview lives at /admin, which every admin page starts with, so only an exact match counts.
+    if (href === "/admin") return pathname === href;
     return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -64,7 +68,9 @@ function NavRow({ item, depth }: { item: AdminNavItem; depth: number }) {
     // current page. Purely derived from the URL — no open/closed JS state.
     const containsActive =
         hasChildren && item.children!.some((c) => isActive(pathname, c.href));
-    const showChildren = hasChildren && (active || containsActive);
+    // A group heading has no page of its own, so its links always show.
+    const showChildren =
+        hasChildren && (!item.href || active || containsActive);
 
     // Shared inner content for both the link and the plain-row variants.
     const inner = (
@@ -78,6 +84,7 @@ function NavRow({ item, depth }: { item: AdminNavItem; depth: number }) {
 
     return (
         <div className="admin-sidebar-item" style={{ paddingLeft: depth * 12 }}>
+            {item.dividerAbove && <hr className="admin-sidebar-divider" />}
             {item.href ? (
                 <Link
                     href={item.href}
@@ -89,7 +96,7 @@ function NavRow({ item, depth }: { item: AdminNavItem; depth: number }) {
                 // Group-only rows (no href) just render as a static label —
                 // there's nowhere for them to navigate to, and we no longer
                 // toggle their children's visibility on click.
-                <div className="admin-sidebar-row">{inner}</div>
+                <div className="admin-sidebar-group">{inner}</div>
             )}
             {showChildren && (
                 <div className="admin-sidebar-children">

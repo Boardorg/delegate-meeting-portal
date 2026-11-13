@@ -9,7 +9,7 @@ import {
     scoreAgainstGroup,
     scorePair,
 } from "./score";
-import { answeredCount, buildAnswerScales } from "./questions";
+import { TRANSFORMATION_STAGE_ORDER, answeredCount, buildAnswerScales } from "./questions";
 import { DEFAULT_QUESTIONS, type QuestionSetting } from "./settings";
 
 // ---------------------------------------------------------------------------
@@ -127,6 +127,25 @@ describe("scorePair", () => {
         expect(far.score).toBe(0);
         expect(explainMatch(same.shared)).toBe("Same company size.");
         expect(explainMatch(near.shared)).toBe("Similar company size.");
+    });
+});
+
+describe("transformation stage", () => {
+    test("uses the form's stages in order, so neighbouring stages count as similar", () => {
+        expect(TRANSFORMATION_STAGE_ORDER).toEqual([
+            "No active initiatives",
+            "Early planning",
+            "Piloting in key areas",
+            "Scaling across functions",
+            "Embedded in core operations",
+        ]);
+        const on: QuestionSetting[] = [{ id: "transformation_stage", enabled: true }];
+        const scales = buildAnswerScales([]);
+        const piloting = profile({ transformationStage: "Piloting in key areas" });
+        const scaling = profile({ transformationStage: "Scaling across functions" });
+        const embedded = profile({ transformationStage: "Embedded in core operations" });
+        expect(scorePair(piloting, scaling, on, scales).score).toBe(50);
+        expect(scorePair(piloting, embedded, on, scales).score).toBe(0);
     });
 });
 

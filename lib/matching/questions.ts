@@ -66,7 +66,7 @@ function one(value: string | null): string[] {
 }
 
 /**
- * The transformation stages, from least to most advanced.
+ * The transformation stages, from least to most advanced, exactly as the Networking Profile form words them.
  * The form's stage names carry no numbers, so their order is listed here.
  * A stage missing from this list only matches the same stage.
  */
@@ -74,7 +74,7 @@ export const TRANSFORMATION_STAGE_ORDER = [
     "No active initiatives",
     "Early planning",
     "Piloting in key areas",
-    "Scaling up",
+    "Scaling across functions",
     "Embedded in core operations",
 ];
 

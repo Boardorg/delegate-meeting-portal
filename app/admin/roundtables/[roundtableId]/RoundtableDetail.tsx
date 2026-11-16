@@ -152,7 +152,10 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
             <div className="adm-card">
                 <div className="adm-card-head">
                     <div>
-                        <div className="adm-card-title">{table.themeTitle || table.location}</div>
+                        <div className="adm-card-title-row">
+                            <div className="adm-card-title">{table.themeTitle || table.location}</div>
+                            <SyncChip status={table.syncStatus} />
+                        </div>
                         <div className="adm-card-sub">
                             {table.location} · {fmtWeekday(table.startTime, detail.timezone)}{" "}
                             {fmtTime(table.startTime, detail.timezone)}
@@ -160,7 +163,6 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
                         <div className="adm-card-sub">{table.summary}</div>
                     </div>
                     <div className="adm-card-row">
-                        <SyncChip status={table.syncStatus} />
                         {table.syncStatus !== "synced" && (
                             <button
                                 type="button"

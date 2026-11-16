@@ -773,6 +773,13 @@
     font-weight: 700;
     letter-spacing: -0.02em;
 }
+/* A card title with a status chip beside it. */
+.adm-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
 .adm-card-sub {
     font-size: 13px;
     color: var(--t2);

@@ -388,7 +388,10 @@ export async function getSlotOptions(params: {
     const { timeslots, locationById } = scheduleData;
     // Stored meetings' slots, for their busy time and the current slot.
     // A pushed meeting whose time Cvent no longer lists gets its slot from its Cvent appointment.
-    const timeslotById = await loadStoredSlots(params.eventCode, scheduleData, [meeting, ...otherMeetings]);
+    // Only the two parties' meetings are sent, so Cvent's appointment list is read only when one of theirs needs it.
+    const parties = [meeting.attendeeA, meeting.attendeeB];
+    const partyMeetings = otherMeetings.filter((m) => parties.includes(m.attendeeA) || parties.includes(m.attendeeB));
+    const timeslotById = await loadStoredSlots(params.eventCode, scheduleData, [meeting, ...partyMeetings]);
 
     // The company is always the A side of a sponsor meeting.
     const booth = await boothFilterForSponsor(
@@ -712,7 +715,10 @@ export async function getNewMeetingSlots(params: {
     const { timeslots, locationById } = scheduleData;
     // Stored meetings' slots, for their busy time.
     // A pushed meeting whose time Cvent no longer lists gets its slot from its Cvent appointment.
-    const timeslotById = await loadStoredSlots(params.eventCode, scheduleData, allMeetings);
+    // Only the two parties' meetings are sent, so Cvent's appointment list is read only when one of theirs needs it.
+    const parties = [params.sponsorId, params.delegateId];
+    const partyMeetings = allMeetings.filter((m) => parties.includes(m.attendeeA) || parties.includes(m.attendeeB));
+    const timeslotById = await loadStoredSlots(params.eventCode, scheduleData, partyMeetings);
     const bookedSponsor = bookedIntervals(
         allMeetings,
         params.sponsorId,

@@ -49,9 +49,12 @@ vi.mock("@/lib/cvent/client", () => ({
     getEventAppointments: (...a: unknown[]) => getEventAppointments(...a),
     cancelAppointment: vi.fn(),
 }));
+// loadStoredSlots runs the real slot rebuild against the mocked appointment list, so the run's wiring is tested.
+const loadStoredSlots = vi.fn();
 vi.mock("@/lib/cvent/push", () => ({
     pushMeetingRows: vi.fn(async () => ({ total: 0, pushed: 0, failed: 0, results: [] })),
     needsSync: vi.fn(() => true),
+    loadStoredSlots: (...a: unknown[]) => loadStoredSlots(...a),
 }));
 // No manual booth mapping by default, so each sponsor's booth is matched by location name.
 const getEventSettings = vi.fn();
@@ -68,6 +71,7 @@ import {
     unpushAllForEvent,
 } from "./actions";
 import { BOOTH_MAPPING_UNAVAILABLE_MESSAGE } from "@/lib/scheduling/boothData";
+import { storedSlotMap, type SlotSources, type StoredSlotRow } from "@/lib/cvent/storedSlots";
 import { NO_ATTENDEES_MESSAGE } from "@/lib/scheduling/helpers";
 import { meetingRequests, roundtableSeats, roundtables } from "@/lib/db/schema";
 import {
@@ -103,11 +107,11 @@ function roundtableSeatsTable(): unknown {
 }
 
 // The event's roundtables and their seats. None by default.
-let ROUNDTABLES: { id: string; timeslotId: string }[] = [];
+let ROUNDTABLES: { id: string; timeslotId: string; cventAppointmentId?: string | null; locationId?: string | null }[] = [];
 let SEATS: { roundtableId: string; delegateId: string; role: "seated" | "alternate" }[] = [];
 
 // Meetings already pushed to Cvent, as scheduled_meetings rows. None by default.
-let PUSHED: { attendeeA: string; attendeeB: string; timeslotId: string; cventAppointmentId: string }[] = [];
+let PUSHED: { kind?: string; attendeeA: string; attendeeB: string; timeslotId: string; cventAppointmentId: string; locationId?: string | null; lastPushedAt?: Date | null; lastModifiedAt?: Date | null }[] = [];
 
 // One sponsor request from Acme to Dee by default.
 const ONE_REQUEST = [
@@ -218,6 +222,9 @@ beforeEach(() => {
     dbInsert.mockReturnValue({ values: insertValues });
     getEventSettings.mockResolvedValue({ boothLocations: null });
     getEventAppointments.mockResolvedValue([]);
+    loadStoredSlots.mockImplementation(async (eventCode: string, data: SlotSources, rows: StoredSlotRow[]) =>
+        storedSlotMap(data, rows, await getEventAppointments(eventCode).catch(() => null)),
+    );
     PUSHED = [];
     ROUNDTABLES = [];
     SEATS = [];
@@ -570,6 +577,63 @@ describe("runSchedulerForEvent: D2D meetings and roundtables", () => {
         expect(result.ok).toBe(true);
         const inserted = insertValues.mock.calls[0][0] as { timeslotId: string }[];
         expect(inserted.map((m) => m.timeslotId)).toEqual(["ts-a"]);
+    });
+
+    test("fix 5: a seat at a pushed table whose booked slot Cvent no longer lists still keeps the delegate busy", async () => {
+        // The table's 10:00 slot is full, so Cvent's list dropped it. Its appointment still has the time.
+        // Dee isn't linked in Cvent, so only the seat, not the appointment, makes her busy.
+        scheduleWith(KINDS, [
+            slot("ts-b", "2026-01-20T10:00:00.000Z", "t-s2d", KINDS),
+            slot("ts-a", "2026-01-20T09:00:00.000Z", "t-s2d", KINDS),
+        ]);
+        ROUNDTABLES = [{ id: "rt-1", timeslotId: "ts-group-booked", cventAppointmentId: "appt-rt", locationId: "loc-1" }];
+        SEATS = [{ roundtableId: "rt-1", delegateId: "d1", role: "seated" }];
+        getEventAppointments.mockResolvedValue([
+            {
+                id: "appt-rt",
+                startTime: "2026-01-20T10:00:00.000Z",
+                endTime: "2026-01-20T10:40:00.000Z",
+                participantContactIds: ["c-someone"],
+                hostContactIds: ["c-someone"],
+                locationName: "Booth 1",
+                locationId: null,
+                typeName: "Delegate Group Meetings",
+                typeId: null,
+            },
+        ]);
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        const inserted = insertValues.mock.calls[0][0] as { timeslotId: string }[];
+        expect(inserted.map((m) => m.timeslotId)).toEqual(["ts-a"]);
+        // Fix 4: the run reads stored slots through loadStoredSlots, which reads Cvent only when a slot is missing.
+        expect(loadStoredSlots).toHaveBeenCalledTimes(1);
+    });
+
+    test("fix 5: a synced pushed D2D meeting in a booked slot Cvent no longer lists keeps both delegates busy", async () => {
+        scheduleWith(KINDS, [slot("ts-b", "2026-01-20T10:00:00.000Z", "t-s2d", KINDS)]);
+        PUSHED = [{ kind: "delegate_delegate", attendeeA: "d1", attendeeB: "d2", timeslotId: "ts-d2d-booked", cventAppointmentId: "appt-d2d", locationId: "loc-1", lastPushedAt: new Date(0), lastModifiedAt: null }];
+        getEventAppointments.mockResolvedValue([
+            {
+                id: "appt-d2d",
+                startTime: "2026-01-20T10:00:00.000Z",
+                endTime: "2026-01-20T10:20:00.000Z",
+                participantContactIds: [],
+                hostContactIds: [],
+                locationName: "Booth 1",
+                locationId: null,
+                typeName: "Sponsor to Delegate Meetings",
+                typeId: null,
+            },
+        ]);
+
+        const result = await runSchedulerForEvent("EVT");
+
+        expect(result.ok).toBe(true);
+        // The only sponsor slot is at Dee's D2D time, so nothing is booked for her.
+        const inserted = (insertValues.mock.calls[0]?.[0] ?? []) as { timeslotId: string }[];
+        expect(inserted).toEqual([]);
     });
 
     test("an alternate isn't busy at the table's time", async () => {

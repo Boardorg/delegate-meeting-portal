@@ -14,9 +14,8 @@ import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { getEventAppointments } from "@/lib/cvent/client";
 import { unpushMeetingRows } from "@/lib/cvent/unpush";
-import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
+import { pushMeetingRows, needsSync, loadStoredSlots } from "@/lib/cvent/push";
 import { preexistingFromAppointments } from "@/lib/cvent/preexisting";
-import { storedSlotMap } from "@/lib/cvent/storedSlots";
 import { countAppointmentsNotInPortal } from "@/lib/cvent/cventOnly";
 import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import {
@@ -442,11 +441,12 @@ export async function runSchedulerForEvent(
 
     // Stored meetings' and roundtables' slots, for their busy time and the reconciliation below.
     // A pushed row whose time Cvent no longer lists gets its slot from its Cvent appointment.
-    const slotById = storedSlotMap(
-        scheduleData,
-        [...pushedRows, ...unpushedD2D, ...roundtableRows],
-        await getEventAppointments(eventCode).catch(() => null),
-    );
+    // Cvent's appointment list is only read when a slot is missing, and a failed read is logged.
+    const slotById = await loadStoredSlots(eventCode, scheduleData, [
+        ...pushedRows,
+        ...unpushedD2D,
+        ...roundtableRows,
+    ]);
 
     // Existing meetings count toward each company's maximum before the run books anything.
     // Cvent's appointment list already includes pushed meetings, so the two counts overlap.

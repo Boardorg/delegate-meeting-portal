@@ -94,6 +94,7 @@ import {
     pushMeeting,
     removeMeeting,
 } from "./actions";
+import { loadStoredSlots } from "@/lib/cvent/push";
 
 /**
  * Builds a sponsor rep.
@@ -295,6 +296,45 @@ describe("Edit and Create Meeting slots — booths", () => {
         const { options } = await getSlotOptions({ meetingId: "m1", eventCode: "NALES" });
 
         expect(options.map((o) => o.timeslotId)).not.toContain("b2-09");
+    });
+
+    test("Create leaves out a time the delegate is booked at in a slot Cvent no longer lists, reading only the two parties' meetings", async () => {
+        // d1 has a pushed meeting with another sponsor at 10:00, in a full slot Cvent dropped from its list.
+        const booked = { ...lakesideMeeting("x-10", "bx"), id: "m-other", attendeeA: "acct-21m", cventAppointmentId: "appt-x", lastPushedAt: new Date(0) };
+        const unrelated = { ...lakesideMeeting("b2-09", "b2"), id: "m-unrelated", attendeeA: "acct-21m", attendeeB: "d9" };
+        rows = [booked, unrelated];
+        vi.mocked(loadStoredSlots).mockImplementationOnce(async (_eventCode, data) => {
+            const map = new Map(data.timeslotById);
+            map.set("x-10", slot("x-10", "2026-11-10T10:00:00.000Z", "bx"));
+            return map;
+        });
+
+        const { options } = await getNewMeetingSlots({ sponsorId: "acct-lake", delegateId: "d1", eventCode: "NALES" });
+
+        expect(options.map((o) => o.timeslotId)).not.toContain("b3-10");
+        expect(options.map((o) => o.timeslotId)).toContain("b3-11");
+        // Fix 4: only rows of the sponsor or the delegate are sent, so the appointment list is read only when they need it.
+        expect(vi.mocked(loadStoredSlots).mock.calls[0][2]).toEqual([booked]);
+    });
+
+    test("Edit leaves out a time either party is booked at in a slot Cvent no longer lists, reading only the two parties' meetings", async () => {
+        const booked = { ...lakesideMeeting("x-11", "bx"), id: "m-other", attendeeA: "acct-21m", cventAppointmentId: "appt-x", lastPushedAt: new Date(0) };
+        const unrelated = { ...lakesideMeeting("b2-09", "b2"), id: "m-unrelated", attendeeA: "acct-21m", attendeeB: "d9" };
+        const editing = lakesideMeeting("b3-10", "b3");
+        // Every select returns these rows, so the meeting being edited is found first.
+        rows = [editing, booked, unrelated];
+        vi.mocked(loadStoredSlots).mockImplementationOnce(async (_eventCode, data) => {
+            const map = new Map(data.timeslotById);
+            map.set("x-11", slot("x-11", "2026-11-10T11:00:00.000Z", "bx"));
+            return map;
+        });
+
+        const { options } = await getSlotOptions({ meetingId: "m1", eventCode: "NALES" });
+
+        expect(options.map((o) => o.timeslotId)).not.toContain("b3-11");
+        const sent = vi.mocked(loadStoredSlots).mock.calls[0][2].map((r) => (r as unknown as { id: string }).id);
+        expect(sent).not.toContain("m-unrelated");
+        expect(sent).toContain("m-other");
     });
 
     test("a manual mapping moves the sponsor's own booth", async () => {

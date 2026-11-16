@@ -6,10 +6,16 @@ import { useRouter } from "next/navigation";
 import { fmtTime, fmtWeekday } from "@/lib/format";
 import { StatChip } from "../../meetings/_components/StatChip";
 import { ConfirmModal } from "../../meetings/_components/ConfirmModal";
+import { SyncChip } from "../../meetings/_components/MeetingChips";
+import SyncReportPanel from "../../meetings/SyncReportPanel";
+import { DEFAULT_ROUNDTABLE_DESCRIPTION } from "@/lib/matching/roundtables";
+import type { SyncReport } from "@/lib/cvent/syncReport";
 import {
     moveDelegate,
+    pushRoundtable,
     saveRoundtableText,
     swapAlternate,
+    unpushRoundtable,
     type MoveResult,
     type MoveTarget,
     type RoundtableDetail,
@@ -20,10 +26,11 @@ import {
 // RoundtableDetail: one roundtable, for /admin/roundtables/[roundtableId].
 //
 // Mirrors MeetingDetail on a sponsor's page.
-// Admins type the theme title and discussion prompt, and move delegates between tables,
+// Admins type the theme title, edit the description, and move delegates between tables,
 // alternates and the unassigned list. A move that breaks a rule is refused with a message.
 // A move with warnings shows them and only saves once the admin confirms.
-// Pushing roundtables to Cvent comes next, so there are no Push buttons yet.
+// The description is exactly what Cvent gets. "Reset to default" puts the host note back.
+// Push and Unpush work as on a sponsor's page.
 // ---------------------------------------------------------------------------
 
 /** A move waiting for the admin to confirm its warnings. */
@@ -39,9 +46,13 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
     const router = useRouter();
     const { table } = detail;
     const [theme, setTheme] = useState(table.themeTitle);
-    const [prompt, setPrompt] = useState(table.description);
+    const [description, setDescription] = useState(table.description);
     const [message, setMessage] = useState<{ tone: "error" | "ok"; text: string } | null>(null);
     const [pending, setPending] = useState<PendingMove | null>(null);
+    const [pushResult, setPushResult] = useState<SyncReport | null>(null);
+    const [confirmUnpush, setConfirmUnpush] = useState(false);
+    const [unpushError, setUnpushError] = useState<string | null>(null);
+    const textChanged = theme !== table.themeTitle || description !== table.description;
     const [isPending, startTransition] = useTransition();
 
     /**
@@ -98,12 +109,35 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
         );
     }
 
-    /** Saves the theme title and discussion prompt. */
+    /** Saves the theme title and description. */
     function saveText() {
         startTransition(async () => {
-            const result = await saveRoundtableText({ roundtableId: table.id, themeTitle: theme, description: prompt });
+            const result = await saveRoundtableText({ roundtableId: table.id, themeTitle: theme, description });
             setMessage(result.ok ? { tone: "ok", text: "Saved." } : { tone: "error", text: result.error });
             if (result.ok) router.refresh();
+        });
+    }
+
+    /** Pushes this table to Cvent and shows the sync report. */
+    function handlePush() {
+        startTransition(async () => {
+            setMessage(null);
+            setPushResult(await pushRoundtable({ roundtableId: table.id, eventCode }));
+            router.refresh();
+        });
+    }
+
+    /** Cancels this table's Cvent appointment, keeping the table. */
+    function handleUnpush() {
+        startTransition(async () => {
+            setUnpushError(null);
+            const result = await unpushRoundtable({ roundtableId: table.id, eventCode });
+            if (!result.ok) {
+                setUnpushError(result.error);
+                return;
+            }
+            setConfirmUnpush(false);
+            router.refresh();
         });
     }
 
@@ -124,6 +158,33 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
                             {fmtTime(table.startTime, detail.timezone)}
                         </div>
                         <div className="adm-card-sub">{table.summary}</div>
+                    </div>
+                    <div className="adm-card-row">
+                        <SyncChip status={table.syncStatus} />
+                        {table.syncStatus !== "synced" && (
+                            <button
+                                type="button"
+                                className="adm-new-btn adm-new-btn-primary"
+                                disabled={isPending || textChanged}
+                                title={textChanged ? "Save the theme first." : undefined}
+                                onClick={handlePush}
+                            >
+                                {isPending ? "Working…" : "Push to Cvent"}
+                            </button>
+                        )}
+                        {table.syncStatus !== "not_pushed" && (
+                            <button
+                                type="button"
+                                className="adm-new-btn adm-new-btn-danger"
+                                disabled={isPending}
+                                onClick={() => {
+                                    setUnpushError(null);
+                                    setConfirmUnpush(true);
+                                }}
+                            >
+                                Unpush
+                            </button>
+                        )}
                     </div>
                 </div>
                 <div className="adm-card-row">
@@ -155,35 +216,53 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
                         placeholder="Shown as the appointment's title in Cvent"
                     />
                 </label>
-                <label className="adm-field adm-field-mb-lg">
-                    <span className="adm-field-label">Discussion Prompt (optional)</span>
+                <label className="adm-field">
+                    <span className="adm-field-label">Description</span>
                     <textarea
                         className="adm-input"
-                        rows={3}
-                        value={prompt}
+                        rows={4}
+                        value={description}
                         maxLength={2000}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Shown as the appointment's message in Cvent"
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Shown as the appointment's message in Cvent. Left empty, Cvent gets an empty message."
                     />
                 </label>
+                <div className="adm-field-mb-lg">
+                    <button
+                        type="button"
+                        className="adm-link-btn"
+                        disabled={isPending || description === DEFAULT_ROUNDTABLE_DESCRIPTION}
+                        onClick={() => setDescription(DEFAULT_ROUNDTABLE_DESCRIPTION)}
+                    >
+                        Reset to default
+                    </button>
+                </div>
                 <div className="adm-card-row">
                     <button
                         type="button"
                         className="adm-new-btn adm-new-btn-primary"
-                        disabled={isPending || (theme === table.themeTitle && prompt === table.description)}
+                        disabled={isPending || !textChanged}
                         onClick={saveText}
                     >
                         {isPending ? "Saving…" : "Save Theme"}
                     </button>
-                    <span className="adm-help-note">Pushing roundtables to Cvent comes next.</span>
+                    <span className="adm-help-note">
+                        The theme title is the appointment&apos;s title in Cvent, and a table can&apos;t be pushed
+                        without one. Saving a pushed table marks it Modified until it is pushed again.
+                    </span>
                 </div>
             </div>
 
             {message && (
                 <div className={message.tone === "error" ? "adm-modal-error" : "adm-help-note"}>{message.text}</div>
             )}
+            {pushResult && <SyncReportPanel report={pushResult} onDismiss={() => setPushResult(null)} />}
 
             <div className="adm-chart-title">Seated ({detail.seated.length})</div>
+            <p className="adm-help-note">
+                The seated delegate with the lowest Salesforce id hosts the table in Cvent. Hosting is a Cvent
+                requirement only, since roundtables are unmoderated.
+            </p>
             <SeatTable
                 rows={detail.seated}
                 empty="No one is seated yet."
@@ -284,6 +363,24 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
                 </table>
             )}
 
+            {confirmUnpush && (
+                <ConfirmModal
+                    title="Unpush This Roundtable?"
+                    confirmLabel="Unpush"
+                    pendingLabel="Unpushing…"
+                    tone="danger"
+                    isPending={isPending}
+                    error={unpushError}
+                    onConfirm={handleUnpush}
+                    onCancel={() => setConfirmUnpush(false)}
+                >
+                    <p className="adm-modal-body">
+                        This cancels the table&apos;s appointment in Cvent. The table keeps its seats, theme and
+                        description but returns to un-synced.
+                    </p>
+                </ConfirmModal>
+            )}
+
             {pending && (
                 <ConfirmModal
                     title="Save This Move?"
@@ -337,6 +434,11 @@ function SeatTable({
                         <td>
                             <div className="adm-party-name">{r.name}</div>
                             {r.title && <div className="adm-text-sm-muted">{r.title}</div>}
+                            {r.host && (
+                                <div className="adm-chip-mt">
+                                    <span className="adm-chip adm-chip-synced">Cvent host</span>
+                                </div>
+                            )}
                         </td>
                         <td>{r.company || "—"}</td>
                         <td>

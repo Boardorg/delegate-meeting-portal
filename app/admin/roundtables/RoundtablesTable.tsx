@@ -6,12 +6,17 @@ import { fmtTime, fmtWeekday } from "@/lib/format";
 import type { RoundtableReport } from "@/lib/matching/roundtableReport";
 import { ConfirmModal } from "../meetings/_components/ConfirmModal";
 import { ProgressCell } from "../meetings/_components/ProgressCell";
+import { SyncChip } from "../meetings/_components/MeetingChips";
+import SyncReportPanel from "../meetings/SyncReportPanel";
 import MaintenanceReportPanel from "../meetings/MaintenanceReportPanel";
+import type { SyncReport } from "@/lib/cvent/syncReport";
 import type { MaintenanceReport } from "../meetings/actions";
 import RoundtableReportPanel from "./RoundtableReportPanel";
 import {
     clearUnsyncedRoundtablesForEvent,
+    pushAllRoundtablesForEvent,
     runRoundtablesForEvent,
+    unpushAllRoundtablesForEvent,
     type RoundtablesOverview,
 } from "./actions";
 
@@ -20,7 +25,7 @@ import {
 //
 // Mirrors SponsorsTable on the Sponsor Meetings page: the same header buttons and confirmations
 // and the same report panels. Clicking a table opens it.
-// Pushing roundtables to Cvent comes next, so Push All and Unpush All are shown disabled.
+// Push All refuses a table with no theme title, and the sync report says which ones.
 // ---------------------------------------------------------------------------
 
 type Props = {
@@ -30,8 +35,8 @@ type Props = {
     timezone: string;
 };
 
-/** The note on the disabled push buttons. */
-const PUSH_LATER_NOTE = "Pushing roundtables to Cvent comes next.";
+/** Which confirmation is open. */
+type OpenModal = "run" | "push" | "clear" | "unpush" | null;
 
 /**
  * Renders the Roundtables list, its header buttons, the unassigned list and the tables found in Cvent.
@@ -41,9 +46,10 @@ const PUSH_LATER_NOTE = "Pushing roundtables to Cvent comes next.";
  */
 export default function RoundtablesTable({ selectedEvent, data, timezone }: Props) {
     const router = useRouter();
-    const [openModal, setOpenModal] = useState<"run" | "clear" | null>(null);
+    const [openModal, setOpenModal] = useState<OpenModal>(null);
     const [modalError, setModalError] = useState<string | null>(null);
     const [report, setReport] = useState<RoundtableReport | null>(null);
+    const [syncReport, setSyncReport] = useState<SyncReport | null>(null);
     const [maintenanceReport, setMaintenanceReport] = useState<MaintenanceReport | null>(null);
     const [isPending, startTransition] = useTransition();
 
@@ -82,6 +88,47 @@ export default function RoundtablesTable({ selectedEvent, data, timezone }: Prop
         });
     }
 
+    /**
+     * Runs a header action, closes its confirmation and refreshes the list.
+     * A thrown error stays in the confirmation.
+     *
+     * @param {() => Promise<void>} action - The work to do.
+     */
+    function run(action: () => Promise<void>) {
+        startTransition(async () => {
+            try {
+                setModalError(null);
+                await action();
+                setOpenModal(null);
+                router.refresh();
+            } catch (e) {
+                setModalError(e instanceof Error ? e.message : "An unexpected error occurred.");
+            }
+        });
+    }
+
+    /** Pushes every roundtable that is not pushed or was changed since its last push. */
+    function handlePushAll() {
+        if (!selectedEvent) return;
+        run(async () => setSyncReport(await pushAllRoundtablesForEvent(selectedEvent)));
+    }
+
+    /** Cancels every synced roundtable in Cvent, keeping the tables. */
+    function handleUnpush() {
+        if (!selectedEvent) return;
+        run(async () => setMaintenanceReport(await unpushAllRoundtablesForEvent(selectedEvent)));
+    }
+
+    /**
+     * Opens a confirmation with no error showing.
+     *
+     * @param {OpenModal} which - The confirmation to open.
+     */
+    function open(which: OpenModal) {
+        setModalError(null);
+        setOpenModal(which);
+    }
+
     const missing = data.cventTables.filter((t) => !t.hasRoundtable).length;
 
     return (
@@ -101,8 +148,12 @@ export default function RoundtablesTable({ selectedEvent, data, timezone }: Prop
                 >
                     {isPending ? "Running…" : "Run Roundtable Grouping"}
                 </button>
-                <button className="adm-new-btn adm-new-btn-primary" disabled title={PUSH_LATER_NOTE}>
-                    Push All to Cvent
+                <button
+                    className="adm-new-btn adm-new-btn-primary"
+                    disabled={!selectedEvent || isPending}
+                    onClick={() => open("push")}
+                >
+                    {isPending ? "Working…" : "Push All to Cvent"}
                 </button>
                 <button
                     className="adm-new-btn adm-new-btn-danger"
@@ -114,11 +165,14 @@ export default function RoundtablesTable({ selectedEvent, data, timezone }: Prop
                 >
                     {isPending ? "Working…" : "Clear All Unsynced"}
                 </button>
-                <button className="adm-new-btn adm-new-btn-danger-solid" disabled title={PUSH_LATER_NOTE}>
-                    Unpush All Synced
+                <button
+                    className="adm-new-btn adm-new-btn-danger-solid"
+                    disabled={!selectedEvent || isPending}
+                    onClick={() => open("unpush")}
+                >
+                    {isPending ? "Working…" : "Unpush All Synced"}
                 </button>
             </div>
-            <p className="adm-help-note">{PUSH_LATER_NOTE}</p>
 
             {openModal === "run" && selectedEvent && (
                 <ConfirmModal
@@ -143,6 +197,43 @@ export default function RoundtablesTable({ selectedEvent, data, timezone }: Prop
                 </ConfirmModal>
             )}
 
+            {openModal === "push" && selectedEvent && (
+                <ConfirmModal
+                    title="Push All to Cvent?"
+                    confirmLabel="Push All"
+                    pendingLabel="Pushing…"
+                    isPending={isPending}
+                    error={modalError}
+                    onConfirm={handlePushAll}
+                    onCancel={() => setOpenModal(null)}
+                >
+                    <p className="adm-modal-body">
+                        This will push all un-synced roundtables for <strong>{selectedEvent}</strong> to Cvent,
+                        including tables that have been modified since their last push. Tables already in Cvent
+                        are updated in place. A table with no theme title isn&apos;t pushed.
+                    </p>
+                </ConfirmModal>
+            )}
+
+            {openModal === "unpush" && selectedEvent && (
+                <ConfirmModal
+                    title="Unpush All Synced Roundtables?"
+                    confirmLabel="Unpush All"
+                    pendingLabel="Unpushing…"
+                    tone="danger"
+                    isPending={isPending}
+                    error={modalError}
+                    onConfirm={handleUnpush}
+                    onCancel={() => setOpenModal(null)}
+                >
+                    <p className="adm-modal-body">
+                        This cancels the Cvent appointment behind every synced roundtable for{" "}
+                        <strong>{selectedEvent}</strong>. The tables keep their seats, themes and descriptions
+                        but return to un-synced. This cannot be undone.
+                    </p>
+                </ConfirmModal>
+            )}
+
             {openModal === "clear" && selectedEvent && (
                 <ConfirmModal
                     title="Clear All Unsynced Roundtables?"
@@ -162,6 +253,7 @@ export default function RoundtablesTable({ selectedEvent, data, timezone }: Prop
             )}
 
             {report && <RoundtableReportPanel report={report} timezone={timezone} onDismiss={() => setReport(null)} />}
+            {syncReport && <SyncReportPanel report={syncReport} onDismiss={() => setSyncReport(null)} />}
             {maintenanceReport && (
                 <MaintenanceReportPanel report={maintenanceReport} onDismiss={() => setMaintenanceReport(null)} />
             )}
@@ -182,12 +274,13 @@ export default function RoundtablesTable({ selectedEvent, data, timezone }: Prop
                         <th>Theme Title</th>
                         <th>Seats</th>
                         <th>What They Share</th>
+                        <th>Cvent Sync</th>
                     </tr>
                 </thead>
                 <tbody>
                     {data.rows.length === 0 ? (
                         <tr>
-                            <td colSpan={5} className="adm-empty">
+                            <td colSpan={6} className="adm-empty">
                                 {!selectedEvent
                                     ? "No events found."
                                     : data.cventTables.length === 0
@@ -224,6 +317,9 @@ export default function RoundtablesTable({ selectedEvent, data, timezone }: Prop
                                 </td>
                                 <td>
                                     <span className="adm-text-sm-muted">{r.summary}</span>
+                                </td>
+                                <td>
+                                    <SyncChip status={r.syncStatus} />
                                 </td>
                             </tr>
                         ))

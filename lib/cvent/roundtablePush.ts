@@ -13,12 +13,14 @@ import {
     existingAppointmentLookup,
     hostBusyElsewhereLookup,
     sendAppointment,
+    storedSlotsForPush,
     type PushResult,
     type PushSummary,
     type SavePush,
 } from "@/lib/cvent/push";
 import { unpushAppointments, type UnpushOutcome } from "@/lib/cvent/unpush";
 import { roundtableHostId } from "@/lib/matching/roundtables";
+import { missingSlotMessage } from "@/lib/cvent/storedSlots";
 
 // ---------------------------------------------------------------------------
 // Pushing roundtables to Cvent.
@@ -88,6 +90,8 @@ export async function pushRoundtableRows(
     const hostBusyElsewhere = await hostBusyElsewhereLookup(eventCode);
     // Existing appointments' times and types, read from Cvent only if a re-push collides with its old appointment.
     const existingAppointmentOf = existingAppointmentLookup(eventCode);
+    // Each table's slot, rebuilt from its Cvent appointment when Cvent no longer lists the time.
+    const slotById = await storedSlotsForPush(eventCode, scheduleData, rows);
     /**
      * Names a roundtable by its theme and location.
      *
@@ -140,9 +144,10 @@ export async function pushRoundtableRows(
             continue;
         }
 
-        const timeslot = scheduleData.timeslotById.get(row.timeslotId);
+        // A pushed table whose time is no longer listed gets it from its Cvent appointment.
+        const timeslot = slotById.get(row.timeslotId);
         if (!timeslot) {
-            results.push(fail("missing_timeslot", `No Cvent timeslot found for id ${row.timeslotId}.`));
+            results.push(fail("missing_timeslot", missingSlotMessage("roundtable", row.timeslotId)));
             continue;
         }
         // Cvent fails a create without a location, even for a real slot.

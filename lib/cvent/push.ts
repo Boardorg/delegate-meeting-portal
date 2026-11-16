@@ -23,6 +23,12 @@ import {
     type CventExistingAppointment,
 } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
+import {
+    missingSlotMessage,
+    storedSlotMap,
+    type SlotSources,
+    type StoredSlotRow,
+} from "@/lib/cvent/storedSlots";
 import type { CventAppointmentInput } from "@/lib/cvent/client";
 import type { MeetingKind } from "@/lib/events/meetingKinds";
 import type { Timeslot } from "@/types";
@@ -270,6 +276,37 @@ export async function hostBusyElsewhereLookup(
 }
 
 /**
+ * Builds the slot lookup for stored rows being pushed, with each missing slot rebuilt from the row's Cvent appointment.
+ * Cvent's available-times list drops a booked time at a location that allows one appointment at a time.
+ * When the appointment list can't be read, only the listed slots are used, and the failure is logged.
+ *
+ * @param {string} eventCode - The event the rows belong to.
+ * @param {SlotSources} scheduleData - The event's schedule data.
+ * @param {StoredSlotRow[]} rows - The stored rows whose slots are read.
+ * @returns {Promise<Map<string, Timeslot>>} Slots by id, listed and rebuilt.
+ */
+export async function storedSlotsForPush(
+    eventCode: string,
+    scheduleData: SlotSources,
+    rows: StoredSlotRow[],
+): Promise<Map<string, Timeslot>> {
+    // Only rows whose slot isn't listed need the appointment list.
+    if (rows.every((r) => scheduleData.timeslotById.has(r.timeslotId) || !r.cventAppointmentId)) {
+        return scheduleData.timeslotById;
+    }
+    let appointments: CventExistingAppointment[] | null = null;
+    try {
+        appointments = await getEventAppointments(eventCode);
+    } catch (err) {
+        console.warn(
+            `storedSlotsForPush: could not list Cvent appointments for "${eventCode}" to find booked slots. ` +
+                `${err instanceof Error ? err.message : String(err)}`,
+        );
+    }
+    return storedSlotMap(scheduleData, rows, appointments);
+}
+
+/**
  * Whether an existing appointment starts at the same moment as a slot.
  * Both are parsed to timestamps, so differently formatted ISO strings still compare correctly.
  * An unknown or unparseable time never matches.
@@ -411,6 +448,10 @@ export async function pushMeetingRows(
     // Existing appointments' times and types, read from Cvent only if an in-place update needs one.
     const existingAppointmentOf = existingAppointmentLookup(eventCode);
 
+    // Each meeting's slot, rebuilt from its Cvent appointment when Cvent no longer lists the time.
+    // The company's other meetings are included, so the rep split still sees them at their time.
+    const slotById = await storedSlotsForPush(eventCode, scheduleData, [...rows, ...companyMeetings]);
+
     const results: PushResult[] = [];
     for (const row of rows) {
         // attendeeA is the requesting COMPANY (party id = Account id); every one
@@ -427,7 +468,8 @@ export async function pushMeetingRows(
         const kind = oldAppointmentId ? "update" : "create";
 
         // A meeting can't be pushed without a resolvable time block.
-        const timeslot = scheduleData.timeslotById.get(row.timeslotId);
+        // A pushed meeting whose time is no longer listed gets it from its Cvent appointment.
+        const timeslot = slotById.get(row.timeslotId);
         if (!timeslot) {
             results.push({
                 meetingId: row.id,
@@ -435,7 +477,7 @@ export async function pushMeetingRows(
                 ok: false,
                 kind,
                 reason: "missing_timeslot",
-                error: `No Cvent timeslot found for id ${row.timeslotId}.`,
+                error: missingSlotMessage("meeting", row.timeslotId),
             });
             continue;
         }
@@ -510,7 +552,7 @@ export async function pushMeetingRows(
         const meetingIdsAtTime = sameTimeMeetingIds(
             row,
             companyMeetings,
-            scheduleData.timeslotById,
+            slotById,
             busyHostsAt
                 ? (m) => !m.cventAppointmentId || batchIds.has(m.id)
                 : undefined,
@@ -664,6 +706,8 @@ export async function pushDelegateMeetingRows(
     );
     const busyHostsAt = await busyHostLookup(eventCode, replacedAppointmentIds);
     const existingAppointmentOf = existingAppointmentLookup(eventCode);
+    // Each meeting's slot, rebuilt from its Cvent appointment when Cvent no longer lists the time.
+    const slotById = await storedSlotsForPush(eventCode, scheduleData, rows);
 
     const results: PushResult[] = [];
     for (const row of rows) {
@@ -687,9 +731,10 @@ export async function pushDelegateMeetingRows(
             error,
         });
 
-        const timeslot = scheduleData.timeslotById.get(row.timeslotId);
+        // A pushed meeting whose time is no longer listed gets it from its Cvent appointment.
+        const timeslot = slotById.get(row.timeslotId);
         if (!timeslot) {
-            results.push(fail("missing_timeslot", `No Cvent timeslot found for id ${row.timeslotId}.`));
+            results.push(fail("missing_timeslot", missingSlotMessage("meeting", row.timeslotId)));
             continue;
         }
         if (!row.locationId) {

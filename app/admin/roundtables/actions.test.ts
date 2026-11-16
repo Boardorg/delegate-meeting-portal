@@ -170,6 +170,7 @@ describe("runRoundtablesForEvent", () => {
                 { id: 1, eventCode: "EVT", roundtableId: "rt-pushed", delegateId: "d1", role: "seated", position: 1, reason: null, score: null, createdAt: new Date(0) },
             ],
             appointments: [],
+            slotById: new Map(slots.map((s) => [s.id, s])),
             cventOnly: [],
             counts: new Map(),
         };

@@ -165,6 +165,7 @@ function context(
             createdAt: new Date(0),
         })),
         appointments: [],
+        slotById: new Map(timeslots.map((t) => [t.id, t])),
         cventOnly,
         counts: delegateMeetingCounts(rows, cventOnly),
     };

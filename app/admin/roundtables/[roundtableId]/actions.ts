@@ -150,7 +150,8 @@ export async function getRoundtableDetail(params: {
         .sort((x, y) => y.score - x.score || x.name.localeCompare(y.name));
 
     const summary = summarizeTable(seatedPeople, settings, scales);
-    const ts = ctx.scheduleData.timeslotById.get(row.timeslotId);
+    // A pushed table whose time Cvent no longer lists gets it from its appointment.
+    const ts = ctx.slotById.get(row.timeslotId);
     return {
         table: {
             id: row.id,
@@ -171,7 +172,7 @@ export async function getRoundtableDetail(params: {
         unassigned,
         tables: ctx.roundtableRows
             .map((r) => {
-                const t = ctx.scheduleData.timeslotById.get(r.timeslotId);
+                const t = ctx.slotById.get(r.timeslotId);
                 return { id: r.id, label: tableLabel(ctx, r), sort: `${t?.day ?? 9}|${t?.startTime ?? ""}` };
             })
             .sort((x, y) => x.sort.localeCompare(y.sort) || x.label.localeCompare(y.label))
@@ -271,7 +272,7 @@ function checkMove(
     leaving: string[] = [],
 ): { errors: string[]; warnings: string[] } | null {
     const table = ctx.roundtableRows.find((r) => r.id === to.roundtableId);
-    const slot = table ? ctx.scheduleData.timeslotById.get(table.timeslotId) : undefined;
+    const slot = table ? ctx.slotById.get(table.timeslotId) : undefined;
     if (!table) return null;
     const byId = new Map(ctx.attendees.map((a) => [a.salesforceId, a]));
     const seated = ctx.seatRows
@@ -284,7 +285,7 @@ function checkMove(
         ctx.roundtableRows.map((r) => r.cventAppointmentId).filter((id): id is string => !!id),
     );
     const appointments = (ctx.appointments ?? []).filter((a) => !a.id || !roundtableAppointmentIds.has(a.id));
-    const busy = busyStartTimes(ctx.rows, ctx.scheduleData.timeslotById, appointments, ctx.attendees);
+    const busy = busyStartTimes(ctx.rows, ctx.slotById, appointments, ctx.attendees);
     const check = checkSeatMove({
         delegate,
         role: to.role,

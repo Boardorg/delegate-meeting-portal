@@ -44,7 +44,8 @@ vi.mock("@/lib/db/client", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { moveDelegate, saveRoundtableText } from "./actions";
+import { getRoundtableDetail, moveDelegate, saveRoundtableText } from "./actions";
+import { storedSlotMap } from "@/lib/cvent/storedSlots";
 
 /**
  * Builds a delegate with no meetings.
@@ -130,6 +131,7 @@ function context(attendees: Attendee[]): MatchingContext {
         roundtableRows: [TABLE],
         seatRows: [seat("ann", 1)],
         appointments: [],
+        slotById: new Map([[SLOT.id, SLOT]]),
         cventOnly: [],
         counts: new Map(),
     };
@@ -153,6 +155,38 @@ function statusOfPushedTableAfterSave(): string {
         lastModifiedAt,
     });
 }
+
+describe("getRoundtableDetail", () => {
+    test("shows a pushed table's day and time from its Cvent appointment when Cvent no longer lists its slot", async () => {
+        // Table 1 allows one appointment at a time, so its booked slot dropped out of the list.
+        // Another time at the same location is still listed.
+        const later: Timeslot = { ...SLOT, id: "ts-later", startTime: "2027-01-20T16:00:00.000Z", endTime: "2027-01-20T16:40:00.000Z" };
+        const ctx = context([delegate("ann", "Acme")]);
+        ctx.scheduleData.timeslots = [later];
+        ctx.scheduleData.timeslotById = new Map([[later.id, later]]);
+        ctx.roundtableRows = [{ ...TABLE, cventAppointmentId: "appt-1", lastPushedAt: new Date(0) }];
+        ctx.appointments = [
+            {
+                id: "appt-1",
+                startTime: SLOT.startTime,
+                endTime: SLOT.endTime,
+                participantContactIds: ["c-ann"],
+                hostContactIds: ["c-ann"],
+                locationName: null,
+                locationId: null,
+                typeName: "Group",
+                typeId: null,
+            },
+        ];
+        ctx.slotById = storedSlotMap(ctx.scheduleData, ctx.roundtableRows, ctx.appointments);
+        loadMatchingContext.mockResolvedValue(ctx);
+
+        const detail = await getRoundtableDetail({ roundtableId: "rt-1", eventCode: "EVT" });
+
+        expect(detail?.table.startTime).toBe(SLOT.startTime);
+        expect(detail?.table.day).toBe(1);
+    });
+});
 
 describe("moveDelegate", () => {
     test("criterion 18: moving a delegate onto a table that has someone from their company is refused with a message", async () => {
@@ -190,6 +224,7 @@ describe("moveDelegate", () => {
         const slotB: Timeslot = { ...SLOT, id: "ts-rt-b", locationId: "loc-rt-b" };
         ctx.scheduleData.timeslots = [SLOT, slotB];
         ctx.scheduleData.timeslotById = new Map([[SLOT.id, SLOT], [slotB.id, slotB]]);
+        ctx.slotById = new Map(ctx.scheduleData.timeslotById);
         ctx.roundtableRows = [
             { ...TABLE, cventAppointmentId: "appt-A", lastPushedAt: new Date(0) },
             { ...TABLE, id: "rt-2", timeslotId: slotB.id, locationId: "loc-rt-b" },

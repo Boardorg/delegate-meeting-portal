@@ -102,7 +102,8 @@ export async function getDelegateMeetingDetail(params: {
     const companies = sponsorCompaniesByAccountId(ctx.attendees);
     const appointmentById = new Map((ctx.appointments ?? []).filter((a) => a.id).map((a) => [a.id!, a]));
     const scales = buildAnswerScales(ctx.attendees.filter((a) => a.role === "delegate").map((a) => a.profile));
-    const { timeslotById, locationById } = ctx.scheduleData;
+    const { locationById } = ctx.scheduleData;
+    const timeslotById = ctx.slotById;
 
     const meetings: DelegateMeetingRow[] = [];
     for (const r of ctx.rows) {
@@ -217,7 +218,7 @@ function busyIntervals(ctx: MatchingContext, partyId: string, exceptMeetingId: s
     const out = bookedIntervals(
         ctx.rows.filter((r) => r.id !== exceptMeetingId),
         partyId,
-        ctx.scheduleData.timeslotById,
+        ctx.slotById,
     );
     const me = ctx.attendees.find((a) => a.salesforceId === partyId);
     const moving = ctx.rows.find((r) => r.id === exceptMeetingId);
@@ -232,7 +233,7 @@ function busyIntervals(ctx: MatchingContext, partyId: string, exceptMeetingId: s
     const slotByTable = new Map(ctx.roundtableRows.map((r) => [r.id, r.timeslotId]));
     for (const seat of ctx.seatRows) {
         if (seat.delegateId !== partyId || seat.role !== "seated") continue;
-        const ts = ctx.scheduleData.timeslotById.get(slotByTable.get(seat.roundtableId) ?? "");
+        const ts = ctx.slotById.get(slotByTable.get(seat.roundtableId) ?? "");
         if (ts) out.push({ start: startMs(ts.startTime), end: startMs(ts.endTime) });
     }
     return out;
@@ -253,7 +254,7 @@ export async function getD2DSlotOptions(params: {
     const ctx = await loadMatchingContext(params.eventCode);
     const meeting = ctx.rows.find((r) => r.id === params.meetingId && r.kind === "delegate_delegate");
     if (!meeting) return { current: null, options: [] };
-    const { timeslots, timeslotById, locationById } = ctx.scheduleData;
+    const { timeslots, locationById } = ctx.scheduleData;
 
     const options = buildSlotOptions(
         timeslots.filter((t) => t.kind === "delegate_delegate"),
@@ -261,7 +262,7 @@ export async function getD2DSlotOptions(params: {
         busyIntervals(ctx, meeting.attendeeA, meeting.id),
         busyIntervals(ctx, meeting.attendeeB, meeting.id),
     );
-    const currentTs = timeslotById.get(meeting.timeslotId);
+    const currentTs = ctx.slotById.get(meeting.timeslotId);
     const current = currentTs ? slotOptionFromTimeslot(currentTs, locationById) : null;
     if (current && !options.some((o) => o.timeslotId === current.timeslotId)) {
         return { current, options: sortSlotOptions([...options, current]) };

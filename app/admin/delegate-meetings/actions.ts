@@ -221,8 +221,8 @@ export async function runD2DForEvent(eventCode: string): Promise<RunD2DResult> {
         s2dCountById,
         existingD2D: keptD2DMeetings(keptD2D, ctx.cventOnly, scheduleData.timeslots),
         busyById: mergeBusyTimes(
-            busyStartTimes([...s2dRows, ...keptD2D], scheduleData.timeslotById, ctx.appointments ?? [], ctx.attendees),
-            seatedBusyTimes(ctx.seatRows, ctx.roundtableRows, scheduleData.timeslotById),
+            busyStartTimes([...s2dRows, ...keptD2D], ctx.slotById, ctx.appointments ?? [], ctx.attendees),
+            seatedBusyTimes(ctx.seatRows, ctx.roundtableRows, ctx.slotById),
         ),
         seatedIds,
         timeslots: d2dSlots,

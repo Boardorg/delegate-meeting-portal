@@ -166,6 +166,7 @@ function context(
             createdAt: new Date(0),
         })),
         appointments: [],
+        slotById: new Map(SLOTS.map((t) => [t.id, t])),
         cventOnly: [],
         counts: new Map(),
     };

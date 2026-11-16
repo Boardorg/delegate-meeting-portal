@@ -13,7 +13,8 @@ import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData, type EventScheduleData } from "@/lib/cvent/mapper";
 import { getEventAppointments, type CventExistingAppointment } from "@/lib/cvent/client";
 import { getEventSettings } from "@/lib/events/settings";
-import type { Attendee } from "@/types";
+import { storedSlotMap } from "@/lib/cvent/storedSlots";
+import type { Attendee, Timeslot } from "@/types";
 import { resolveMatchingSettings, type MatchingSettings } from "./settings";
 import {
     cventOnlyForDelegates,
@@ -40,6 +41,12 @@ export type MatchingContext = {
     seatRows: RoundtableSeatRow[];
     /** The event's active Cvent appointments. Null when Cvent couldn't be read. */
     appointments: CventExistingAppointment[] | null;
+    /**
+     * Slots by id for reading a stored meeting's or roundtable's time.
+     * It holds the listed timeslots plus each pushed row's slot rebuilt from its Cvent appointment when Cvent no longer lists it.
+     * Choosing a slot to book still uses scheduleData, so a full time is never offered.
+     */
+    slotById: Map<string, Timeslot>;
     /** Cvent appointments this database has no meeting or roundtable for, with their delegates. */
     cventOnly: CventOnlyForDelegates[];
     /** Each delegate's S2D and D2D meetings, in the portal and in Cvent. */
@@ -104,6 +111,7 @@ export async function loadMatchingContext(eventCode: string): Promise<MatchingCo
         roundtableRows,
         seatRows,
         appointments,
+        slotById: storedSlotMap(scheduleData, [...rows, ...roundtableRows], appointments),
         cventOnly,
         counts: delegateMeetingCounts(rows, cventOnly),
     };

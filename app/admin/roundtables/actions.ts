@@ -93,7 +93,9 @@ function unassignedDelegates(ctx: MatchingContext): DelegateBrief[] {
  */
 export async function listRoundtables(eventCode: string): Promise<RoundtablesOverview> {
     const ctx = await loadMatchingContext(eventCode);
-    const { timeslotById, locationById } = ctx.scheduleData;
+    const { locationById } = ctx.scheduleData;
+    // A pushed table whose time Cvent no longer lists gets it from its appointment.
+    const timeslotById = ctx.slotById;
     const byId = new Map(ctx.attendees.map((a) => [a.salesforceId, a]));
     const scales = buildAnswerScales(ctx.attendees.filter((a) => a.role === "delegate").map((a) => a.profile));
     const settings = ctx.settings.roundtables;
@@ -124,7 +126,13 @@ export async function listRoundtables(eventCode: string): Promise<RoundtablesOve
     rows.sort((x, y) => x.day - y.day || (x.startTime ?? "").localeCompare(y.startTime ?? "") || x.location.localeCompare(y.location));
 
     const withRow = new Set(ctx.roundtableRows.map((r) => r.timeslotId));
-    const cventTables = roundtableSlots(ctx.scheduleData.timeslots).map((t) => ({
+    // A pushed table's booked slot can drop out of Cvent's list, so it is added back from its appointment.
+    const listedIds = new Set(ctx.scheduleData.timeslots.map((t) => t.id));
+    const bookedTableSlots = ctx.roundtableRows
+        .filter((r) => !listedIds.has(r.timeslotId))
+        .map((r) => ctx.slotById.get(r.timeslotId))
+        .filter((t): t is NonNullable<typeof t> => !!t);
+    const cventTables = roundtableSlots([...ctx.scheduleData.timeslots, ...bookedTableSlots]).map((t) => ({
         timeslotId: t.id,
         location: (t.locationId ? locationById.get(t.locationId)?.name : undefined) ?? "Unknown location",
         day: t.day,

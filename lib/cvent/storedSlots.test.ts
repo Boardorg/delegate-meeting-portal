@@ -1,6 +1,7 @@
 import { describe, test, expect } from "vitest";
 import type { Location, Timeslot } from "@/types";
 import type { CventExistingAppointment } from "@/lib/cvent/client";
+import { busyStartTimes } from "@/lib/matching/delegateMeetings";
 import { missingSlotMessage, storedSlotMap, type SlotSources } from "./storedSlots";
 
 // ---------------------------------------------------------------------------
@@ -178,6 +179,22 @@ describe("storedSlotMap", () => {
         );
 
         expect(map.has("ts-1430")).toBe(false);
+    });
+});
+
+describe("busy time with a rebuilt slot", () => {
+    test("a pushed meeting whose slot Cvent no longer lists still makes both delegates busy then", () => {
+        const row = { kind: "delegate_delegate", attendeeA: "d1", attendeeB: "d2", timeslotId: "ts-1430", cventAppointmentId: "appt-b", locationId: "loc-b" } as const;
+        const slotById = storedSlotMap(sources(), [row], [appointment()]);
+
+        // No Cvent appointments are passed as busy, so only the meeting row can make them busy.
+        const busy = busyStartTimes([row], slotById, [], []);
+
+        const ms = new Date("2026-10-31T14:30:00.000Z").getTime();
+        expect(busy.get("d1")?.has(ms)).toBe(true);
+        expect(busy.get("d2")?.has(ms)).toBe(true);
+        // Without the rebuilt slot the meeting would drop out of busy time.
+        expect(busyStartTimes([row], sources().timeslotById, [], []).get("d1")).toBeUndefined();
     });
 });
 

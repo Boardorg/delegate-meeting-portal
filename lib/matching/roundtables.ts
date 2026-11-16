@@ -37,6 +37,15 @@ export const DEFAULT_ROUNDTABLE_DESCRIPTION =
     "as all meetings are unmoderated.";
 
 /**
+ * The description "Reset to default" on the roundtable page puts back.
+ *
+ * @returns {string} The default host note.
+ */
+export function resetRoundtableDescription(): string {
+    return DEFAULT_ROUNDTABLE_DESCRIPTION;
+}
+
+/**
  * The Salesforce id of a roundtable's Cvent host.
  * The host is the seated delegate with the lowest Salesforce id, so re-runs are stable.
  * Ids are compared the same way as the D2D host rule.

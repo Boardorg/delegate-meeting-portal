@@ -8,7 +8,7 @@ import { StatChip } from "../../meetings/_components/StatChip";
 import { ConfirmModal } from "../../meetings/_components/ConfirmModal";
 import { SyncChip } from "../../meetings/_components/MeetingChips";
 import SyncReportPanel from "../../meetings/SyncReportPanel";
-import { DEFAULT_ROUNDTABLE_DESCRIPTION } from "@/lib/matching/roundtables";
+import { DEFAULT_ROUNDTABLE_DESCRIPTION, resetRoundtableDescription } from "@/lib/matching/roundtables";
 import type { SyncReport } from "@/lib/cvent/syncReport";
 import {
     moveDelegate,
@@ -166,7 +166,7 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
                                 type="button"
                                 className="adm-new-btn adm-new-btn-primary"
                                 disabled={isPending || textChanged}
-                                title={textChanged ? "Save the theme first." : undefined}
+                                title={textChanged ? "Save your changes first." : undefined}
                                 onClick={handlePush}
                             >
                                 {isPending ? "Working…" : "Push to Cvent"}
@@ -232,7 +232,7 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
                         type="button"
                         className="adm-link-btn"
                         disabled={isPending || description === DEFAULT_ROUNDTABLE_DESCRIPTION}
-                        onClick={() => setDescription(DEFAULT_ROUNDTABLE_DESCRIPTION)}
+                        onClick={() => setDescription(resetRoundtableDescription())}
                     >
                         Reset to default
                     </button>
@@ -244,7 +244,7 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
                         disabled={isPending || !textChanged}
                         onClick={saveText}
                     >
-                        {isPending ? "Saving…" : "Save Theme"}
+                        {isPending ? "Saving…" : "Save"}
                     </button>
                     <span className="adm-help-note">
                         The theme title is the appointment&apos;s title in Cvent, and a table can&apos;t be pushed
@@ -436,7 +436,7 @@ function SeatTable({
                             {r.title && <div className="adm-text-sm-muted">{r.title}</div>}
                             {r.host && (
                                 <div className="adm-chip-mt">
-                                    <span className="adm-chip adm-chip-synced">Cvent host</span>
+                                    <span className="adm-chip adm-chip-mutual">Hosts in Cvent</span>
                                 </div>
                             )}
                         </td>

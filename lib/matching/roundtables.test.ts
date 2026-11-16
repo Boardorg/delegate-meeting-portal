@@ -4,6 +4,7 @@ import { emptyProfile } from "@/lib/attendees/formatProfile";
 import {
     DEFAULT_ROUNDTABLE_DESCRIPTION,
     checkSeatMove,
+    resetRoundtableDescription,
     roundtableHostId,
     roundtableOrderWarning,
     roundtableSlots,
@@ -273,6 +274,12 @@ describe("DEFAULT_ROUNDTABLE_DESCRIPTION", () => {
         const result = runRoundtableGrouping(input({ attendees: delegates(30), timeslots: FOUR_TABLES }));
         expect(result.groups).toHaveLength(4);
         expect(result.groups.every((g) => g.description === DEFAULT_ROUNDTABLE_DESCRIPTION)).toBe(true);
+    });
+});
+
+describe("resetRoundtableDescription", () => {
+    test("criterion 21a: Reset to default restores the host note", () => {
+        expect(resetRoundtableDescription()).toBe(DEFAULT_ROUNDTABLE_DESCRIPTION);
     });
 });
 

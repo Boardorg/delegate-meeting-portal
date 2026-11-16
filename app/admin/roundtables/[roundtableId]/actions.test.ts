@@ -256,7 +256,7 @@ describe("saveRoundtableText", () => {
         expect(statusOfPushedTableAfterSave()).toBe("modified");
     });
 
-    test("criterion 21a: Reset to default then Save stores the host note exactly", async () => {
+    test("criterion 21a: saving the default description stores it exactly", async () => {
         await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "Skills", description: DEFAULT_ROUNDTABLE_DESCRIPTION });
 
         expect(dbSet.mock.calls[0][0]).toMatchObject({ description: DEFAULT_ROUNDTABLE_DESCRIPTION });

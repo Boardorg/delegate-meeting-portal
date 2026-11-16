@@ -6,14 +6,18 @@ import type { NewRoundtable, NewRoundtableSeat, RoundtableRow } from "@/lib/db/s
 import type { MatchingContext } from "@/lib/matching/data";
 import { emptyProfile } from "@/lib/attendees/formatProfile";
 import { DEFAULT_MATCHING_SETTINGS } from "@/lib/matching/settings";
+import { DEFAULT_ROUNDTABLE_DESCRIPTION } from "@/lib/matching/roundtables";
 
 // ---------------------------------------------------------------------------
-// runRoundtablesForEvent. The matching data and the DB are mocked.
+// runRoundtablesForEvent and pushAllRoundtablesForEvent. The matching data, the DB and the push are mocked.
 // ---------------------------------------------------------------------------
 
 const loadMatchingContext = vi.fn();
 const deleteWhere = vi.fn<(cond: SQL) => Promise<void>>(async () => undefined);
 const inserted: unknown[] = [];
+// What each db.select() returns, in call order.
+const selectResults: unknown[][] = [];
+const pushRoundtableRows = vi.fn();
 
 vi.mock("@/lib/matching/data", () => ({
     loadMatchingContext: (...a: unknown[]) => loadMatchingContext(...a),
@@ -22,11 +26,17 @@ vi.mock("@/lib/db/client", () => ({
     db: {
         delete: () => ({ where: (cond: SQL) => deleteWhere(cond) }),
         insert: () => ({ values: async (rows: unknown) => void inserted.push(rows) }),
+        select: () => ({ from: () => ({ where: async () => selectResults.shift() ?? [] }) }),
     },
+}));
+vi.mock("@/lib/cvent/roundtablePush", () => ({
+    pushRoundtableRows: (...a: unknown[]) => pushRoundtableRows(...a),
+    roundtableLabel: () => "",
+    unpushRoundtableRows: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { runRoundtablesForEvent } from "./actions";
+import { pushAllRoundtablesForEvent, runRoundtablesForEvent } from "./actions";
 
 /**
  * Builds a delegate with no meetings.
@@ -78,10 +88,38 @@ function table(id: string, timeslotId: string, cventAppointmentId: string | null
 beforeEach(() => {
     vi.clearAllMocks();
     inserted.length = 0;
+    selectResults.length = 0;
+});
+
+describe("pushAllRoundtablesForEvent", () => {
+    test("criteria 20 and 21: pushes new and modified tables with their seats, skips synced ones, and reports a missing theme as a failure", async () => {
+        const pushedAt = new Date("2027-01-01T00:00:00Z");
+        const later = new Date("2027-01-02T00:00:00Z");
+        const fresh = table("rt-new", "a", null);
+        const modified = { ...table("rt-mod", "b", "appt-1"), lastPushedAt: pushedAt, lastModifiedAt: later };
+        const synced = { ...table("rt-ok", "c", "appt-2"), lastPushedAt: later, lastModifiedAt: pushedAt };
+        const seats = [{ id: 1, eventCode: "EVT", roundtableId: "rt-new", delegateId: "d1", role: "seated", position: 1, reason: null, score: null, createdAt: new Date(0) }];
+        selectResults.push([fresh, modified, synced], seats);
+        pushRoundtableRows.mockResolvedValue({
+            total: 2,
+            pushed: 1,
+            failed: 1,
+            results: [
+                { meetingId: "rt-new", label: "a", ok: false, kind: "create", reason: "missing_theme", error: "a has no theme title." },
+                { meetingId: "rt-mod", label: "b", ok: true, kind: "update", cventAppointmentId: "appt-1" },
+            ],
+        });
+
+        const report = await pushAllRoundtablesForEvent("EVT");
+
+        expect(pushRoundtableRows).toHaveBeenCalledWith("EVT", [fresh, modified], seats);
+        expect(report).toMatchObject({ totalPortalMeetings: 3, alreadySynced: 1, attempted: 2, updated: 1, failed: 1 });
+        expect(report.failures[0]).toMatchObject({ meetingId: "rt-new", reason: "missing_theme" });
+    });
 });
 
 describe("runRoundtablesForEvent", () => {
-    test("replaces unpushed roundtables and leaves pushed ones and their delegates alone", async () => {
+    test("criterion 21a: replaces unpushed roundtables with new ones that start with the default description, and leaves pushed ones alone", async () => {
         const slots = [slot("a"), slot("b")];
         const attendees = ["d1", "d2", "d3", "d4", "d5"].map(delegate);
         const ctx: MatchingContext = {
@@ -120,6 +158,8 @@ describe("runRoundtablesForEvent", () => {
         const [tables, seats] = inserted as [NewRoundtable[], NewRoundtableSeat[]];
         expect(tables.map((t) => t.timeslotId)).toEqual(["b"]);
         expect(tables[0].themeTitle).toBeNull();
+        // Criterion 21a: a new roundtable's description is the default host note.
+        expect(tables[0].description).toBe(DEFAULT_ROUNDTABLE_DESCRIPTION);
         expect(seats.map((s) => s.delegateId)).not.toContain("d1");
         expect(seats.filter((s) => s.role === "seated")).toHaveLength(4);
     });

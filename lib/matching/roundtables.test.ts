@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 import type { Attendee, AttendeeProfile, Timeslot } from "@/types";
 import { emptyProfile } from "@/lib/attendees/formatProfile";
 import {
+    DEFAULT_ROUNDTABLE_DESCRIPTION,
     checkSeatMove,
+    roundtableHostId,
     roundtableOrderWarning,
     roundtableSlots,
     runRoundtableGrouping,
@@ -257,5 +259,34 @@ describe("roundtableOrderWarning", () => {
     test("warns when no D2D meetings exist, and says nothing once they do", () => {
         expect(roundtableOrderWarning(0)).toMatch(/No D2D meetings/);
         expect(roundtableOrderWarning(2)).toBeNull();
+    });
+});
+
+describe("DEFAULT_ROUNDTABLE_DESCRIPTION", () => {
+    test("criterion 21a: is the host note from decision 24, word for word", () => {
+        expect(DEFAULT_ROUNDTABLE_DESCRIPTION).toBe(
+            "The system requires one attendee to be designated as the meeting host in order to create the meeting. However, this is purely a system requirement and does not involve any hosting or moderation responsibilities, as all meetings are unmoderated.",
+        );
+    });
+
+    test("criterion 21a: every table the engine creates starts with the default host note", () => {
+        const result = runRoundtableGrouping(input({ attendees: delegates(30), timeslots: FOUR_TABLES }));
+        expect(result.groups).toHaveLength(4);
+        expect(result.groups.every((g) => g.description === DEFAULT_ROUNDTABLE_DESCRIPTION)).toBe(true);
+    });
+});
+
+describe("roundtableHostId", () => {
+    test("criterion 19: picks the seated delegate with the lowest Salesforce id, whatever the seat order", () => {
+        expect(roundtableHostId(["003C", "003A", "003B"])).toBe("003A");
+    });
+
+    test("uses the same comparison as the D2D host rule", () => {
+        // Plain string comparison puts upper case before lower case, as `idA < idB` does in d2d.ts.
+        expect(roundtableHostId(["003a", "003B"])).toBe("003B");
+    });
+
+    test("is null when no one is seated", () => {
+        expect(roundtableHostId([])).toBeNull();
     });
 });

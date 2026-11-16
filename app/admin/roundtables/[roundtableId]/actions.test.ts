@@ -4,6 +4,8 @@ import type { RoundtableRow, RoundtableSeatRow } from "@/lib/db/schema";
 import type { MatchingContext } from "@/lib/matching/data";
 import { emptyProfile } from "@/lib/attendees/formatProfile";
 import { DEFAULT_MATCHING_SETTINGS } from "@/lib/matching/settings";
+import { DEFAULT_ROUNDTABLE_DESCRIPTION } from "@/lib/matching/roundtables";
+import { getSyncStatus } from "@/lib/cvent/syncStatus";
 
 // ---------------------------------------------------------------------------
 // Moving delegates between roundtables. The matching data and the DB are mocked.
@@ -11,6 +13,7 @@ import { DEFAULT_MATCHING_SETTINGS } from "@/lib/matching/settings";
 
 const loadMatchingContext = vi.fn();
 const dbUpdate = vi.fn();
+const dbSet = vi.fn();
 const dbInsert = vi.fn();
 const dbDelete = vi.fn();
 
@@ -22,7 +25,10 @@ vi.mock("@/lib/db/client", () => ({
         update: (...a: unknown[]) => {
             dbUpdate(...a);
             return {
-                set: () => ({ where: () => ({ returning: async () => [{ id: "rt-1" }] }) }),
+                set: (values: unknown) => {
+                    dbSet(values);
+                    return { where: () => ({ returning: async () => [{ id: "rt-1" }] }) };
+                },
             };
         },
         insert: (...a: unknown[]) => {
@@ -133,6 +139,21 @@ beforeEach(() => {
     vi.clearAllMocks();
 });
 
+/**
+ * The sync status a table pushed a day ago would have after the first saved change.
+ * It reads lastModifiedAt from the first db set() call.
+ *
+ * @returns {string} The sync status.
+ */
+function statusOfPushedTableAfterSave(): string {
+    const { lastModifiedAt } = dbSet.mock.calls[0][0] as { lastModifiedAt: Date };
+    return getSyncStatus({
+        cventAppointmentId: "appt-1",
+        lastPushedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        lastModifiedAt,
+    });
+}
+
 describe("moveDelegate", () => {
     test("criterion 18: moving a delegate onto a table that has someone from their company is refused with a message", async () => {
         loadMatchingContext.mockResolvedValue(context([delegate("ann", "Acme"), delegate("bob", "Acme")]));
@@ -152,6 +173,16 @@ describe("moveDelegate", () => {
         expect(result).toEqual({ ok: true });
         expect(dbInsert).toHaveBeenCalledTimes(1);
         expect(dbUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    test("criterion 20: moving the host off a pushed table marks it Modified, so the next push updates Cvent", async () => {
+        loadMatchingContext.mockResolvedValue(context([delegate("ann", "Acme")]));
+
+        const result = await moveDelegate({ eventCode: "EVT", delegateId: "ann", to: null });
+
+        expect(result).toEqual({ ok: true });
+        expect(dbDelete).toHaveBeenCalledTimes(1);
+        expect(statusOfPushedTableAfterSave()).toBe("modified");
     });
 
     test("asks for confirmation before seating a delegate who now has a meeting", async () => {
@@ -179,6 +210,43 @@ describe("saveRoundtableText", () => {
         const result = await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "  Skills  ", description: "" });
         expect(result).toEqual({ ok: true });
         expect(dbUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    test("criterion 20: changing a pushed table's theme marks it Modified", async () => {
+        const result = await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "Board Readiness", description: DEFAULT_ROUNDTABLE_DESCRIPTION });
+
+        expect(result).toEqual({ ok: true });
+        expect(dbSet.mock.calls[0][0]).toMatchObject({ themeTitle: "Board Readiness" });
+        expect(statusOfPushedTableAfterSave()).toBe("modified");
+    });
+
+    test("criterion 21a: editing a pushed table's description marks it Modified and saves the text as typed", async () => {
+        const text = `${DEFAULT_ROUNDTABLE_DESCRIPTION}\n\nWhat does good leadership look like?`;
+
+        await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "Skills", description: text });
+
+        expect(dbSet.mock.calls[0][0]).toMatchObject({ description: text });
+        expect(statusOfPushedTableAfterSave()).toBe("modified");
+    });
+
+    test("criterion 21a: clearing the description stores it empty, not as the default, and marks a pushed table Modified", async () => {
+        await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "Skills", description: "   " });
+
+        expect(dbSet.mock.calls[0][0]).toMatchObject({ description: "" });
+        expect(statusOfPushedTableAfterSave()).toBe("modified");
+    });
+
+    test("criterion 21a: Reset to default then Save stores the host note exactly", async () => {
+        await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "Skills", description: DEFAULT_ROUNDTABLE_DESCRIPTION });
+
+        expect(dbSet.mock.calls[0][0]).toMatchObject({ description: DEFAULT_ROUNDTABLE_DESCRIPTION });
+    });
+
+    test("refuses a description that is too long, with a message", async () => {
+        const result = await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "Skills", description: "x".repeat(2001) });
+
+        expect(result).toEqual({ ok: false, error: "Error: the description must be 2,000 characters or fewer" });
+        expect(dbUpdate).not.toHaveBeenCalled();
     });
 
     test("refuses a theme that is too long, with a message", async () => {

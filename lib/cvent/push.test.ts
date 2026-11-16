@@ -822,6 +822,12 @@ describe("pushDelegateMeetingRows", () => {
         expect(dbUpdate).toHaveBeenCalled();
     });
 
+    test("decision 24: pushes a D2D meeting with no description", async () => {
+        await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect("description" in lastInput()).toBe(false);
+    });
+
     test("fails without calling Cvent when the host already hosts another appointment then", async () => {
         getEventAppointments.mockResolvedValue([
             { id: "other", startTime: "2025-01-15T09:00:00Z", participantContactIds: ["cd1"], hostContactIds: ["cd1"], locationName: null },

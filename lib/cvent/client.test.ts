@@ -45,6 +45,35 @@ describe("buildCreateAppointmentRequest", () => {
         expect("attendees" in req).toBe(false);
         expect("location" in req).toBe(false);
         expect("code" in req).toBe(false);
+        expect("description" in req).toBe(false);
+    });
+
+    test("sends a description when given, including an empty one", () => {
+        expect(buildCreateAppointmentRequest({ ...base, hostContactIds: ["h1"], description: "Note" }).description).toBe("Note");
+        const cleared = buildCreateAppointmentRequest({ ...base, hostContactIds: ["h1"], description: "" });
+        expect("description" in cleared).toBe(true);
+        expect(cleared.description).toBe("");
+    });
+});
+
+describe("buildUpdateAppointmentRequest description", () => {
+    const base = {
+        subject: "Leadership",
+        startTime: new Date("2025-01-15T09:00:00Z"),
+        endTime: new Date("2025-01-15T09:30:00Z"),
+        appointmentTypeId: "type-g",
+        hostContactIds: ["h1"],
+    };
+
+    test("sends a description when given, including an empty one", () => {
+        expect(buildUpdateAppointmentRequest("appt-1", { ...base, description: "Note" }).description).toBe("Note");
+        const cleared = buildUpdateAppointmentRequest("appt-1", { ...base, description: "" });
+        expect("description" in cleared).toBe(true);
+        expect(cleared.description).toBe("");
+    });
+
+    test("leaves the description out when none is given, as for sponsor and D2D meetings", () => {
+        expect("description" in buildUpdateAppointmentRequest("appt-1", base)).toBe(false);
     });
 });
 

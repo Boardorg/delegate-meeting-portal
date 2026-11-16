@@ -277,7 +277,7 @@ export async function hostBusyElsewhereLookup(
 
 /**
  * Builds the slot lookup for stored rows, with each missing slot rebuilt from the row's Cvent appointment.
- * Used by push and by the sponsor page's slot pickers.
+ * Used by push, by the sponsor page's slot pickers and by the S2D run's busy times.
  * Cvent's available-times list drops a booked time at a location that allows one appointment at a time.
  * When the appointment list can't be read, only the listed slots are used, and the failure is logged.
  *

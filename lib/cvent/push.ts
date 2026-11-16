@@ -233,6 +233,37 @@ export async function busyHostLookup(
 }
 
 /**
+ * Builds a check for whether a contact already hosts a Cvent appointment at a time, other than one appointment.
+ * The event's appointment list is read once for the batch.
+ * Each row leaves out only its own appointment, so the answer doesn't depend on which rows are pushed or their order.
+ * Returns null when Cvent's appointment list can't be read. Cvent itself still rejects a host who is busy.
+ *
+ * @param {string} eventCode - The event the rows belong to.
+ * @returns {Promise<((startTime: string, contactId: string, ownAppointmentId: string | null) => boolean) | null>} The check, or null.
+ */
+export async function hostBusyElsewhereLookup(
+    eventCode: string,
+): Promise<((startTime: string, contactId: string, ownAppointmentId: string | null) => boolean) | null> {
+    let appointments;
+    try {
+        appointments = await getEventAppointments(eventCode);
+    } catch (err) {
+        console.warn(
+            `pushRoundtableRows: could not list Cvent appointments for "${eventCode}" to find busy hosts. ` +
+                `${err instanceof Error ? err.message : String(err)}`,
+        );
+        return null;
+    }
+    return (startTime, contactId, ownAppointmentId) =>
+        appointments.some(
+            (appt) =>
+                appt.id !== ownAppointmentId &&
+                sameStartTime(appt.startTime, startTime) &&
+                appt.hostContactIds.includes(contactId),
+        );
+}
+
+/**
  * Whether an existing appointment starts at the same moment as a slot.
  * Both are parsed to timestamps, so differently formatted ISO strings still compare correctly.
  * An unknown or unparseable time never matches.
@@ -493,7 +524,7 @@ export async function pushMeetingRows(
                 label,
                 ok: false,
                 kind,
-                reason: "host_not_in_cvent",
+                reason: "host_busy",
                 error:
                     available.length === 0
                         ? `Every rep of ${companyName} who can host is already hosting another Cvent appointment at this time, so this meeting has no host. Move it to another time.`
@@ -545,7 +576,7 @@ export async function pushMeetingRows(
         // is created without an attendee) but is worth flagging.
         const attendeeContactIds = target?.cventContactId
             ? [target.cventContactId]
-            : [];
+            : undefined;
         const targetWarning = target?.cventContactId
             ? undefined
             : `${target?.name ?? row.attendeeB} isn't linked in Cvent, so the appointment was created without them as a participant.`;
@@ -575,6 +606,7 @@ export async function pushMeetingRows(
                     targetWarning,
                 ],
                 existingAppointmentOf,
+                save: saveMeetingPush(row.id),
             }),
         );
     }
@@ -677,7 +709,7 @@ export async function pushDelegateMeetingRows(
         // Cvent rejects a host who is already in another appointment at that time.
         if (busyHostsAt?.(timeslot.startTime).has(host.cventContactId)) {
             results.push(fail(
-                "host_not_in_cvent",
+                "host_busy",
                 `${host.name} already hosts another Cvent appointment at this time. Move this meeting to another time.`,
             ));
             continue;
@@ -700,10 +732,11 @@ export async function pushDelegateMeetingRows(
                     hostContactIds: [host.cventContactId],
                     appointmentTypeId: timeslot.appointmentTypeId,
                     locationId: row.locationId,
-                    attendeeContactIds: guest?.cventContactId ? [guest.cventContactId] : [],
+                    attendeeContactIds: guest?.cventContactId ? [guest.cventContactId] : undefined,
                 },
                 warnings: [appointmentTypeWarning(timeslot, "delegate_delegate"), guestWarning],
                 existingAppointmentOf,
+                save: saveMeetingPush(row.id),
             }),
         );
     }
@@ -717,32 +750,70 @@ export async function pushDelegateMeetingRows(
     };
 }
 
+/** The fields of a meeting or roundtable row that sending its appointment reads. */
+export type SendableRow = {
+    id: string;
+    cventAppointmentId: string | null;
+    lastPushedAt: Date | null;
+};
+
+/**
+ * Saves a successful push on a row.
+ * Returns false when no row was updated, for example because it was deleted during the push.
+ */
+export type SavePush = (cventAppointmentId: string, pushedAt: Date) => Promise<boolean>;
+
+/**
+ * Builds the save step for a scheduled meeting's push.
+ *
+ * @param {string} meetingId - The meeting.
+ * @returns {SavePush} Writes the appointment id and push time on the meeting, and says whether the row was still there.
+ */
+function saveMeetingPush(meetingId: string): SavePush {
+    return async (cventAppointmentId, pushedAt) => {
+        const updated = await db
+            .update(scheduledMeetings)
+            .set({ cventAppointmentId, lastPushedAt: pushedAt })
+            .where(eq(scheduledMeetings.id, meetingId))
+            .returning({ id: scheduledMeetings.id });
+        return updated.length > 0;
+    };
+}
+
 /**
  * Sends one meeting's appointment to Cvent and saves the result on its row.
  * Shared by the sponsor and D2D pushes, so creating, replacing and the in-place fallback work the same for both.
+ * Roundtables use it too, with a save step that writes the roundtables table.
  *
  * A row not yet synced gets a new appointment.
  * A row already synced and edited since gets a replacement appointment instead.
  * The new appointment is created first. The old one is only cancelled after that succeeds.
  * The code comes from appointmentCode(), since Cvent keeps old codes reserved even after cancellation.
  *
- * @param {{ eventCode: string; row: ScheduledMeetingRow; label: string; timeslot: Timeslot; input: Omit<CventAppointmentInput, "code">; warnings: (string | undefined)[]; existingAppointmentOf: (apptId: string) => Promise<ExistingAppointment | null> }} params
- *   The meeting, its slot, the appointment to send, non-fatal notes for a success, and the lookup for existing appointments.
- * @returns {Promise<PushResult>} The meeting's outcome.
+ * The push time saved as lastPushedAt is taken before calling Cvent.
+ * So an edit saved while the push is running still reads as Modified afterwards.
+ * When the save finds no row, the push fails and names the appointment Cvent now has, so a person can cancel it.
+ *
+ * @param {{ eventCode: string; row: SendableRow; label: string; timeslot: Timeslot; input: Omit<CventAppointmentInput, "code">; warnings: (string | undefined)[]; existingAppointmentOf: (apptId: string) => Promise<ExistingAppointment | null>; save: SavePush }} params
+ *   The row, its slot, the appointment to send, non-fatal notes for a success, the lookup for existing appointments, and the save step.
+ * @returns {Promise<PushResult>} The row's outcome.
  */
-async function sendAppointment(params: {
+export async function sendAppointment(params: {
     eventCode: string;
-    row: ScheduledMeetingRow;
+    row: SendableRow;
     label: string;
     timeslot: Timeslot;
     input: Omit<CventAppointmentInput, "code">;
     warnings: (string | undefined)[];
     existingAppointmentOf: (apptId: string) => Promise<ExistingAppointment | null>;
+    save: SavePush;
 }): Promise<PushResult> {
     const { eventCode, row, label, timeslot, existingAppointmentOf } = params;
     const oldAppointmentId = row.cventAppointmentId;
     const kind = oldAppointmentId ? "update" : "create";
     const input = { ...params.input, code: appointmentCode(row) };
+    // Taken before Cvent is called, so an edit saved during the push is later than the push.
+    const pushedAt = new Date();
 
     try {
         let cventAppointmentId: string;
@@ -812,10 +883,20 @@ async function sendAppointment(params: {
             }
         }
 
-        await db
-            .update(scheduledMeetings)
-            .set({ cventAppointmentId, lastPushedAt: new Date() })
-            .where(eq(scheduledMeetings.id, row.id));
+        // The row may have been deleted while Cvent was called.
+        // Then nothing in the portal links to the appointment, so say which one it is.
+        if (!(await params.save(cventAppointmentId, pushedAt))) {
+            return {
+                meetingId: row.id,
+                label,
+                ok: false,
+                kind,
+                reason: "unknown",
+                error:
+                    `Cvent now has appointment ${cventAppointmentId}, but this was deleted in the portal during the push, so nothing links to it. ` +
+                    `Cancel appointment ${cventAppointmentId} in Cvent.`,
+            };
+        }
 
         return {
             meetingId: row.id,

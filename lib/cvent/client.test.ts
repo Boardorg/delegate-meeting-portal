@@ -48,6 +48,11 @@ describe("buildCreateAppointmentRequest", () => {
         expect("description" in req).toBe(false);
     });
 
+    test("still leaves attendees out of a create when the list is empty", () => {
+        const req = buildCreateAppointmentRequest({ ...base, hostContactIds: ["h1"], attendeeContactIds: [] });
+        expect("attendees" in req).toBe(false);
+    });
+
     test("sends a description when given, including an empty one", () => {
         expect(buildCreateAppointmentRequest({ ...base, hostContactIds: ["h1"], description: "Note" }).description).toBe("Note");
         const cleared = buildCreateAppointmentRequest({ ...base, hostContactIds: ["h1"], description: "" });
@@ -70,6 +75,15 @@ describe("buildUpdateAppointmentRequest description", () => {
         const cleared = buildUpdateAppointmentRequest("appt-1", { ...base, description: "" });
         expect("description" in cleared).toBe(true);
         expect(cleared.description).toBe("");
+    });
+
+    test("finding 1: sends an empty attendee list, so a roundtable that drops to its host alone loses its old attendees", () => {
+        const req = buildUpdateAppointmentRequest("appt-1", { ...base, attendeeContactIds: [] });
+        expect(req.attendees).toEqual([]);
+    });
+
+    test("finding 1: leaves attendees out when none are given, as for an unlinked sponsor or D2D delegate", () => {
+        expect("attendees" in buildUpdateAppointmentRequest("appt-1", base)).toBe(false);
     });
 
     test("leaves the description out when none is given, as for sponsor and D2D meetings", () => {

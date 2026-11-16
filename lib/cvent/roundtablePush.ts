@@ -8,19 +8,17 @@ import {
 } from "@/lib/db/schema";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { loadAttendees } from "@/lib/attendees/loader";
-import { createAppointment, updateAppointment } from "@/lib/cvent/client";
 import {
-    appointmentCode,
     appointmentTypeWarning,
-    busyHostLookup,
-    describePushError,
+    existingAppointmentLookup,
+    hostBusyElsewhereLookup,
+    sendAppointment,
     type PushResult,
     type PushSummary,
+    type SavePush,
 } from "@/lib/cvent/push";
 import { unpushAppointments, type UnpushOutcome } from "@/lib/cvent/unpush";
-import { classifyPushError } from "@/lib/cvent/syncReport";
 import { roundtableHostId } from "@/lib/matching/roundtables";
-import type { CventAppointmentInput } from "@/lib/cvent/client";
 
 // ---------------------------------------------------------------------------
 // Pushing roundtables to Cvent.
@@ -30,8 +28,9 @@ import type { CventAppointmentInput } from "@/lib/cvent/client";
 // Roundtables are unmoderated, so the seated delegate with the lowest Salesforce id is the host.
 // The other seated delegates are attendees. Alternates are never sent.
 //
-// A table already in Cvent is always updated in place, never replaced.
-// Its time and type can't change, so a replacement would only collide with the old appointment.
+// Sending goes through sendAppointment in lib/cvent/push.ts, so a re-push works as for meetings.
+// A replacement is created first and the old appointment is cancelled after that succeeds.
+// When the replacement collides with the old appointment at the same time and type, the old one is updated in place.
 // Unpush cancels through the shared unpush step, so Cvent's emails are suppressed when set.
 // ---------------------------------------------------------------------------
 
@@ -54,13 +53,13 @@ export function roundtableLabel(
  * Pushes roundtables to Cvent.
  *
  * A table not yet in Cvent gets a new appointment with a code from appointmentCode().
- * A table already in Cvent is updated in place, so a new theme, description or host lands on the same appointment.
+ * A table already in Cvent is replaced, or updated in place on a same-time collision, as sendAppointment does for meetings.
  * A table with no theme title is refused with a message, and nothing is sent.
  * Failures are captured per table so one bad table doesn't stop the batch.
  *
  * Cvent rejects a host who is already in another appointment at that time.
  * So a table whose host already hosts a Cvent appointment then fails with a message, and nothing is sent.
- * The table's own appointment doesn't count, since an update keeps it.
+ * Only the table's own appointment doesn't count, so the check doesn't depend on which tables are pushed or their order.
  *
  * @param {string} eventCode - The event the tables belong to.
  * @param {RoundtableRow[]} rows - The roundtables to push.
@@ -82,14 +81,10 @@ export async function pushRoundtableRows(
     ]);
     const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
 
-    // Which delegates already host a Cvent appointment at each time.
-    // The tables' own appointments are left out, since an update keeps them.
-    const ownAppointmentIds = new Set(
-        rows
-            .map((r) => r.cventAppointmentId)
-            .filter((id): id is string => !!id),
-    );
-    const busyHostsAt = await busyHostLookup(eventCode, ownAppointmentIds);
+    // Whether a delegate already hosts another Cvent appointment at a time, read once for the batch.
+    const hostBusyElsewhere = await hostBusyElsewhereLookup(eventCode);
+    // Existing appointments' times and types, read from Cvent only if a re-push collides with its old appointment.
+    const existingAppointmentOf = existingAppointmentLookup(eventCode);
 
     const results: PushResult[] = [];
     for (const row of rows) {
@@ -143,7 +138,12 @@ export async function pushRoundtableRows(
             .map((s) => s.delegateId);
         const hostId = roundtableHostId(seatedIds);
         if (!hostId) {
-            results.push(fail("empty_table", "No one is seated at this table, so it has no host to send to Cvent."));
+            results.push(fail(
+                "empty_table",
+                row.cventAppointmentId
+                    ? "No one is seated at this table, so it has no host to send to Cvent. Seat a delegate, or Unpush the table to cancel its Cvent appointment."
+                    : "No one is seated at this table, so it has no host to send to Cvent.",
+            ));
             continue;
         }
 
@@ -169,9 +169,10 @@ export async function pushRoundtableRows(
         }
 
         // Cvent rejects a host who is already in another appointment at that time.
-        if (busyHostsAt?.(timeslot.startTime).has(host.cventContactId)) {
+        // Only this table's own appointment is left out, so the result doesn't depend on push order.
+        if (hostBusyElsewhere?.(timeslot.startTime, host.cventContactId, row.cventAppointmentId)) {
             results.push(fail(
-                "host_not_in_cvent",
+                "host_busy",
                 `${host.name} hosts this table but already hosts another Cvent appointment at this time. Move them off the table.`,
             ));
             continue;
@@ -193,10 +194,11 @@ export async function pushRoundtableRows(
                 : undefined;
 
         results.push(
-            await sendRoundtable({
+            await sendAppointment({
                 eventCode,
                 row,
                 label,
+                timeslot,
                 input: {
                     subject,
                     // Sent exactly as stored. A cleared description is sent empty, not as the default.
@@ -206,9 +208,12 @@ export async function pushRoundtableRows(
                     hostContactIds: [host.cventContactId],
                     appointmentTypeId: timeslot.appointmentTypeId,
                     locationId: row.locationId,
+                    // Always a list, even an empty one, so an in-place update clears attendees who left the table.
                     attendeeContactIds,
                 },
                 warnings: [appointmentTypeWarning(timeslot, "delegate_group"), guestWarning],
+                existingAppointmentOf,
+                save: saveRoundtablePush(row.id),
             }),
         );
     }
@@ -223,55 +228,20 @@ export async function pushRoundtableRows(
 }
 
 /**
- * Sends one roundtable's appointment to Cvent and saves the result on its row.
+ * Builds the save step for a roundtable's push.
  *
- * A table not yet in Cvent is created with a code from appointmentCode().
- * A table already in Cvent is updated in place, keeping its appointment id.
- * lastPushedAt moves only when Cvent accepts the push, so the next code after an unpush is always new.
- *
- * @param {{ eventCode: string; row: RoundtableRow; label: string; input: Omit<CventAppointmentInput, "code">; warnings: (string | undefined)[] }} params
- *   The table, its label, the appointment to send, and non-fatal notes for a success.
- * @returns {Promise<PushResult>} The table's outcome.
+ * @param {string} roundtableId - The roundtable.
+ * @returns {SavePush} Writes the appointment id and push time on the table, and says whether the row was still there.
  */
-async function sendRoundtable(params: {
-    eventCode: string;
-    row: RoundtableRow;
-    label: string;
-    input: Omit<CventAppointmentInput, "code">;
-    warnings: (string | undefined)[];
-}): Promise<PushResult> {
-    const { eventCode, row, label } = params;
-    const existingId = row.cventAppointmentId;
-    const kind = existingId ? "update" : "create";
-    try {
-        const cventAppointmentId = existingId
-            ? await updateAppointment(eventCode, existingId, params.input)
-            : await createAppointment(eventCode, { ...params.input, code: appointmentCode(row) });
-
-        await db
+function saveRoundtablePush(roundtableId: string): SavePush {
+    return async (cventAppointmentId, pushedAt) => {
+        const updated = await db
             .update(roundtables)
-            .set({ cventAppointmentId, lastPushedAt: new Date() })
-            .where(eq(roundtables.id, row.id));
-
-        const notes = params.warnings.filter((w): w is string => !!w);
-        return {
-            meetingId: row.id,
-            label,
-            ok: true,
-            kind,
-            cventAppointmentId,
-            warning: notes.length ? notes.join(" ") : undefined,
-        };
-    } catch (err) {
-        return {
-            meetingId: row.id,
-            label,
-            ok: false,
-            kind,
-            reason: classifyPushError(err),
-            error: describePushError(err),
-        };
-    }
+            .set({ cventAppointmentId, lastPushedAt: pushedAt })
+            .where(eq(roundtables.id, roundtableId))
+            .returning({ id: roundtables.id });
+        return updated.length > 0;
+    };
 }
 
 /**

@@ -20,6 +20,10 @@ const getAppointmentsByEvent = vi.fn();
 // The event's Cvent appointments with their hosts. None by default, so every rep is free.
 const getEventAppointments = vi.fn();
 const dbUpdate = vi.fn();
+// The values of each db set() call, in order.
+const dbSet = vi.fn();
+// The rows a save's returning() reports. One row by default, so the save finds its meeting.
+const savedRows = vi.fn(() => [{ id: "mtg-1" }]);
 
 vi.mock("@/lib/cvent/client", () => ({
     createAppointment: (...a: unknown[]) => createAppointment(...a),
@@ -58,7 +62,12 @@ vi.mock("@/lib/db/client", () => ({
     db: {
         update: (...a: unknown[]) => {
             dbUpdate(...a);
-            return { set: () => ({ where: async () => undefined }) };
+            return {
+                set: (values: unknown) => {
+                    dbSet(values);
+                    return { where: () => ({ returning: async () => savedRows() }) };
+                },
+            };
         },
     },
 }));
@@ -213,7 +222,7 @@ describe("pushMeetingRows — multi-host", () => {
 
         expect(summary.pushed).toBe(1);
         expect(lastInput().hostContactIds).toEqual(["h1"]);
-        expect(lastInput().attendeeContactIds).toEqual([]);
+        expect(lastInput().attendeeContactIds).toBeUndefined();
         expect(summary.results[0].warning).toBeTruthy();
     });
 });
@@ -704,7 +713,7 @@ describe("pushMeetingRows — reps split across same-time meetings", () => {
         const summary = await pushMeetingRows("EVT", [m2], [m1, m2]);
 
         expect(summary.pushed).toBe(0);
-        expect(summary.results[0].reason).toBe("host_not_in_cvent");
+        expect(summary.results[0].reason).toBe("host_busy");
         expect(summary.results[0].error).toContain("already hosting");
         // M1 is never changed to free up a rep.
         expect(createAppointment).not.toHaveBeenCalled();
@@ -781,7 +790,7 @@ describe("pushMeetingRows — reps split across same-time meetings", () => {
         ]);
 
         expect(summary.pushed).toBe(1);
-        expect(summary.results.find((r) => r.meetingId === "m-b")?.reason).toBe("host_not_in_cvent");
+        expect(summary.results.find((r) => r.meetingId === "m-b")?.reason).toBe("host_busy");
     });
 });
 
@@ -836,7 +845,7 @@ describe("pushDelegateMeetingRows", () => {
         const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
 
         expect(summary.pushed).toBe(0);
-        expect(summary.results[0].reason).toBe("host_not_in_cvent");
+        expect(summary.results[0].reason).toBe("host_busy");
         expect(createAppointment).not.toHaveBeenCalled();
     });
 
@@ -870,5 +879,28 @@ describe("pushDelegateMeetingRows", () => {
         const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
 
         expect(summary.results[0].warning).toBe("Pushed as Sponsor to Delegate Meetings.");
+    });
+
+    test("finding 7a: fails and names the new appointment when the meeting was deleted during the push", async () => {
+        savedRows.mockReturnValueOnce([]);
+
+        const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect(summary.results[0]).toMatchObject({ ok: false, reason: "unknown" });
+        expect(summary.results[0].error).toContain("appt-123");
+    });
+
+    test("finding 9: saves the push time taken before Cvent was called", async () => {
+        let calledAt = 0;
+        createAppointment.mockImplementationOnce(async () => {
+            calledAt = Date.now();
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            return "appt-123";
+        });
+
+        await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        const { lastPushedAt } = dbSet.mock.calls[0][0] as { lastPushedAt: Date };
+        expect(lastPushedAt.getTime()).toBeLessThanOrEqual(calledAt);
     });
 });

@@ -4,6 +4,7 @@ import type { RoundtableRow, RoundtableSeatRow } from "@/lib/db/schema";
 import type { CventAppointmentInput } from "@/lib/cvent/client";
 import { emptyProfile } from "@/lib/attendees/formatProfile";
 import { DEFAULT_ROUNDTABLE_DESCRIPTION } from "@/lib/matching/roundtables";
+import { getSyncStatus } from "@/lib/cvent/syncStatus";
 
 // ---------------------------------------------------------------------------
 // Pushing and unpushing roundtables.
@@ -19,6 +20,8 @@ const loadAttendees = vi.fn();
 const loadEventScheduleData = vi.fn();
 // Every set() the push or unpush saves, in order.
 const saved: Record<string, unknown>[] = [];
+// The rows a push's save reports as updated. One by default, so the save finds its table.
+const returnedRows = vi.fn(() => [{ id: "rt-001-1" }]);
 
 vi.mock("@/lib/cvent/client", () => ({
     createAppointment: (...a: unknown[]) => createAppointment(...a),
@@ -38,7 +41,9 @@ vi.mock("@/lib/db/client", () => ({
         update: () => ({
             set: (values: Record<string, unknown>) => {
                 saved.push(values);
-                return { where: async () => undefined };
+                // Awaited directly by unpush, and through returning() by push.
+                const where = Promise.resolve(undefined);
+                return { where: () => Object.assign(where, { returning: async () => returnedRows() }) };
             },
         }),
     },
@@ -151,10 +156,34 @@ function updated(): CventAppointmentInput {
     return updateAppointment.mock.calls[0][2];
 }
 
+/**
+ * Builds the error Cvent gives when a replacement collides with the old appointment at the same time.
+ *
+ * @returns {Error} A 409 with a no-availability code.
+ */
+function collision(): Error {
+    return Object.assign(new Error("Conflict"), {
+        statusCode: 409,
+        body: JSON.stringify({ message: "No more appointments at this time", code: "NO_MORE_APPT_AVAILABLE" }),
+    });
+}
+
+/**
+ * Builds one entry of the event's active appointment list, at the roundtable's start time.
+ *
+ * @param {string} id - The appointment id.
+ * @param {string | null} typeName - The type name Cvent lists for it.
+ * @returns The appointment summary.
+ */
+function listed(id: string, typeName: string | null) {
+    return { id, startTime: new Date(SLOT.startTime), endTime: new Date(SLOT.endTime), locationName: "Table 1", typeName };
+}
+
 beforeEach(() => {
     vi.clearAllMocks();
     saved.length = 0;
     createAppointment.mockResolvedValue("appt-new");
+    cancelAppointment.mockResolvedValue(undefined);
     updateAppointment.mockImplementation(async (_e: string, id: string) => id);
     getEventAppointments.mockResolvedValue([]);
     getAppointmentsByEvent.mockResolvedValue([]);
@@ -183,7 +212,34 @@ describe("pushRoundtableRows", () => {
         expect(saved[0].lastPushedAt).toBeInstanceOf(Date);
     });
 
-    test("criterion 20: re-pushing a modified table updates the same Cvent appointment in place", async () => {
+    test("criterion 20: re-pushing a modified table creates its replacement first, then cancels the old appointment", async () => {
+        const order: string[] = [];
+        createAppointment.mockImplementation(async () => {
+            order.push("create");
+            return "appt-new";
+        });
+        cancelAppointment.mockImplementation(async () => void order.push("cancel"));
+        const modified = table({
+            themeTitle: "Board Readiness",
+            cventAppointmentId: "appt-1",
+            lastPushedAt: new Date("2027-01-01T00:00:00Z"),
+            lastModifiedAt: new Date("2027-01-02T00:00:00Z"),
+        });
+
+        const summary = await pushRoundtableRows("EVT", [modified], defaultSeats());
+
+        expect(summary.results[0]).toMatchObject({ ok: true, kind: "update", cventAppointmentId: "appt-new" });
+        expect(order).toEqual(["create", "cancel"]);
+        expect(cancelAppointment).toHaveBeenCalledWith("EVT", "appt-1");
+        expect(updateAppointment).not.toHaveBeenCalled();
+        expect(created().subject).toBe("Board Readiness");
+        expect(created().code).toBe(`rt-001-1-${new Date("2027-01-01T00:00:00Z").getTime()}`);
+        expect(saved[0]).toMatchObject({ cventAppointmentId: "appt-new" });
+    });
+
+    test("criterion 20: a same-time collision with the old appointment falls back to updating it in place", async () => {
+        createAppointment.mockRejectedValue(collision());
+        getAppointmentsByEvent.mockResolvedValue([listed("appt-1", "Delegate Group Meetings")]);
         const modified = table({
             themeTitle: "Board Readiness",
             cventAppointmentId: "appt-1",
@@ -194,15 +250,88 @@ describe("pushRoundtableRows", () => {
         const summary = await pushRoundtableRows("EVT", [modified], defaultSeats());
 
         expect(summary.results[0]).toMatchObject({ ok: true, kind: "update", cventAppointmentId: "appt-1" });
-        expect(createAppointment).not.toHaveBeenCalled();
-        expect(cancelAppointment).not.toHaveBeenCalled();
-        expect(updateAppointment.mock.calls[0][0]).toBe("EVT");
         expect(updateAppointment.mock.calls[0][1]).toBe("appt-1");
         expect(updated().subject).toBe("Board Readiness");
+        expect(cancelAppointment).not.toHaveBeenCalled();
         expect(saved[0]).toMatchObject({ cventAppointmentId: "appt-1" });
     });
 
-    test("criterion 20: after the host is moved off, the next lowest id hosts and the same appointment is updated", async () => {
+    test("finding 1: a table that drops to its host alone sends an empty attendee list", async () => {
+        createAppointment.mockRejectedValue(collision());
+        getAppointmentsByEvent.mockResolvedValue([listed("appt-1", "Delegate Group Meetings")]);
+        const modified = table({
+            cventAppointmentId: "appt-1",
+            lastPushedAt: new Date("2027-01-01T00:00:00Z"),
+            lastModifiedAt: new Date("2027-01-02T00:00:00Z"),
+        });
+
+        await pushRoundtableRows("EVT", [modified], [seat("sf-a", "seated", 1)]);
+
+        expect(updated().attendeeContactIds).toEqual([]);
+    });
+
+    test("criterion 20: gives up on a collision when the old appointment isn't in Cvent's active list", async () => {
+        createAppointment.mockRejectedValue(collision());
+        getAppointmentsByEvent.mockResolvedValue([]);
+        const modified = table({
+            cventAppointmentId: "appt-1",
+            lastPushedAt: new Date("2027-01-01T00:00:00Z"),
+            lastModifiedAt: new Date("2027-01-02T00:00:00Z"),
+        });
+
+        const summary = await pushRoundtableRows("EVT", [modified], defaultSeats());
+
+        expect(summary.results[0]).toMatchObject({ ok: false, reason: "cvent_no_availability" });
+        expect(updateAppointment).not.toHaveBeenCalled();
+        expect(cancelAppointment).not.toHaveBeenCalled();
+        expect(saved).toHaveLength(0);
+    });
+
+    test("criterion 20: a table whose appointment was cancelled in Cvent gets a fresh create", async () => {
+        cancelAppointment.mockRejectedValue(
+            Object.assign(new Error("Gone"), { statusCode: 400, body: JSON.stringify({ message: "This appointment has been cancelled." }) }),
+        );
+        const modified = table({
+            cventAppointmentId: "appt-1",
+            lastPushedAt: new Date("2027-01-01T00:00:00Z"),
+            lastModifiedAt: new Date("2027-01-02T00:00:00Z"),
+        });
+
+        const summary = await pushRoundtableRows("EVT", [modified], defaultSeats());
+
+        expect(summary.results[0]).toMatchObject({ ok: true, cventAppointmentId: "appt-new" });
+        expect(createAppointment).toHaveBeenCalledTimes(1);
+        expect(updateAppointment).not.toHaveBeenCalled();
+        expect(saved[0]).toMatchObject({ cventAppointmentId: "appt-new" });
+    });
+
+    test("finding 3: a host moved between two pushed tables at the same time is busy whatever the push order", async () => {
+        // sf-a hosted table A's appointment. They now sit at table B, whose appointment has another host.
+        getEventAppointments.mockResolvedValue([
+            { id: "appt-A", startTime: SLOT.startTime, participantContactIds: ["c-sf-a"], hostContactIds: ["c-sf-a"], locationName: null },
+            { id: "appt-B", startTime: SLOT.startTime, participantContactIds: ["c-sf-z"], hostContactIds: ["c-sf-z"], locationName: null },
+        ]);
+        loadAttendees.mockResolvedValue(["sf-a", "sf-b", "sf-z"].map((id) => delegate(id)));
+        const pushedAt = new Date("2027-01-01T00:00:00Z");
+        const editedAt = new Date("2027-01-02T00:00:00Z");
+        const tableA = table({ id: "rt-A", cventAppointmentId: "appt-A", lastPushedAt: pushedAt, lastModifiedAt: editedAt });
+        const tableB = table({ id: "rt-B", cventAppointmentId: "appt-B", lastPushedAt: pushedAt, lastModifiedAt: editedAt });
+        const seats: RoundtableSeatRow[] = [
+            { ...seat("sf-b", "seated", 1), roundtableId: "rt-A" },
+            { ...seat("sf-a", "seated", 1), roundtableId: "rt-B" },
+            { ...seat("sf-z", "seated", 2), roundtableId: "rt-B" },
+        ];
+
+        const bFirst = await pushRoundtableRows("EVT", [tableB, tableA], seats);
+        const aFirst = await pushRoundtableRows("EVT", [tableA, tableB], seats);
+
+        expect(bFirst.results.find((r) => r.meetingId === "rt-B")?.reason).toBe("host_busy");
+        expect(aFirst.results.find((r) => r.meetingId === "rt-B")?.reason).toBe("host_busy");
+    });
+
+    test("criterion 20: after the host is moved off, the in-place update sends the next lowest id as host", async () => {
+        createAppointment.mockRejectedValue(collision());
+        getAppointmentsByEvent.mockResolvedValue([listed("appt-1", "Delegate Group Meetings")]);
         const modified = table({
             cventAppointmentId: "appt-1",
             lastPushedAt: new Date("2027-01-01T00:00:00Z"),
@@ -262,7 +391,7 @@ describe("pushRoundtableRows", () => {
         expect(created().description).toBe("");
     });
 
-    test("criterion 21a: an edited description is pushed exactly, and re-pushed in place", async () => {
+    test("criterion 21a: an edited description is pushed exactly on re-push", async () => {
         const text = `${DEFAULT_ROUNDTABLE_DESCRIPTION}\n\nWhat does good leadership look like in 2027?`;
         const modified = table({
             description: text,
@@ -273,7 +402,7 @@ describe("pushRoundtableRows", () => {
 
         await pushRoundtableRows("EVT", [modified], defaultSeats());
 
-        expect(updated().description).toBe(text);
+        expect(created().description).toBe(text);
     });
 
     test("fails without calling Cvent when the host already hosts another appointment then", async () => {
@@ -283,7 +412,7 @@ describe("pushRoundtableRows", () => {
 
         const summary = await pushRoundtableRows("EVT", [table()], defaultSeats());
 
-        expect(summary.results[0]).toMatchObject({ ok: false, reason: "host_not_in_cvent" });
+        expect(summary.results[0]).toMatchObject({ ok: false, reason: "host_busy" });
         expect(summary.results[0].error).toContain("already hosts another Cvent appointment at this time");
         expect(createAppointment).not.toHaveBeenCalled();
     });
@@ -302,6 +431,43 @@ describe("pushRoundtableRows", () => {
 
         expect(summary.results[0].reason).toBe("empty_table");
         expect(createAppointment).not.toHaveBeenCalled();
+    });
+
+    test("finding 5: a pushed table with no one seated says it can be unpushed", async () => {
+        const pushed = table({ cventAppointmentId: "appt-1", lastPushedAt: new Date(0), lastModifiedAt: new Date(1) });
+
+        const summary = await pushRoundtableRows("EVT", [pushed], []);
+
+        expect(summary.results[0].reason).toBe("empty_table");
+        expect(summary.results[0].error).toContain("or Unpush the table to cancel its Cvent appointment");
+    });
+
+    test("finding 7a: fails and names the new appointment when the table was deleted during the push", async () => {
+        returnedRows.mockReturnValueOnce([]);
+
+        const summary = await pushRoundtableRows("EVT", [table()], defaultSeats());
+
+        expect(summary.results[0]).toMatchObject({ ok: false });
+        expect(summary.results[0].error).toContain("appt-new");
+    });
+
+    test("finding 9: an edit saved while the push runs leaves the table Modified", async () => {
+        let editedAt: Date | null = null;
+        createAppointment.mockImplementationOnce(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            editedAt = new Date();
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            return "appt-new";
+        });
+
+        await pushRoundtableRows("EVT", [table()], defaultSeats());
+
+        const status = getSyncStatus({
+            cventAppointmentId: "appt-new",
+            lastPushedAt: saved[0].lastPushedAt as Date,
+            lastModifiedAt: editedAt,
+        });
+        expect(status).toBe("modified");
     });
 
     test("refuses a table with a seated delegate who cancelled in Cvent", async () => {

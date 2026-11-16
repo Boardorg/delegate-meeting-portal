@@ -803,7 +803,10 @@ export type CventAppointmentInput = {
     appointmentTypeId: string;
     /** Cvent location id. Omitted from the request when null/undefined. */
     locationId?: string | null;
-    /** Cvent contact ids of the appointment attendees (the requested delegate). */
+    /**
+     * Cvent contact ids of the appointment attendees (the requested delegate).
+     * On update, an empty list removes every attendee, and undefined leaves them out of the request.
+     */
     attendeeContactIds?: string[];
     /**
      * External reference code, built by appointmentCode() in lib/cvent/push.ts.
@@ -869,7 +872,9 @@ export function buildUpdateAppointmentRequest(
         endTime: input.endTime,
         hosts: toUuidList(input.hostContactIds),
         ...(input.locationId ? { location: input.locationId } : {}),
-        ...(input.attendeeContactIds?.length
+        // An empty list is still sent, so an update can remove every attendee.
+        // Leaving attendeeContactIds undefined leaves the attendees out of the request.
+        ...(input.attendeeContactIds !== undefined
             ? { attendees: toUuidList(input.attendeeContactIds) }
             : {}),
     };
@@ -966,9 +971,7 @@ export async function createAppointment(
  * Updates an existing Cvent appointment in place and returns its id. Used when
  * a re-push can't create a replacement because the old appointment still holds
  * the same participants at the same time (see lib/cvent/push.ts). In mock mode
- * is a no-op that returns the given apptId.
- * A roundtable already in Cvent is always updated this way (see lib/cvent/roundtablePush.ts).
- *
+ * is a no-op that returns the given apptId. *
  * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
  * @param {string} apptId - The existing Cvent appointment id to update.
  * @param {CventAppointmentInput} input - The updated appointment fields.

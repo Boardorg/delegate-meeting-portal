@@ -43,7 +43,8 @@ vi.mock("@/lib/cvent/roundtablePush", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { clearUnsyncedRoundtablesForEvent, pushAllRoundtablesForEvent, runRoundtablesForEvent } from "./actions";
+import { clearUnsyncedRoundtablesForEvent, listRoundtables, pushAllRoundtablesForEvent, runRoundtablesForEvent } from "./actions";
+import { storedSlotMap } from "@/lib/cvent/storedSlots";
 
 /**
  * Checks that exactly one delete ran, and that it only matches the event's tables with no Cvent appointment.
@@ -119,6 +120,56 @@ beforeEach(() => {
     vi.clearAllMocks();
     inserted.length = 0;
     selectResults.length = 0;
+});
+
+describe("listRoundtables", () => {
+    test("fix 5: a pushed table whose booked slot Cvent no longer lists still shows its time and stays in the setup list", async () => {
+        // Table A's slot is full, so Cvent's list only has table B's slot.
+        const slotB = slot("b");
+        const pushedA = { ...table("rt-a", "a", "appt-a"), locationId: "loc-a", lastPushedAt: new Date(0) };
+        const scheduleData: MatchingContext["scheduleData"] = {
+            timeslots: [slotB],
+            locations: [],
+            timeslotById: new Map([[slotB.id, slotB]]),
+            locationById: new Map(),
+            timezone: "UTC",
+            appointmentTypes: [{ id: "g", name: "Group" }],
+            appointmentTypeKinds: { g: "delegate_group" },
+        };
+        const appointments = [
+            {
+                id: "appt-a",
+                startTime: "2027-01-20T15:00:00.000Z",
+                endTime: "2027-01-20T15:40:00.000Z",
+                participantContactIds: [],
+                hostContactIds: [],
+                locationName: null,
+                locationId: null,
+                typeName: "Group",
+                typeId: null,
+            },
+        ];
+        loadMatchingContext.mockResolvedValue({
+            attendees: [],
+            scheduleData,
+            settings: DEFAULT_MATCHING_SETTINGS,
+            rows: [],
+            roundtableRows: [pushedA],
+            seatRows: [],
+            appointments,
+            slotById: storedSlotMap(scheduleData, [pushedA], appointments),
+            cventOnly: [],
+            counts: new Map(),
+        } satisfies MatchingContext);
+
+        const overview = await listRoundtables("EVT");
+
+        expect(overview.rows[0]).toMatchObject({ id: "rt-a", startTime: "2027-01-20T15:00:00.000Z", day: 1 });
+        expect(overview.cventTables.map((t) => [t.timeslotId, t.hasRoundtable])).toEqual(
+            expect.arrayContaining([["a", true], ["b", false]]),
+        );
+        expect(overview.cventTables).toHaveLength(2);
+    });
 });
 
 describe("pushAllRoundtablesForEvent", () => {

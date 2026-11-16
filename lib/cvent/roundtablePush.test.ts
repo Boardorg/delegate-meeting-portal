@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import type { Attendee, Timeslot } from "@/types";
 import type { RoundtableRow, RoundtableSeatRow } from "@/lib/db/schema";
-import type { CventAppointmentInput } from "@/lib/cvent/client";
+import type { CventAppointmentInput, CventAppointmentSummary } from "@/lib/cvent/client";
 import { emptyProfile } from "@/lib/attendees/formatProfile";
 import { DEFAULT_ROUNDTABLE_DESCRIPTION } from "@/lib/matching/roundtables";
 import { getSyncStatus } from "@/lib/cvent/syncStatus";
@@ -173,9 +173,9 @@ function collision(): Error {
  *
  * @param {string} id - The appointment id.
  * @param {string | null} typeName - The type name Cvent lists for it.
- * @returns The appointment summary.
+ * @returns {CventAppointmentSummary} The appointment summary.
  */
-function listed(id: string, typeName: string | null) {
+function listed(id: string, typeName: string | null): CventAppointmentSummary {
     return { id, startTime: new Date(SLOT.startTime), endTime: new Date(SLOT.endTime), locationName: "Table 1", typeName };
 }
 

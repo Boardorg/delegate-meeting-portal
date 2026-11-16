@@ -48,7 +48,7 @@ describe("buildCreateAppointmentRequest", () => {
         expect("description" in req).toBe(false);
     });
 
-    test("still leaves attendees out of a create when the list is empty", () => {
+    test("finding 1: still leaves attendees out of a create when the list is empty", () => {
         const req = buildCreateAppointmentRequest({ ...base, hostContactIds: ["h1"], attendeeContactIds: [] });
         expect("attendees" in req).toBe(false);
     });

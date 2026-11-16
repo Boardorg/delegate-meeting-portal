@@ -43,7 +43,7 @@ const REASON_HINT: Record<SyncFailureReason, string> = {
     host_not_in_cvent:
         "The requester (appointment host) isn't a Cvent attendee for this event. Add them in Cvent, then sync again.",
     host_busy:
-        "The host already hosts another Cvent appointment at this time, and Cvent rejects a host in two appointments at once. Move the meeting to another time, or move the host off the roundtable.",
+        "No host is free at this time. Each one already hosts another Cvent appointment then, or is needed for another meeting in this push. Move the meeting to another time, or for a roundtable, move the host off the table.",
     attendee_cancelled:
         "A participant cancelled their Cvent registration, so Cvent won't accept them. Reassign or delete the meeting.",
     cvent_type_change:

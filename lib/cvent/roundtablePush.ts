@@ -229,6 +229,7 @@ export async function pushRoundtableRows(
 
 /**
  * Builds the save step for a roundtable's push.
+ * lastPushedAt moves only when Cvent accepts the push, so the next code after an unpush is always new.
  *
  * @param {string} roundtableId - The roundtable.
  * @returns {SavePush} Writes the appointment id and push time on the table, and says whether the row was still there.

@@ -17,7 +17,7 @@
  * - missing_timeslot: the meeting's timeslot no longer exists in Cvent.
  * - missing_location: the meeting has no location assigned to send.
  * - host_not_in_cvent: the requester (appointment host) has no Cvent contact id.
- * - host_busy: every possible host already hosts another Cvent appointment at that time.
+ * - host_busy: no host is free at that time, because they already host another Cvent appointment then or are needed for another meeting in the same push.
  * - attendee_cancelled: the delegate, or every rep of the company, cancelled their Cvent registration.
  * - cvent_type_change: a re-push would need to edit the old appointment in place to a slot of another
  *   appointment type, which Cvent can't do. Also used when the old appointment's type can't be checked.

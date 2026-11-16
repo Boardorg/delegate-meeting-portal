@@ -971,7 +971,8 @@ export async function createAppointment(
  * Updates an existing Cvent appointment in place and returns its id. Used when
  * a re-push can't create a replacement because the old appointment still holds
  * the same participants at the same time (see lib/cvent/push.ts). In mock mode
- * is a no-op that returns the given apptId. *
+ * is a no-op that returns the given apptId.
+ *
  * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
  * @param {string} apptId - The existing Cvent appointment id to update.
  * @param {CventAppointmentInput} input - The updated appointment fields.

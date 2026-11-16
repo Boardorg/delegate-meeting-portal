@@ -140,7 +140,7 @@ Both new meeting pages mirror the sponsor meetings page (`app/admin/meetings/`, 
 
 ## Open questions
 
-None. The roundtable host question was answered by Jax on 2026-11-16 (decisions 22 and 24).
+None.
 
 ## Acceptance criteria
 

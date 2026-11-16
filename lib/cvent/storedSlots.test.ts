@@ -182,9 +182,74 @@ describe("storedSlotMap", () => {
     });
 });
 
+describe("which stored slots are rebuilt", () => {
+    /**
+     * Builds a stored meeting row at the booked 14:30 slot, pushed on Jan 1.
+     *
+     * @param {Date | null} lastModifiedAt - When it was last edited, or null.
+     * @param {Date | null} [lastPushedAt] - When it was last pushed. Defaults to Jan 1.
+     * @returns The row.
+     */
+    function meeting(lastModifiedAt: Date | null, lastPushedAt: Date | null = new Date("2026-01-01T00:00:00Z")) {
+        return { kind: "delegate_delegate", timeslotId: "ts-1430", cventAppointmentId: "appt-b", locationId: "loc-b", lastPushedAt, lastModifiedAt };
+    }
+
+    test("fix 1: a meeting not modified since its push is rebuilt from its appointment", () => {
+        const map = storedSlotMap(sources(), [meeting(null)], [appointment()]);
+
+        expect(map.get("ts-1430")?.startTime).toBe("2026-10-31T14:30:00.000Z");
+    });
+
+    test("fix 1: a meeting modified since its push isn't rebuilt, since it may have moved off the appointment's time", () => {
+        const map = storedSlotMap(sources(), [meeting(new Date("2026-01-02T00:00:00Z"))], [appointment()]);
+
+        expect(map.has("ts-1430")).toBe(false);
+    });
+
+    test("fix 1: a meeting with no recorded push isn't rebuilt", () => {
+        const map = storedSlotMap(sources(), [meeting(null, null)], [appointment()]);
+
+        expect(map.has("ts-1430")).toBe(false);
+    });
+
+    test("fix 1: a modified roundtable is still rebuilt, since a roundtable never changes slot", () => {
+        const table = {
+            timeslotId: "ts-1430",
+            cventAppointmentId: "appt-b",
+            locationId: "loc-b",
+            lastPushedAt: new Date("2026-01-01T00:00:00Z"),
+            lastModifiedAt: new Date("2026-01-02T00:00:00Z"),
+        };
+
+        const map = storedSlotMap(sources(), [table], [appointment()]);
+
+        expect(map.get("ts-1430")?.startTime).toBe("2026-10-31T14:30:00.000Z");
+    });
+
+    test("fix 2: leaves the type unresolved when the location's listed slots have two types", () => {
+        const s = sources();
+        const other = { ...slot("ts-other", "2026-10-31T15:45:00.000Z", 1), appointmentTypeId: "type-d", appointmentTypeName: "D2D", kind: "delegate_delegate" as const };
+        s.timeslots.push(other);
+        s.timeslotById.set(other.id, other);
+
+        const map = storedSlotMap(s, [{ timeslotId: "ts-1430", cventAppointmentId: "appt-b", locationId: "loc-b" }], [appointment({ typeName: null })]);
+
+        expect(map.get("ts-1430")).toMatchObject({ appointmentTypeId: "", appointmentTypeName: null, kind: "ignore" });
+    });
+});
+
 describe("busy time with a rebuilt slot", () => {
     test("a pushed meeting whose slot Cvent no longer lists still makes both delegates busy then", () => {
-        const row = { kind: "delegate_delegate", attendeeA: "d1", attendeeB: "d2", timeslotId: "ts-1430", cventAppointmentId: "appt-b", locationId: "loc-b" } as const;
+        const row = {
+            kind: "delegate_delegate",
+            attendeeA: "d1",
+            attendeeB: "d2",
+            timeslotId: "ts-1430",
+            cventAppointmentId: "appt-b",
+            locationId: "loc-b",
+            lastPushedAt: new Date("2026-01-01T00:00:00Z"),
+            lastModifiedAt: null,
+        } as const;
         const slotById = storedSlotMap(sources(), [row], [appointment()]);
 
         // No Cvent appointments are passed as busy, so only the meeting row can make them busy.

@@ -2,6 +2,7 @@ import type { Timeslot } from "@/types";
 import type { CventExistingAppointment } from "@/lib/cvent/client";
 import type { EventScheduleData } from "@/lib/cvent/mapper";
 import { kindForAppointmentType } from "@/lib/events/meetingKinds";
+import { getSyncStatus } from "@/lib/cvent/syncStatus";
 
 // ---------------------------------------------------------------------------
 // Resolving a stored meeting's or roundtable's timeslot.
@@ -20,7 +21,36 @@ export type StoredSlotRow = {
     timeslotId: string;
     cventAppointmentId: string | null;
     locationId: string | null;
+    /**
+     * The meeting kind, set on scheduled_meetings rows only.
+     * A meeting can move to another slot, so its slot is only rebuilt while it is synced.
+     * A roundtable has no kind and never changes slot.
+     */
+    kind?: string;
+    lastPushedAt?: Date | null;
+    lastModifiedAt?: Date | null;
 };
+
+/**
+ * Whether a row's stored slot is the one its Cvent appointment was pushed for.
+ * A roundtable never changes slot, so it always is.
+ * A meeting is when it was pushed and hasn't been modified since, by the same rule as its sync status.
+ * A meeting moved since its push still has its appointment at the old time, so that time can't stand in for the new slot.
+ *
+ * @param {StoredSlotRow} row - The stored meeting or roundtable.
+ * @returns {boolean} True when the appointment's time is the stored slot's time.
+ */
+export function slotMatchesAppointment(row: StoredSlotRow): boolean {
+    if (row.kind === undefined) return true;
+    if (!row.lastPushedAt) return false;
+    return (
+        getSyncStatus({
+            cventAppointmentId: row.cventAppointmentId,
+            lastPushedAt: row.lastPushedAt,
+            lastModifiedAt: row.lastModifiedAt ?? null,
+        }) === "synced"
+    );
+}
 
 /** The parts of an event's schedule data a slot is resolved from. */
 export type SlotSources = Pick<
@@ -60,10 +90,11 @@ function dayNumbering(timeslots: Timeslot[], extraStarts: string[]): (startTime:
 /**
  * Rebuilds a stored row's timeslot from its Cvent appointment.
  *
- * The time comes from the appointment. The location is the row's own, else the appointment's.
- * Cvent's appointment list usually names the type and location without their ids.
- * So the type id comes from the record when it has one, else from the event's types by name,
- * else from a listed slot at the same location.
+ * The time comes from the appointment.
+ * The location is the row's own, else the appointment's.
+ * The appointment list usually names the type and location without their ids.
+ * The type id comes from the record when it has one.
+ * Otherwise it comes from the event's types by name, then from the listed slots at the same location when they all share one type.
  * The kind comes from the event's appointment-type mapping.
  *
  * @param {StoredSlotRow} row - The stored meeting or roundtable.
@@ -85,7 +116,11 @@ function slotFromAppointment(
         (appt.locationName ? sources.locations.find((l) => l.name === appt.locationName)?.id : undefined) ??
         null;
     // A listed slot at the same location, used for the type when the appointment doesn't name it.
-    const sibling = locationId ? sources.timeslots.find((t) => t.locationId === locationId) : undefined;
+    // It only counts when every listed slot there has the same type, so the guess can't pick the wrong one.
+    const atLocation = locationId ? sources.timeslots.filter((t) => t.locationId === locationId) : [];
+    const sibling = atLocation.every((t) => t.appointmentTypeId === atLocation[0].appointmentTypeId)
+        ? atLocation[0]
+        : undefined;
     const typeByName = appt.typeName
         ? sources.appointmentTypes.find((t) => t.name.trim() === appt.typeName)
         : undefined;
@@ -115,6 +150,7 @@ function slotFromAppointment(
  * Builds the slot lookup for stored rows.
  * It holds every listed timeslot, plus a slot rebuilt from the Cvent appointment of each row whose stored slot isn't listed.
  * A row whose appointment isn't in the active list stays missing.
+ * So does a meeting modified since its push, since its appointment may still be at an old time (see slotMatchesAppointment).
  *
  * Use it only to read the slot of a stored meeting or roundtable.
  * Choosing a slot to book still uses the listed timeslots, so a full time is never offered.
@@ -134,7 +170,7 @@ export function storedSlotMap(
         (appointments ?? []).filter((a) => a.id).map((a) => [a.id as string, a]),
     );
     const missing = rows
-        .filter((r) => !out.has(r.timeslotId) && r.cventAppointmentId)
+        .filter((r) => !out.has(r.timeslotId) && r.cventAppointmentId && slotMatchesAppointment(r))
         .map((r) => ({ row: r, appt: appointmentById.get(r.cventAppointmentId as string) }))
         .filter((m): m is { row: StoredSlotRow; appt: CventExistingAppointment } => !!m.appt);
     const dayOf = dayNumbering(sources.timeslots, missing.map((m) => m.appt.startTime));

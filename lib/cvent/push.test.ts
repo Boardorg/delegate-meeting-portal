@@ -960,20 +960,21 @@ describe("a pushed meeting whose slot Cvent no longer lists", () => {
         getAppointmentsByEvent.mockResolvedValue(listed("appt-old", typeName, BOOKED_START));
     }
 
-    test("a sponsor meeting re-pushes from its appointment's time and is updated in place", async () => {
+    test("a synced sponsor meeting re-pushes from its appointment's time and is updated in place", async () => {
         bookedAppointment("Sponsor to Delegate Meetings");
         loadAttendees.mockResolvedValue([
             att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
             att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
         ]);
-        const edited = row({
+        // Not modified since its push, so its stored slot is the one its appointment was pushed for.
+        const synced = row({
             timeslotId: "ts-booked",
             cventAppointmentId: "appt-old",
-            lastPushedAt: new Date("2025-01-01T00:00:00Z"),
-            lastModifiedAt: new Date("2025-01-02T00:00:00Z"),
+            lastPushedAt: new Date("2025-01-02T00:00:00Z"),
+            lastModifiedAt: new Date("2025-01-01T00:00:00Z"),
         });
 
-        const summary = await pushMeetingRows("EVT", [edited]);
+        const summary = await pushMeetingRows("EVT", [synced]);
 
         expect(summary.results[0]).toMatchObject({ ok: true, kind: "update", cventAppointmentId: "appt-old" });
         expect(lastInput().startTime).toEqual(new Date(BOOKED_START));
@@ -981,13 +982,13 @@ describe("a pushed meeting whose slot Cvent no longer lists", () => {
         expect(cancelAppointment).not.toHaveBeenCalled();
     });
 
-    test("a D2D meeting re-pushes from its appointment's time and is updated in place", async () => {
+    test("a synced D2D meeting re-pushes from its appointment's time and is updated in place", async () => {
         bookedAppointment("Delegate to Delegate Meetings");
         loadAttendees.mockResolvedValue([
             att({ id: "d1", role: "delegate", salesforceId: "d1-sf", name: "Dee", cventContactId: "cd1" }),
             att({ id: "d2", role: "delegate", salesforceId: "d2-sf", name: "Eve", cventContactId: "cd2" }),
         ]);
-        const edited = row({
+        const synced = row({
             id: "d2d-1",
             kind: "delegate_delegate",
             attendeeA: "d1-sf",
@@ -995,14 +996,36 @@ describe("a pushed meeting whose slot Cvent no longer lists", () => {
             timeslotId: "ts-booked",
             cventAppointmentId: "appt-old",
             lastPushedAt: new Date("2025-01-01T00:00:00Z"),
-            lastModifiedAt: new Date("2025-01-02T00:00:00Z"),
+            lastModifiedAt: null,
         });
 
-        const summary = await pushDelegateMeetingRows("EVT", [edited]);
+        const summary = await pushDelegateMeetingRows("EVT", [synced]);
 
         expect(summary.results[0]).toMatchObject({ ok: true, kind: "update", cventAppointmentId: "appt-old" });
         expect(updateAppointment.mock.calls[0][1]).toBe("appt-old");
         expect(cancelAppointment).not.toHaveBeenCalled();
+    });
+
+    test("fix 1: a meeting moved since its push, to a slot no longer listed, fails without touching Cvent", async () => {
+        // The appointment is still at the old time, so it can't stand in for the new slot.
+        bookedAppointment("Sponsor to Delegate Meetings");
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+        ]);
+        const moved = row({
+            timeslotId: "ts-new-full",
+            cventAppointmentId: "appt-old",
+            lastPushedAt: new Date("2025-01-01T00:00:00Z"),
+            lastModifiedAt: new Date("2025-01-02T00:00:00Z"),
+        });
+
+        const summary = await pushMeetingRows("EVT", [moved]);
+
+        expect(summary.results[0]).toMatchObject({ ok: false, reason: "missing_timeslot" });
+        expect(summary.results[0].error).toContain("Move it to another slot.");
+        expect(createAppointment).not.toHaveBeenCalled();
+        expect(updateAppointment).not.toHaveBeenCalled();
     });
 
     test("a meeting with no listed slot and no appointment fails with missing_timeslot and a hint", async () => {

@@ -13,7 +13,7 @@ import {
     existingAppointmentLookup,
     hostBusyElsewhereLookup,
     sendAppointment,
-    storedSlotsForPush,
+    loadStoredSlots,
     type PushResult,
     type PushSummary,
     type SavePush,
@@ -91,7 +91,7 @@ export async function pushRoundtableRows(
     // Existing appointments' times and types, read from Cvent only if a re-push collides with its old appointment.
     const existingAppointmentOf = existingAppointmentLookup(eventCode);
     // Each table's slot, rebuilt from its Cvent appointment when Cvent no longer lists the time.
-    const slotById = await storedSlotsForPush(eventCode, scheduleData, rows);
+    const slotById = await loadStoredSlots(eventCode, scheduleData, rows);
     /**
      * Names a roundtable by its theme and location.
      *

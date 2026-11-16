@@ -10,7 +10,7 @@ import {
 import { loadAttendees } from "@/lib/attendees/loader";
 import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
-import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
+import { pushMeetingRows, needsSync, loadStoredSlots } from "@/lib/cvent/push";
 import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import {
     cancelAppointment,
@@ -385,7 +385,10 @@ export async function getSlotOptions(params: {
     const meeting = meetingRows[0];
     if (!meeting) return { current: null, options: [] };
 
-    const { timeslots, timeslotById, locationById } = scheduleData;
+    const { timeslots, locationById } = scheduleData;
+    // Stored meetings' slots, for their busy time and the current slot.
+    // A pushed meeting whose time Cvent no longer lists gets its slot from its Cvent appointment.
+    const timeslotById = await loadStoredSlots(params.eventCode, scheduleData, [meeting, ...otherMeetings]);
 
     // The company is always the A side of a sponsor meeting.
     const booth = await boothFilterForSponsor(
@@ -706,7 +709,10 @@ export async function getNewMeetingSlots(params: {
         loadEventScheduleData(params.eventCode),
     ]);
 
-    const { timeslots, timeslotById, locationById } = scheduleData;
+    const { timeslots, locationById } = scheduleData;
+    // Stored meetings' slots, for their busy time.
+    // A pushed meeting whose time Cvent no longer lists gets its slot from its Cvent appointment.
+    const timeslotById = await loadStoredSlots(params.eventCode, scheduleData, allMeetings);
     const bookedSponsor = bookedIntervals(
         allMeetings,
         params.sponsorId,

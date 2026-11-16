@@ -80,6 +80,8 @@ vi.mock("@/lib/cvent/client", () => ({
 vi.mock("@/lib/cvent/push", () => ({
     pushMeetingRows: vi.fn(async () => ({ total: 0, pushed: 0, failed: 0, results: [] })),
     needsSync: vi.fn(),
+    // Every stored slot is listed in these tests, so the lookup is the listed slots.
+    loadStoredSlots: vi.fn(async (_eventCode: string, data: { timeslotById: Map<string, unknown> }) => data.timeslotById),
 }));
 
 import {

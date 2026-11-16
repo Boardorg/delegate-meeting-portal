@@ -276,7 +276,8 @@ export async function hostBusyElsewhereLookup(
 }
 
 /**
- * Builds the slot lookup for stored rows being pushed, with each missing slot rebuilt from the row's Cvent appointment.
+ * Builds the slot lookup for stored rows, with each missing slot rebuilt from the row's Cvent appointment.
+ * Used by push and by the sponsor page's slot pickers.
  * Cvent's available-times list drops a booked time at a location that allows one appointment at a time.
  * When the appointment list can't be read, only the listed slots are used, and the failure is logged.
  *
@@ -285,7 +286,7 @@ export async function hostBusyElsewhereLookup(
  * @param {StoredSlotRow[]} rows - The stored rows whose slots are read.
  * @returns {Promise<Map<string, Timeslot>>} Slots by id, listed and rebuilt.
  */
-export async function storedSlotsForPush(
+export async function loadStoredSlots(
     eventCode: string,
     scheduleData: SlotSources,
     rows: StoredSlotRow[],
@@ -299,7 +300,7 @@ export async function storedSlotsForPush(
         appointments = await getEventAppointments(eventCode);
     } catch (err) {
         console.warn(
-            `storedSlotsForPush: could not list Cvent appointments for "${eventCode}" to find booked slots. ` +
+            `loadStoredSlots: could not list Cvent appointments for "${eventCode}" to find booked slots. ` +
                 `${err instanceof Error ? err.message : String(err)}`,
         );
     }
@@ -450,7 +451,7 @@ export async function pushMeetingRows(
 
     // Each meeting's slot, rebuilt from its Cvent appointment when Cvent no longer lists the time.
     // The company's other meetings are included, so the rep split still sees them at their time.
-    const slotById = await storedSlotsForPush(eventCode, scheduleData, [...rows, ...companyMeetings]);
+    const slotById = await loadStoredSlots(eventCode, scheduleData, [...rows, ...companyMeetings]);
 
     const results: PushResult[] = [];
     for (const row of rows) {
@@ -707,7 +708,7 @@ export async function pushDelegateMeetingRows(
     const busyHostsAt = await busyHostLookup(eventCode, replacedAppointmentIds);
     const existingAppointmentOf = existingAppointmentLookup(eventCode);
     // Each meeting's slot, rebuilt from its Cvent appointment when Cvent no longer lists the time.
-    const slotById = await storedSlotsForPush(eventCode, scheduleData, rows);
+    const slotById = await loadStoredSlots(eventCode, scheduleData, rows);
 
     const results: PushResult[] = [];
     for (const row of rows) {

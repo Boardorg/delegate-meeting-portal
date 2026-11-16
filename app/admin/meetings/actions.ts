@@ -16,6 +16,7 @@ import { getEventAppointments } from "@/lib/cvent/client";
 import { unpushMeetingRows } from "@/lib/cvent/unpush";
 import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
 import { preexistingFromAppointments } from "@/lib/cvent/preexisting";
+import { storedSlotMap } from "@/lib/cvent/storedSlots";
 import { countAppointmentsNotInPortal } from "@/lib/cvent/cventOnly";
 import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import {
@@ -439,6 +440,14 @@ export async function runSchedulerForEvent(
     // unavailable — the DB-based reconciliation below still guards pushed rows.
     const preexisting = await buildPreexistingFromCvent(eventCode, attendees);
 
+    // Stored meetings' and roundtables' slots, for their busy time and the reconciliation below.
+    // A pushed row whose time Cvent no longer lists gets its slot from its Cvent appointment.
+    const slotById = storedSlotMap(
+        scheduleData,
+        [...pushedRows, ...unpushedD2D, ...roundtableRows],
+        await getEventAppointments(eventCode).catch(() => null),
+    );
+
     // Existing meetings count toward each company's maximum before the run books anything.
     // Cvent's appointment list already includes pushed meetings, so the two counts overlap.
     // The larger one is used per party, which still counts pushed meetings when Cvent
@@ -461,7 +470,7 @@ export async function runSchedulerForEvent(
     // Each engine treats every meeting already scheduled as busy time, so add the unpushed D2D meetings and roundtable seats.
     const busy = new Map(preexisting.busyStartTimesByAttendee ?? []);
     for (const r of [...unpushedD2D, ...seatMeetings]) {
-        const start = scheduleData.timeslotById.get(r.timeslotId)?.startTime;
+        const start = slotById.get(r.timeslotId)?.startTime;
         if (!start) continue;
         for (const party of [r.attendeeA, r.attendeeB]) {
             const counts = toBusyCounts(busy.get(party));
@@ -520,7 +529,7 @@ export async function runSchedulerForEvent(
             schedule,
             // Unpushed D2D meetings and roundtable seats stay too, so they guard their delegates' times the same way.
             [...pushedRows, ...unpushedD2D, ...seatMeetings],
-            scheduleData.timeslotById,
+            slotById,
             atOnceOf,
         );
 

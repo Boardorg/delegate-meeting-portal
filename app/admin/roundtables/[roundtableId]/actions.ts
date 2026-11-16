@@ -114,13 +114,13 @@ export async function getRoundtableDetail(params: {
         .map((s) => byId.get(s.delegateId))
         .filter((a): a is Attendee => !!a);
 
+    const hostId = roundtableHostId(mine.filter((s) => s.role === "seated").map((s) => s.delegateId));
     /**
      * Builds a seat row, explained against the table's other seated delegates.
      *
      * @param {(typeof mine)[number]} s - The seat.
      * @returns {SeatRow} The row.
      */
-    const hostId = roundtableHostId(mine.filter((s) => s.role === "seated").map((s) => s.delegateId));
     const toRow = (s: (typeof mine)[number]): SeatRow => {
         const a = byId.get(s.delegateId);
         const others = seatedPeople.filter((p) => p.salesforceId !== s.delegateId).map((p) => p.profile);
@@ -278,7 +278,13 @@ function checkMove(
         .filter((s) => s.roundtableId === table.id && s.role === "seated" && !leaving.includes(s.delegateId))
         .map((s) => byId.get(s.delegateId))
         .filter((a): a is Attendee => !!a);
-    const busy = busyStartTimes(ctx.rows, ctx.scheduleData.timeslotById, ctx.appointments ?? [], ctx.attendees);
+    // A pushed roundtable's own Cvent appointment doesn't make its delegates busy.
+    // The seats in the portal are the truth for roundtables, and a move takes the delegate off their current table.
+    const roundtableAppointmentIds = new Set(
+        ctx.roundtableRows.map((r) => r.cventAppointmentId).filter((id): id is string => !!id),
+    );
+    const appointments = (ctx.appointments ?? []).filter((a) => !a.id || !roundtableAppointmentIds.has(a.id));
+    const busy = busyStartTimes(ctx.rows, ctx.scheduleData.timeslotById, appointments, ctx.attendees);
     const check = checkSeatMove({
         delegate,
         role: to.role,

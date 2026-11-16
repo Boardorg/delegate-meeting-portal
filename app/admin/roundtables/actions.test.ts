@@ -14,6 +14,8 @@ import { DEFAULT_ROUNDTABLE_DESCRIPTION } from "@/lib/matching/roundtables";
 
 const loadMatchingContext = vi.fn();
 const deleteWhere = vi.fn<(cond: SQL) => Promise<void>>(async () => undefined);
+// The rows a delete's returning() reports.
+const deletedRows = vi.fn(() => [{ id: "rt-old" }]);
 const inserted: unknown[] = [];
 // What each db.select() returns, in call order.
 const selectResults: unknown[][] = [];
@@ -24,7 +26,12 @@ vi.mock("@/lib/matching/data", () => ({
 }));
 vi.mock("@/lib/db/client", () => ({
     db: {
-        delete: () => ({ where: (cond: SQL) => deleteWhere(cond) }),
+        delete: () => ({
+            where: (cond: SQL) => {
+                void deleteWhere(cond);
+                return { returning: async () => deletedRows() };
+            },
+        }),
         insert: () => ({ values: async (rows: unknown) => void inserted.push(rows) }),
         select: () => ({ from: () => ({ where: async () => selectResults.shift() ?? [] }) }),
     },
@@ -36,7 +43,30 @@ vi.mock("@/lib/cvent/roundtablePush", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { pushAllRoundtablesForEvent, runRoundtablesForEvent } from "./actions";
+import { clearUnsyncedRoundtablesForEvent, pushAllRoundtablesForEvent, runRoundtablesForEvent } from "./actions";
+
+/**
+ * Checks that exactly one delete ran, and that it only matches the event's tables with no Cvent appointment.
+ * Checking cventAppointmentId in the delete itself means a table pushed since the data was read survives.
+ */
+function expectOnlyUnpushedDeleted(): void {
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
+    const query = new PgDialect().sqlToQuery(deleteWhere.mock.calls[0][0]);
+    expect(query.sql).toContain('"roundtables"."event_code" = $1');
+    expect(query.sql).toContain('"roundtables"."cvent_appointment_id" is null');
+    expect(query.params).toEqual(["EVT"]);
+}
+
+describe("clearUnsyncedRoundtablesForEvent", () => {
+    test("finding 7b: deletes only unpushed tables in one statement, so a pushed table survives, and counts what went", async () => {
+        deletedRows.mockReturnValueOnce([{ id: "rt-1" }, { id: "rt-2" }]);
+
+        const report = await clearUnsyncedRoundtablesForEvent("EVT");
+
+        expectOnlyUnpushedDeleted();
+        expect(report).toMatchObject({ kind: "clear_unsynced", deleted: 2 });
+    });
+});
 
 /**
  * Builds a delegate with no meetings.
@@ -148,11 +178,8 @@ describe("runRoundtablesForEvent", () => {
         const result = await runRoundtablesForEvent("EVT");
 
         expect(result.ok).toBe(true);
-        // Seats of the unpushed table go, then the unpushed tables themselves.
-        const dialect = new PgDialect();
-        const seatDelete = dialect.sqlToQuery(deleteWhere.mock.calls[0][0]);
-        expect(seatDelete.params).toEqual(["rt-old"]);
-        expect(dialect.sqlToQuery(deleteWhere.mock.calls[1][0]).sql).toContain('"cvent_appointment_id" is null');
+        // Finding 7b: one delete of the event's unpushed tables, which the cascade takes their seats with.
+        expectOnlyUnpushedDeleted();
 
         // Only slot b gets a new table, and d1 at the pushed table isn't seated again.
         const [tables, seats] = inserted as [NewRoundtable[], NewRoundtableSeat[]];

@@ -185,6 +185,26 @@ describe("moveDelegate", () => {
         expect(statusOfPushedTableAfterSave()).toBe("modified");
     });
 
+    test("finding 2: a delegate seated at pushed table A can move to table B at the same time", async () => {
+        const ctx = context([delegate("ann", "Acme")]);
+        const slotB: Timeslot = { ...SLOT, id: "ts-rt-b", locationId: "loc-rt-b" };
+        ctx.scheduleData.timeslots = [SLOT, slotB];
+        ctx.scheduleData.timeslotById = new Map([[SLOT.id, SLOT], [slotB.id, slotB]]);
+        ctx.roundtableRows = [
+            { ...TABLE, cventAppointmentId: "appt-A", lastPushedAt: new Date(0) },
+            { ...TABLE, id: "rt-2", timeslotId: slotB.id, locationId: "loc-rt-b" },
+        ];
+        // Table A's own appointment lists ann, but the portal's seats are the truth for roundtables.
+        ctx.appointments = [
+            { id: "appt-A", startTime: SLOT.startTime, participantContactIds: ["c-ann"], hostContactIds: ["c-ann"], locationName: null },
+        ] as MatchingContext["appointments"];
+        loadMatchingContext.mockResolvedValue(ctx);
+
+        const result = await moveDelegate({ eventCode: "EVT", delegateId: "ann", to: { roundtableId: "rt-2", role: "seated" } });
+
+        expect(result).toEqual({ ok: true });
+    });
+
     test("asks for confirmation before seating a delegate who now has a meeting", async () => {
         const ctx = context([delegate("ann", "Acme"), delegate("dan", "Initech")]);
         ctx.counts = new Map([["dan", { s2d: 1, d2d: 0 }]]);

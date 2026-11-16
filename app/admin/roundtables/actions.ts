@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import {
@@ -163,7 +163,6 @@ export async function runRoundtablesForEvent(eventCode: string): Promise<RunRoun
 
     const pushed = ctx.roundtableRows.filter((r) => r.cventAppointmentId);
     const pushedIds = new Set(pushed.map((r) => r.id));
-    const unpushedIds = ctx.roundtableRows.filter((r) => !r.cventAppointmentId).map((r) => r.id);
 
     const warnings: string[] = [];
     let d2d = 0;
@@ -183,13 +182,12 @@ export async function runRoundtablesForEvent(eventCode: string): Promise<RunRoun
         settings: ctx.settings.roundtables,
     });
 
-    // Replace the unpushed tables. Seats go first, though the foreign key would delete them too.
-    if (unpushedIds.length > 0) {
-        await db.delete(roundtableSeats).where(inArray(roundtableSeats.roundtableId, unpushedIds));
-        await db
-            .delete(roundtables)
-            .where(and(eq(roundtables.eventCode, eventCode), isNull(roundtables.cventAppointmentId)));
-    }
+    // Replace the unpushed tables. The foreign key deletes their seats.
+    // The delete checks cventAppointmentId itself, so a table pushed since the data was read is kept.
+    await db
+        .delete(roundtables)
+        .where(and(eq(roundtables.eventCode, eventCode), isNull(roundtables.cventAppointmentId)))
+        .returning({ id: roundtables.id });
 
     const now = Date.now();
     const tables: NewRoundtable[] = result.groups.map((g, i) => ({
@@ -315,20 +313,17 @@ export async function unpushAllRoundtablesForEvent(eventCode: string): Promise<M
 
 /**
  * Deletes every roundtable not pushed to Cvent, with its seats and alternates.
+ * The delete checks cventAppointmentId itself, so a table pushed in the meantime is kept.
+ * The foreign key deletes the seats.
  *
  * @param {string} eventCode - The event.
  * @returns {Promise<MaintenanceReport>} How many roundtables were deleted.
  */
 export async function clearUnsyncedRoundtablesForEvent(eventCode: string): Promise<MaintenanceReport> {
-    const unpushed = await db
-        .select({ id: roundtables.id })
-        .from(roundtables)
-        .where(and(eq(roundtables.eventCode, eventCode), isNull(roundtables.cventAppointmentId)));
-    const ids = unpushed.map((r) => r.id);
-    if (ids.length > 0) {
-        await db.delete(roundtableSeats).where(inArray(roundtableSeats.roundtableId, ids));
-        await db.delete(roundtables).where(inArray(roundtables.id, ids));
-    }
+    const deleted = await db
+        .delete(roundtables)
+        .where(and(eq(roundtables.eventCode, eventCode), isNull(roundtables.cventAppointmentId)))
+        .returning({ id: roundtables.id });
     revalidatePath("/admin/roundtables", "layout");
-    return { kind: "clear_unsynced", eventCode, generatedAt: new Date().toISOString(), deleted: ids.length };
+    return { kind: "clear_unsynced", eventCode, generatedAt: new Date().toISOString(), deleted: deleted.length };
 }

@@ -417,6 +417,17 @@ describe("pushRoundtableRows", () => {
         expect(createAppointment).not.toHaveBeenCalled();
     });
 
+    test("finding 6: an unpushed table's host is busy when a Cvent appointment with no id has them as host", async () => {
+        getEventAppointments.mockResolvedValue([
+            { id: null, startTime: SLOT.startTime, participantContactIds: ["c-sf-a"], hostContactIds: ["c-sf-a"], locationName: null },
+        ]);
+
+        const summary = await pushRoundtableRows("EVT", [table()], defaultSeats());
+
+        expect(summary.results[0]).toMatchObject({ ok: false, reason: "host_busy" });
+        expect(createAppointment).not.toHaveBeenCalled();
+    });
+
     test("refuses a table with no location, since Cvent needs one", async () => {
         const summary = await pushRoundtableRows("EVT", [table({ locationId: null })], defaultSeats());
 

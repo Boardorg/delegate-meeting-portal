@@ -257,7 +257,9 @@ export async function hostBusyElsewhereLookup(
     return (startTime, contactId, ownAppointmentId) =>
         appointments.some(
             (appt) =>
-                appt.id !== ownAppointmentId &&
+                // Only an appointment with the row's own known id is left out.
+                // A row not yet pushed has no own appointment, even when Cvent lists one with no id.
+                !(ownAppointmentId !== null && appt.id === ownAppointmentId) &&
                 sameStartTime(appt.startTime, startTime) &&
                 appt.hostContactIds.includes(contactId),
         );

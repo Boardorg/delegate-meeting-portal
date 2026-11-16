@@ -273,6 +273,7 @@ export async function getD2DSlotOptions(params: {
 /**
  * Moves a D2D meeting to another D2D slot, at that slot's location, and marks it modified.
  * The slot must be a delegate_delegate slot where both delegates are free.
+ * Choosing the meeting's own slot succeeds without saving anything.
  *
  * @param {{ id: string; eventCode: string; timeslotId: string }} params - The meeting, event and new slot.
  * @returns {Promise<DelegateMeetingResult>} Success, or why nothing was saved.
@@ -287,17 +288,19 @@ export async function moveD2DMeeting(params: {
         (r) => r.id === params.id && r.kind === "delegate_delegate" && r.source === "portal",
     );
     if (!meeting) return { ok: false, error: "Error: meeting not found" };
+    // Keeping the meeting in its own slot changes nothing.
+    // That slot can be missing from Cvent's list once it is booked, so this comes before the list check.
+    // Saving it would also mark the meeting Modified for no change.
+    if (params.timeslotId === meeting.timeslotId) return { ok: true };
     const slot = ctx.scheduleData.timeslotById.get(params.timeslotId);
     if (!slot) return { ok: false, error: "Error: that time slot isn't in Cvent any more" };
     if (slot.kind !== "delegate_delegate") {
         return { ok: false, error: "Error: D2D meetings can only use Delegate to Delegate slots" };
     }
-    if (slot.id !== meeting.timeslotId) {
-        for (const party of [meeting.attendeeA, meeting.attendeeB]) {
-            if (overlapsBooked(slot, busyIntervals(ctx, party, meeting.id))) {
-                const name = ctx.attendees.find((a) => a.salesforceId === party)?.name ?? party;
-                return { ok: false, error: `Error: ${name} already has a meeting at that time` };
-            }
+    for (const party of [meeting.attendeeA, meeting.attendeeB]) {
+        if (overlapsBooked(slot, busyIntervals(ctx, party, meeting.id))) {
+            const name = ctx.attendees.find((a) => a.salesforceId === party)?.name ?? party;
+            return { ok: false, error: `Error: ${name} already has a meeting at that time` };
         }
     }
 

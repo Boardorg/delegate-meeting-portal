@@ -207,6 +207,21 @@ describe("moveD2DMeeting", () => {
         expect(dbUpdate).not.toHaveBeenCalled();
     });
 
+    test("fix 3: keeping a pushed meeting in its own booked slot that Cvent no longer lists succeeds and changes nothing", async () => {
+        // t1 is full, so Cvent's list dropped it. The page offers it as the meeting's current slot.
+        const ctx = context([]);
+        ctx.rows = [row({ cventAppointmentId: "appt-1", lastPushedAt: new Date(0) })];
+        ctx.scheduleData.timeslots = SLOTS.filter((t) => t.id !== "t1");
+        ctx.scheduleData.timeslotById.delete("t1");
+        loadMatchingContext.mockResolvedValue(ctx);
+
+        const result = await moveD2DMeeting({ id: "m1", eventCode: "EVT", timeslotId: "t1" });
+
+        expect(result).toEqual({ ok: true });
+        // Saving would mark it Modified for no change.
+        expect(dbUpdate).not.toHaveBeenCalled();
+    });
+
     test("moves the meeting to a free D2D slot", async () => {
         loadMatchingContext.mockResolvedValue(context([]));
 

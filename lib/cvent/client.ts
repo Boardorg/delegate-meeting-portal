@@ -581,6 +581,8 @@ export type CventExistingAppointment = {
     id: string | null;
     /** ISO 8601 UTC start time of the appointment. */
     startTime: string;
+    /** ISO 8601 UTC end time of the appointment. Null when Cvent omits it. */
+    endTime: string | null;
     /** Cvent contact ids of the appointment's participants (hosts + attendees). */
     participantContactIds: string[];
     /**
@@ -594,6 +596,18 @@ export type CventExistingAppointment = {
      * Appointments carry only the location's name, not its id.
      */
     locationName: string | null;
+    /**
+     * The location's id, when the record has one.
+     * The SDK's appointment type has no location id, so this is usually null.
+     */
+    locationId: string | null;
+    /** The appointment type's name, trimmed. Null when Cvent omits it. */
+    typeName: string | null;
+    /**
+     * The appointment type's id, when the record has one.
+     * The SDK's appointment type only names the type, so this is usually null.
+     */
+    typeId: string | null;
 };
 
 /**
@@ -604,7 +618,9 @@ export type CventExistingAppointment = {
 type RawCventAppointment = {
     id?: string;
     start?: Date | string;
-    location?: { name?: string | null } | null;
+    end?: Date | string;
+    location?: { id?: string | null; name?: string | null } | null;
+    type?: { id?: unknown; name?: unknown } | null;
     deleted?: boolean;
     /** e.g. "ACTIVE", "CONFIRMED", "CANCELLED" — see AppointmentStatusJson. */
     status?: string;
@@ -650,9 +666,17 @@ export function toExistingAppointments(
                 typeof appt.start === "string"
                     ? appt.start
                     : appt.start.toISOString(),
+            endTime: !appt.end
+                ? null
+                : typeof appt.end === "string"
+                  ? appt.end
+                  : appt.end.toISOString(),
             participantContactIds,
             hostContactIds,
             locationName: appt.location?.name ?? null,
+            locationId: appt.location?.id ?? null,
+            typeName: typeNameOf(appt.type ?? undefined),
+            typeId: typeof appt.type?.id === "string" && appt.type.id ? appt.type.id : null,
         });
     }
     return out;

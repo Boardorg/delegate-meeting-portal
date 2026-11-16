@@ -482,7 +482,7 @@ function cventAppt(
     attendees: string[],
     locationName: string | null = 'Booth 1',
 ): CventExistingAppointment {
-    return { id: null, startTime, participantContactIds: [...hosts, ...attendees], hostContactIds: hosts, locationName };
+    return { id: null, startTime, participantContactIds: [...hosts, ...attendees], hostContactIds: hosts, locationName, endTime: null, locationId: null, typeName: null, typeId: null };
 }
 
 describe('runScheduler — existing Cvent appointments', () => {

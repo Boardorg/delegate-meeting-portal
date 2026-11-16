@@ -54,7 +54,7 @@ function person(id: string, role: "delegate" | "sponsor"): Attendee {
  * @returns {CventExistingAppointment} The appointment.
  */
 function appt(id: string, start: string, contacts: string[], locationName: string | null = null): CventExistingAppointment {
-    return { id, startTime: start, participantContactIds: contacts, hostContactIds: contacts.slice(0, 1), locationName };
+    return { id, startTime: start, participantContactIds: contacts, hostContactIds: contacts.slice(0, 1), locationName, endTime: null, locationId: null, typeName: null, typeId: null };
 }
 
 /**

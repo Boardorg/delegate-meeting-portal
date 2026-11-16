@@ -180,6 +180,44 @@ describe("toExistingAppointments", () => {
             locationName: "Booth 13",
         });
     });
+
+    test("reads the end time and the type name, with null ids when Cvent sends only names", () => {
+        const out = toExistingAppointments([
+            {
+                id: "appt-1",
+                start: new Date("2026-10-31T14:30:00Z"),
+                end: new Date("2026-10-31T14:50:00Z"),
+                status: "ACTIVE",
+                location: { name: "D2D Table B" },
+                type: { name: " Delegate Group Meetings " },
+            },
+        ]);
+        expect(out[0]).toMatchObject({
+            endTime: "2026-10-31T14:50:00.000Z",
+            locationName: "D2D Table B",
+            locationId: null,
+            typeName: "Delegate Group Meetings",
+            typeId: null,
+        });
+    });
+
+    test("reads the location and type ids when a raw record has them", () => {
+        const out = toExistingAppointments([
+            {
+                id: "appt-1",
+                start: "2026-10-31T14:30:00Z",
+                end: "2026-10-31T14:50:00Z",
+                location: { id: "loc-b", name: "D2D Table B" },
+                type: { id: "type-g", name: "Delegate Group Meetings" },
+            },
+        ]);
+        expect(out[0]).toMatchObject({ endTime: "2026-10-31T14:50:00Z", locationId: "loc-b", typeId: "type-g" });
+    });
+
+    test("gives a null end time when Cvent omits it", () => {
+        const out = toExistingAppointments([{ id: "appt-1", start: "2026-10-31T14:30:00Z" }]);
+        expect(out[0].endTime).toBeNull();
+    });
 });
 
 describe("toAppointmentsPage — appointment type", () => {

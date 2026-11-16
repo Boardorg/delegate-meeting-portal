@@ -60,6 +60,10 @@ function appt(id: string | null, startTime: string, people: string[]): CventExis
         participantContactIds: people.map((p) => `c-${p}`),
         hostContactIds: [],
         locationName: "Booth 3",
+        endTime: null,
+        locationId: null,
+        typeName: null,
+        typeId: null,
     };
 }
 

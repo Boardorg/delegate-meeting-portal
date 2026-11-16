@@ -783,6 +783,12 @@ export const getEventAppointments = cache(
 export type CventAppointmentInput = {
     /** Appointment title shown in Cvent. */
     subject: string;
+    /**
+     * Appointment description, shown as the appointment's message in Cvent.
+     * Roundtables send their description, even when it is empty.
+     * Sponsor and D2D meetings leave it out, so Cvent gets no description field.
+     */
+    description?: string;
     /** Appointment start (UTC). */
     startTime: Date;
     /** Appointment end (UTC). */
@@ -825,6 +831,7 @@ function toUuidList(ids: string[]): Array<{ id: string }> {
 export function buildCreateAppointmentRequest(input: CventAppointmentInput) {
     return {
         subject: input.subject,
+        ...(input.description !== undefined ? { description: input.description } : {}),
         startTime: input.startTime,
         endTime: input.endTime,
         hosts: toUuidList(input.hostContactIds),
@@ -857,6 +864,7 @@ export function buildUpdateAppointmentRequest(
     return {
         id: apptId,
         subject: input.subject,
+        ...(input.description !== undefined ? { description: input.description } : {}),
         startTime: input.startTime,
         endTime: input.endTime,
         hosts: toUuidList(input.hostContactIds),
@@ -959,6 +967,7 @@ export async function createAppointment(
  * a re-push can't create a replacement because the old appointment still holds
  * the same participants at the same time (see lib/cvent/push.ts). In mock mode
  * is a no-op that returns the given apptId.
+ * A roundtable already in Cvent is always updated this way (see lib/cvent/roundtablePush.ts).
  *
  * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
  * @param {string} apptId - The existing Cvent appointment id to update.

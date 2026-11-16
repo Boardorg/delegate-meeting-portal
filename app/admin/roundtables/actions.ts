@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import {
@@ -8,6 +8,8 @@ import {
     roundtables,
     type NewRoundtable,
     type NewRoundtableSeat,
+    type RoundtableRow,
+    type RoundtableSeatRow,
 } from "@/lib/db/schema";
 import { loadMatchingContext, type MatchingContext } from "@/lib/matching/data";
 import { NO_DELEGATES_MESSAGE } from "@/lib/matching/d2d";
@@ -21,6 +23,10 @@ import {
 } from "@/lib/matching/roundtables";
 import { buildRoundtableReport, type RoundtableReport } from "@/lib/matching/roundtableReport";
 import { getSyncStatus, type SyncStatus } from "@/lib/cvent/syncStatus";
+import { needsSync } from "@/lib/cvent/push";
+import { pushRoundtableRows, roundtableLabel, unpushRoundtableRows } from "@/lib/cvent/roundtablePush";
+import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
+import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import type { MaintenanceReport } from "@/app/admin/meetings/actions";
 
 // ---------------------------------------------------------------------------
@@ -28,7 +34,7 @@ import type { MaintenanceReport } from "@/app/admin/meetings/actions";
 //
 // Each Cvent timeslot mapped to delegate_group is one table.
 // Running the grouping replaces the tables not pushed to Cvent, including their themes.
-// Pushing roundtables to Cvent isn't built yet, since the host rule is still an open question.
+// Push All and Unpush All work as on the sponsor and delegate meeting pages (see lib/cvent/roundtablePush.ts).
 // ---------------------------------------------------------------------------
 
 /** One roundtable row in the list. */
@@ -234,6 +240,76 @@ export async function runRoundtablesForEvent(eventCode: string): Promise<RunRoun
             kept: pushed.length,
             warnings,
         }),
+    };
+}
+
+/**
+ * Loads an event's roundtables and their seats, for push and unpush.
+ *
+ * @param {string} eventCode - The event.
+ * @returns {Promise<{ rows: RoundtableRow[]; seats: RoundtableSeatRow[] }>} The tables and seats.
+ */
+async function roundtablesWithSeats(eventCode: string): Promise<{ rows: RoundtableRow[]; seats: RoundtableSeatRow[] }> {
+    const [rows, seats] = await Promise.all([
+        db.select().from(roundtables).where(eq(roundtables.eventCode, eventCode)),
+        db.select().from(roundtableSeats).where(eq(roundtableSeats.eventCode, eventCode)),
+    ]);
+    return { rows, seats };
+}
+
+/**
+ * Pushes every roundtable that is not pushed or was changed since its last push.
+ * A table with no theme title is reported as failed with a message, and the others still go.
+ *
+ * @param {string} eventCode - The event.
+ * @returns {Promise<SyncReport>} The push report.
+ */
+export async function pushAllRoundtablesForEvent(eventCode: string): Promise<SyncReport> {
+    const { rows, seats } = await roundtablesWithSeats(eventCode);
+    const toPush = rows.filter(needsSync);
+    const summary = await pushRoundtableRows(eventCode, toPush, seats);
+    revalidatePath("/admin/roundtables", "layout");
+    return buildSyncReport({
+        eventCode,
+        generatedAt: new Date().toISOString(),
+        totalPortalMeetings: rows.length,
+        alreadySynced: rows.length - toPush.length,
+        results: summary.results,
+    });
+}
+
+/**
+ * Cancels the Cvent appointment behind every synced roundtable and unlinks it, keeping the table.
+ * Cancelling suppresses Cvent's emails when CVENT_SUPPRESS_NOTIFICATIONS is set, as for meetings.
+ *
+ * @param {string} eventCode - The event.
+ * @returns {Promise<MaintenanceReport>} Counts plus per-table detail.
+ */
+export async function unpushAllRoundtablesForEvent(eventCode: string): Promise<MaintenanceReport> {
+    const [syncedRows, scheduleData] = await Promise.all([
+        db
+            .select()
+            .from(roundtables)
+            .where(and(eq(roundtables.eventCode, eventCode), isNotNull(roundtables.cventAppointmentId))),
+        loadEventScheduleData(eventCode),
+    ]);
+    const outcome = await unpushRoundtableRows(eventCode, syncedRows, (row) =>
+        roundtableLabel(
+            row,
+            (row.locationId ? scheduleData.locationById.get(row.locationId)?.name : undefined) ?? "Unknown location",
+        ),
+    );
+    revalidatePath("/admin/roundtables", "layout");
+    return {
+        kind: "unpush_synced",
+        eventCode,
+        generatedAt: new Date().toISOString(),
+        total: syncedRows.length,
+        unpushed: outcome.unpushed,
+        alreadyGone: outcome.alreadyGone,
+        failed: outcome.failures.length,
+        failures: outcome.failures,
+        notes: outcome.notes,
     };
 }
 

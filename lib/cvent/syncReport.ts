@@ -21,6 +21,8 @@
  * - cvent_type_change: a re-push would need to edit the old appointment in place to a slot of another
  *   appointment type, which Cvent can't do. Also used when the old appointment's type can't be checked.
  *   Nothing changes in Cvent or the portal, and the meeting stays in Cvent under its old type.
+ * - missing_theme: a roundtable has no theme title, which Cvent needs as the appointment's subject.
+ * - empty_table: a roundtable has no seated delegates, so it has no host.
  *
  * Returned by Cvent when the appointment was rejected:
  * - cvent_no_availability: host has no free appointment slot at that time (409).
@@ -43,6 +45,8 @@ export type SyncFailureReason =
     | "host_not_in_cvent"
     | "attendee_cancelled"
     | "cvent_type_change"
+    | "missing_theme"
+    | "empty_table"
     | "cvent_no_availability"
     | "cvent_validation"
     | "cvent_conflict"

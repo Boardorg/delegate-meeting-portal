@@ -39,6 +39,7 @@ import {
 // event-wide and per-sponsor push actions so their behavior stays identical
 // and callers get structured results to show in the UI.
 // The Delegate Meetings pages push D2D meetings through pushDelegateMeetingRows, which shares the same send step.
+// Roundtables are pushed by lib/cvent/roundtablePush.ts, which reuses the helpers here.
 // ---------------------------------------------------------------------------
 
 /**
@@ -75,7 +76,7 @@ export type PushSummary = {
  * @param {unknown} err - The thrown error.
  * @returns {string} The (possibly expanded) error message.
  */
-function describePushError(err: unknown): string {
+export function describePushError(err: unknown): string {
     const base = err instanceof Error ? err.message : String(err);
     if (!(err instanceof Error)) return base;
 
@@ -298,11 +299,14 @@ export function typeChangeMessage(
  * Whether a portal meeting still needs pushing to Cvent: it was never synced,
  * or it was modified since its last push. Used to partition an event's (or a
  * sponsor's) meetings into "to push" vs "already synced" for the sync report.
+ * Roundtables use it too, since they have the same sync fields.
  *
- * @param {ScheduledMeetingRow} row - The meeting row.
+ * @param {Pick<ScheduledMeetingRow, "cventAppointmentId" | "lastModifiedAt" | "lastPushedAt">} row - The meeting or roundtable row.
  * @returns {boolean} True when the row should be pushed.
  */
-export function needsSync(row: ScheduledMeetingRow): boolean {
+export function needsSync(
+    row: Pick<ScheduledMeetingRow, "cventAppointmentId" | "lastModifiedAt" | "lastPushedAt">,
+): boolean {
     return (
         !row.cventAppointmentId ||
         (row.lastModifiedAt != null &&

@@ -14,6 +14,7 @@ import {
 // Moved out of app/admin/meetings/actions.ts so the sponsor and delegate meeting pages
 // cancel and unlink meetings the same way.
 // Cancelling goes through cancelAppointment, which suppresses Cvent's emails when CVENT_SUPPRESS_NOTIFICATIONS is set.
+// Roundtables unpush through unpushAppointments too, with their own unlink step.
 // ---------------------------------------------------------------------------
 
 /** One meeting's note or failure in an unpush. */
@@ -30,6 +31,9 @@ export type UnpushOutcome = {
     /** Per-meeting notes for the already-gone meetings. */
     notes: UnpushDetail[];
 };
+
+/** The fields of a synced row that unpush reads. */
+export type UnpushRow = { id: string; cventAppointmentId: string | null };
 
 /**
  * Cancels the Cvent appointment behind each synced meeting, then clears that meeting's cventAppointmentId.
@@ -52,6 +56,33 @@ export async function unpushMeetingRows(
     syncedRows: ScheduledMeetingRow[],
     labelOf: (row: ScheduledMeetingRow) => string,
 ): Promise<UnpushOutcome> {
+    return unpushAppointments(eventCode, syncedRows, labelOf, (row) =>
+        // Unlinks the meeting in the DB so it reads as un-synced (row kept).
+        // lastPushedAt stays so the next push gets a fresh code.
+        db
+            .update(scheduledMeetings)
+            .set({ cventAppointmentId: null })
+            .where(eq(scheduledMeetings.id, row.id)),
+    );
+}
+
+/**
+ * Cancels the Cvent appointment behind each synced row, then unlinks the row with the caller's unlink step.
+ * Shared by meetings and roundtables, so both cancel the same way, with Cvent's emails suppressed when set.
+ * The unlink step must clear only cventAppointmentId and keep lastPushedAt, as unpushMeetingRows does.
+ *
+ * @param {string} eventCode - The event the rows belong to.
+ * @param {R[]} syncedRows - The synced rows to unpush.
+ * @param {(row: R) => string} labelOf - Names a row for the report.
+ * @param {(row: R) => Promise<unknown>} unlink - Clears the row's Cvent appointment id in the DB.
+ * @returns {Promise<UnpushOutcome>} Counts plus per-row detail.
+ */
+export async function unpushAppointments<R extends UnpushRow>(
+    eventCode: string,
+    syncedRows: R[],
+    labelOf: (row: R) => string,
+    unlink: (row: R) => Promise<unknown>,
+): Promise<UnpushOutcome> {
     const failures: UnpushDetail[] = [];
     const notes: UnpushDetail[] = [];
     let unpushed = 0;
@@ -62,27 +93,19 @@ export async function unpushMeetingRows(
         if (!row.cventAppointmentId) continue;
         const label = labelOf(row);
 
-        // Unlinks the meeting in the DB so it reads as un-synced (row kept).
-        // lastPushedAt stays so the next push gets a fresh code.
-        const unlink = () =>
-            db
-                .update(scheduledMeetings)
-                .set({ cventAppointmentId: null })
-                .where(eq(scheduledMeetings.id, row.id));
-
         try {
             // Cancel in Cvent first, then unlink. Only clear once the cancel
             // succeeds, so a real failure leaves the row pointing at a live
             // appointment rather than silently orphaning it.
             await cancelAppointment(eventCode, row.cventAppointmentId);
-            await unlink();
+            await unlink(row);
             unpushed++;
         } catch (err) {
             // If the appointment is already gone in Cvent (cancelled manually or
             // missing), there's nothing left to cancel — unlink locally anyway
             // and note it rather than treating it as a failure.
             if (isAppointmentAlreadyGone(err)) {
-                await unlink();
+                await unlink(row);
                 alreadyGone++;
                 notes.push({
                     meetingId: row.id,

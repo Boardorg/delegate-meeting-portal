@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { roundtableSeats, roundtables, type RoundtableSeatRole } from "@/lib/db/schema";
 import { getSyncStatus, type SyncStatus } from "@/lib/cvent/syncStatus";
+import { pushRoundtableRows, roundtableLabel, unpushRoundtableRows } from "@/lib/cvent/roundtablePush";
+import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
+import { loadEventScheduleData } from "@/lib/cvent/mapper";
 import { loadMatchingContext, type MatchingContext } from "@/lib/matching/data";
 import { busyStartTimes } from "@/lib/matching/delegateMeetings";
 import { buildAnswerScales } from "@/lib/matching/questions";
@@ -12,6 +15,7 @@ import {
     checkSeatMove,
     explainSeat,
     roundtableExclusion,
+    roundtableHostId,
     summarizeTable,
 } from "@/lib/matching/roundtables";
 import type { Attendee } from "@/types";
@@ -37,6 +41,8 @@ export type SeatRow = {
     score: number;
     /** What they share with the table's seated delegates. */
     reason: string;
+    /** True for the seated delegate who hosts the table in Cvent. */
+    host: boolean;
 };
 
 /** The roundtable's own details. */
@@ -114,6 +120,7 @@ export async function getRoundtableDetail(params: {
      * @param {(typeof mine)[number]} s - The seat.
      * @returns {SeatRow} The row.
      */
+    const hostId = roundtableHostId(mine.filter((s) => s.role === "seated").map((s) => s.delegateId));
     const toRow = (s: (typeof mine)[number]): SeatRow => {
         const a = byId.get(s.delegateId);
         const others = seatedPeople.filter((p) => p.salesforceId !== s.delegateId).map((p) => p.profile);
@@ -126,6 +133,7 @@ export async function getRoundtableDetail(params: {
             role: s.role,
             position: s.position,
             ...explained,
+            host: s.role === "seated" && s.delegateId === hostId,
         };
     };
 
@@ -393,5 +401,60 @@ export async function swapAlternate(params: {
         .where(eq(roundtableSeats.id, seat.id));
     await touch([params.roundtableId]);
     revalidatePath("/admin/roundtables", "layout");
+    return { ok: true };
+}
+
+/**
+ * Pushes one roundtable to Cvent and returns a one-table sync report.
+ * A table already in Cvent is updated in place.
+ * A table with no theme title is reported as failed with a message, and nothing is sent.
+ *
+ * @param {{ roundtableId: string; eventCode: string }} params - The table and event.
+ * @returns {Promise<SyncReport>} The push report.
+ */
+export async function pushRoundtable(params: { roundtableId: string; eventCode: string }): Promise<SyncReport> {
+    const [rows, seats] = await Promise.all([
+        db
+            .select()
+            .from(roundtables)
+            .where(and(eq(roundtables.id, params.roundtableId), eq(roundtables.eventCode, params.eventCode))),
+        db.select().from(roundtableSeats).where(eq(roundtableSeats.roundtableId, params.roundtableId)),
+    ]);
+    const summary = await pushRoundtableRows(params.eventCode, rows, seats);
+    revalidatePath("/admin/roundtables", "layout");
+    return buildSyncReport({
+        eventCode: params.eventCode,
+        generatedAt: new Date().toISOString(),
+        totalPortalMeetings: rows.length,
+        alreadySynced: 0,
+        results: summary.results,
+    });
+}
+
+/**
+ * Cancels one roundtable's Cvent appointment and unlinks it, keeping the table, its seats and its text.
+ * Cancelling suppresses Cvent's emails when CVENT_SUPPRESS_NOTIFICATIONS is set.
+ * An appointment already gone in Cvent is unlinked anyway.
+ *
+ * @param {{ roundtableId: string; eventCode: string }} params - The table and event.
+ * @returns {Promise<RoundtableSaveResult>} Success, or why the table is still linked.
+ */
+export async function unpushRoundtable(params: { roundtableId: string; eventCode: string }): Promise<RoundtableSaveResult> {
+    const [[row], scheduleData] = await Promise.all([
+        db
+            .select()
+            .from(roundtables)
+            .where(and(eq(roundtables.id, params.roundtableId), eq(roundtables.eventCode, params.eventCode)))
+            .limit(1),
+        loadEventScheduleData(params.eventCode),
+    ]);
+    if (!row) return { ok: false, error: "Error: roundtable not found" };
+    if (!row.cventAppointmentId) return { ok: false, error: "Error: this roundtable isn't in Cvent" };
+    const location = (row.locationId ? scheduleData.locationById.get(row.locationId)?.name : undefined) ?? "Unknown location";
+    const outcome = await unpushRoundtableRows(params.eventCode, [row], (r) => roundtableLabel(r, location));
+    revalidatePath("/admin/roundtables", "layout");
+    if (outcome.failures.length > 0) {
+        return { ok: false, error: `Error: Cvent didn't cancel the appointment, so the table is still linked. ${outcome.failures[0].detail}` };
+    }
     return { ok: true };
 }

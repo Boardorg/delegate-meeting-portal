@@ -75,12 +75,15 @@ The first event to use this is NALES (20–21 Jan 2027). Meetings are scheduled 
 18. **Each table gets 2 recommended alternates.** They are the next-best fits for that group. They are listed in the portal only and never pushed to Cvent. An admin can swap one into a seat, and the swap is checked against decision 4 and the delegate's busy time.
 19. **Extra delegates go on an unassigned list.** If more delegates qualify than there are seats, the rest are reported as unassigned. If too few qualify to fill a table, the table is flagged as short.
 20. **Admins can move delegates by hand.** Moving a delegate between tables, or from the unassigned list, re-checks decision 4 and the delegate's busy time, and warns before saving.
-21. **The theme title syncs to Cvent.** On push, the title becomes the appointment's `subject`, which Cvent shows on the calendar. The optional discussion prompt goes in the appointment's `description`. Changing either after a push marks the roundtable Modified, and the next push updates Cvent in place.
-22. **Roundtables are unmoderated, so one seated delegate is the Cvent host.** Cvent needs a host on every appointment. The host is the seated delegate with the lowest Salesforce id, so re-runs are stable, and the other seated delegates are attendees. If the host is moved off the table, the next one becomes host and the next push updates Cvent. The portal shows which delegate is the host, but admins don't pick one.
+21. **The theme title syncs to Cvent.** On push, the title becomes the appointment's `subject`, which Cvent shows on the calendar. The table's description goes in the appointment's `description` (decision 24). Changing either after a push marks the roundtable Modified, and the next push updates Cvent in place.
+22. **Roundtables are unmoderated, so one seated delegate is the Cvent host.** Cvent needs a host on every appointment. The host is the seated delegate with the lowest Salesforce id, so re-runs are stable, and the other seated delegates are attendees. If the host is moved off the table, the next one becomes host and the next push updates Cvent. The portal shows which delegate is the host, but admins don't pick one. Jax confirmed this on 2026-11-16.
 
 **Push and emails**
 
 23. **D2D and roundtables reuse the existing push.** Synced, Modified and Not pushed work as they do for S2D. Unpush and Remove cancel in Cvent with notifications suppressed (`CVENT_SUPPRESS_NOTIFICATIONS`).
+24. **Each roundtable's description starts with a host note.** New tables get this default description, which is fixed in code:
+    > The system requires one attendee to be designated as the meeting host in order to create the meeting. However, this is purely a system requirement and does not involve any hosting or moderation responsibilities, as all meetings are unmoderated.
+    Admins can edit it, add a discussion prompt to it, or clear it. A cleared description is pushed empty. "Reset to default" puts the note back. There is one description field, and what it shows is exactly what Cvent gets. D2D meetings are pushed with no description.
 
 ## Scope
 
@@ -95,7 +98,7 @@ The first event to use this is NALES (20–21 Jan 2027). Meetings are scheduled 
 
 - `event_settings.matching_settings` (new nullable `jsonb`): the D2D and roundtable question order and on/off switches (decision 7), the meeting caps (decision 11), seats and alternates per table (decisions 16 and 18), and the minimum match scores (decision 10). Null means the code defaults.
 - `scheduled_meetings` stores D2D meetings. `attendee_a` is the host delegate and `attendee_b` the other delegate. The "attendee_a is always the sponsor" note in the schema and in `types/index.ts` becomes "attendee_a is the sponsor company on an S2D meeting".
-- New table `roundtables`: event, timeslot, location, theme title, discussion prompt, Cvent appointment id, last modified, last pushed. One row per table.
+- New table `roundtables`: event, timeslot, location, theme title, description, Cvent appointment id, last modified, last pushed. One row per table.
 - New table `roundtable_seats`: roundtable, delegate, seated or alternate, position, why they were picked and their match score.
 - Generate the migration with `npm run db:generate`. A person applies it to each database by hand before deploy.
 - Read `CventEvents_NP_Profile_Complete__c` and `CventEvents_Conference_Only__c` on each delegate's Cvent Attendee, alongside the profile answers the portal already reads (decision 2).
@@ -122,7 +125,7 @@ Both new meeting pages mirror the sponsor meetings page (`app/admin/meetings/`, 
 - **Roundtables** (new page, mirrors the sponsor meetings page):
   - Header buttons: "Run Roundtable Grouping", "Push All to Cvent", "Unpush All Synced" and "Clear All Unsynced". The run opens a report panel listing tables, weak or short tables, and unassigned delegates.
   - The list has one row per roundtable. Columns: table (location), day and time, theme title, seats filled out of 5, and sync status. Below it is the unassigned list.
-  - Clicking a table opens its detail page. It has the theme title and discussion prompt fields, a table of seated delegates with what they share and which one is the host, and the alternates. Delegates can be moved between tables, alternates and unassigned. Push and Unpush work as on a sponsor's page.
+  - Clicking a table opens its detail page. It has the theme title and description fields, with a "Reset to default" link under the description, a table of seated delegates with what they share and which one is the host, and the alternates. Delegates can be moved between tables, alternates and unassigned. Push and Unpush work as on a sponsor's page.
 - **Sponsor pages say they're for sponsors.** Their titles must be "Sponsor Meeting Requests", "Sponsor Meetings" and "Sponsor Booths". The [admin menu and overview](admin-menu-and-overview.md) spec makes this change. If it isn't merged when this is built, make the renames here, changing only labels and titles, not routes. Otherwise the sponsor pages are unchanged, except that a delegate's meeting count includes their D2D meetings.
 - **Admin menu:** add Delegate Meetings, Roundtables and Matching Settings to `app/admin/nav.tsx`, in that order, after the sponsor pages and before Event Settings. If the menu has groups, put them in a "Delegate Meetings" group. If it's a flat list, add them as three links.
 
@@ -137,7 +140,7 @@ Both new meeting pages mirror the sponsor meetings page (`app/admin/meetings/`, 
 
 ## Open questions
 
-1. **Who hosts a roundtable in Cvent?** Peter checked on 2026-11-13: the Cvent app shows the host in its own "Host" section above the attendees. Decision 22 picks one seated delegate, who would be labeled "Host". The alternative is a staff host per table, which needs 2 staff per time slot, since 2 tables run at once and Cvent rejects a double-booked host. Waiting on Jax.
+None. The roundtable host question was answered by Jax on 2026-11-16 (decisions 22 and 24).
 
 ## Acceptance criteria
 
@@ -166,9 +169,10 @@ Each one must be covered by a unit test unless it is marked manual.
 16. No table seats two people from the same company.
 17. Each table gets 2 alternates, and no delegate is in more than one table.
 18. Moving a delegate onto a table that already has someone from their company is refused with a message.
-19. Push sends the theme title as `subject`, the prompt as `description`, the seated delegate with the lowest Salesforce id as host and the other seated delegates as attendees. Alternates are never sent.
+19. Push sends the theme title as `subject`, the table's description as `description`, the seated delegate with the lowest Salesforce id as host and the other seated delegates as attendees. Alternates are never sent.
 20. Changing a pushed roundtable's theme marks it Modified, and re-pushing updates the same Cvent appointment.
 21. Push refuses a table with no theme title, with a message.
+21a. A new roundtable's description is the default host note. Editing or clearing it marks a pushed table Modified, a cleared description is pushed empty, and "Reset to default" restores the note.
 
 **Order**
 22. Running D2D before any S2D meetings exist shows a warning but still runs.
@@ -180,8 +184,8 @@ On a preview deployment with test data only:
 1. Set the D2D and roundtable question order on Matching settings, then reload and check it saved.
 2. Run S2D scheduling for the test sponsors, then run D2D matching. Check the pairs, shared answers, caps and Day 1 preference.
 3. Run roundtable grouping. Check that only delegates with no meetings are seated, and look at the shared-interest summary for each table.
-4. Move a delegate, swap in an alternate, and enter themes and prompts. Check the host changes when the host delegate is moved off a table.
-5. Push. In Cvent, check the D2D and roundtable appointments, their types, hosts, and that roundtable subjects show the themes. In the Cvent attendee app, check the roundtable shows the theme as its title, the prompt as its message, and the expected host.
+4. Move a delegate, swap in an alternate, and enter themes and edit a description. Check the host changes when the host delegate is moved off a table.
+5. Push. In Cvent, check the D2D and roundtable appointments, their types, hosts, and that roundtable subjects show the themes. In the Cvent attendee app, check the roundtable shows the theme as its title, the description as its message, and the expected host.
 6. Change a theme, re-push, and check Cvent updates in place. Unpush, and check no emails are sent.
 
 ## Rollout

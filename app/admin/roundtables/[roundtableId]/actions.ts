@@ -412,21 +412,20 @@ export async function swapAlternate(params: {
 
 /**
  * Pushes one roundtable to Cvent and returns a one-table sync report.
- * A table already in Cvent is updated in place.
+ * A table already in Cvent is replaced, or updated in place when the replacement collides with it.
  * A table with no theme title is reported as failed with a message, and nothing is sent.
+ * The event's other tables are passed along, so a host still held by another table in Cvent is named.
  *
  * @param {{ roundtableId: string; eventCode: string }} params - The table and event.
  * @returns {Promise<SyncReport>} The push report.
  */
 export async function pushRoundtable(params: { roundtableId: string; eventCode: string }): Promise<SyncReport> {
-    const [rows, seats] = await Promise.all([
-        db
-            .select()
-            .from(roundtables)
-            .where(and(eq(roundtables.id, params.roundtableId), eq(roundtables.eventCode, params.eventCode))),
+    const [eventTables, seats] = await Promise.all([
+        db.select().from(roundtables).where(eq(roundtables.eventCode, params.eventCode)),
         db.select().from(roundtableSeats).where(eq(roundtableSeats.roundtableId, params.roundtableId)),
     ]);
-    const summary = await pushRoundtableRows(params.eventCode, rows, seats);
+    const rows = eventTables.filter((t) => t.id === params.roundtableId);
+    const summary = await pushRoundtableRows(params.eventCode, rows, seats, eventTables);
     revalidatePath("/admin/roundtables", "layout");
     return buildSyncReport({
         eventCode: params.eventCode,

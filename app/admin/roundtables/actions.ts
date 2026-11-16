@@ -265,7 +265,7 @@ async function roundtablesWithSeats(eventCode: string): Promise<{ rows: Roundtab
 export async function pushAllRoundtablesForEvent(eventCode: string): Promise<SyncReport> {
     const { rows, seats } = await roundtablesWithSeats(eventCode);
     const toPush = rows.filter(needsSync);
-    const summary = await pushRoundtableRows(eventCode, toPush, seats);
+    const summary = await pushRoundtableRows(eventCode, toPush, seats, rows);
     revalidatePath("/admin/roundtables", "layout");
     return buildSyncReport({
         eventCode,

@@ -20,6 +20,7 @@ import {
     cancelAppointment,
     getAppointmentsByEvent,
     getEventAppointments,
+    type CventExistingAppointment,
 } from "@/lib/cvent/client";
 import { isTestingMode } from "@/lib/helpers/testingMode";
 import type { CventAppointmentInput } from "@/lib/cvent/client";
@@ -233,17 +234,20 @@ export async function busyHostLookup(
 }
 
 /**
- * Builds a check for whether a contact already hosts a Cvent appointment at a time, other than one appointment.
+ * Builds a lookup for the Cvent appointment a contact already hosts at a time, other than one appointment.
  * The event's appointment list is read once for the batch.
  * Each row leaves out only its own appointment, so the answer doesn't depend on which rows are pushed or their order.
  * Returns null when Cvent's appointment list can't be read. Cvent itself still rejects a host who is busy.
  *
  * @param {string} eventCode - The event the rows belong to.
- * @returns {Promise<((startTime: string, contactId: string, ownAppointmentId: string | null) => boolean) | null>} The check, or null.
+ * @returns {Promise<((startTime: string, contactId: string, ownAppointmentId: string | null) => CventExistingAppointment | undefined) | null>}
+ *   The lookup, which gives the other appointment the contact hosts then, or undefined when they are free. Null when the list can't be read.
  */
 export async function hostBusyElsewhereLookup(
     eventCode: string,
-): Promise<((startTime: string, contactId: string, ownAppointmentId: string | null) => boolean) | null> {
+): Promise<
+    ((startTime: string, contactId: string, ownAppointmentId: string | null) => CventExistingAppointment | undefined) | null
+> {
     let appointments;
     try {
         appointments = await getEventAppointments(eventCode);
@@ -255,7 +259,7 @@ export async function hostBusyElsewhereLookup(
         return null;
     }
     return (startTime, contactId, ownAppointmentId) =>
-        appointments.some(
+        appointments.find(
             (appt) =>
                 // Only an appointment with the row's own known id is left out.
                 // A row not yet pushed has no own appointment, even when Cvent lists one with no id.

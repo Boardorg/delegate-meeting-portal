@@ -64,12 +64,15 @@ export function roundtableLabel(
  * @param {string} eventCode - The event the tables belong to.
  * @param {RoundtableRow[]} rows - The roundtables to push.
  * @param {RoundtableSeatRow[]} seats - Their seats. Alternates and other tables' seats are ignored.
+ * @param {RoundtableRow[]} [eventTables] - Every roundtable of the event, to name another table that still holds a host in Cvent.
+ *   Defaults to `rows`.
  * @returns {Promise<PushSummary>} Aggregate counts plus per-table results.
  */
 export async function pushRoundtableRows(
     eventCode: string,
     rows: RoundtableRow[],
     seats: RoundtableSeatRow[],
+    eventTables: RoundtableRow[] = rows,
 ): Promise<PushSummary> {
     if (rows.length === 0) {
         return { total: 0, pushed: 0, failed: 0, results: [] };
@@ -85,6 +88,23 @@ export async function pushRoundtableRows(
     const hostBusyElsewhere = await hostBusyElsewhereLookup(eventCode);
     // Existing appointments' times and types, read from Cvent only if a re-push collides with its old appointment.
     const existingAppointmentOf = existingAppointmentLookup(eventCode);
+    /**
+     * Names a roundtable by its theme and location.
+     *
+     * @param {RoundtableRow} table - The roundtable.
+     * @returns {string} The label.
+     */
+    const labelOf = (table: RoundtableRow): string =>
+        roundtableLabel(
+            table,
+            (table.locationId ? scheduleData.locationById.get(table.locationId)?.name : undefined) ?? "Unknown location",
+        );
+    // The event's pushed roundtables by Cvent appointment id, so a busy host can be traced to another table.
+    const tableLabelByAppointmentId = new Map(
+        [...eventTables, ...rows]
+            .filter((t) => t.cventAppointmentId)
+            .map((t) => [t.cventAppointmentId as string, labelOf(t)]),
+    );
 
     const results: PushResult[] = [];
     for (const row of rows) {
@@ -170,10 +190,15 @@ export async function pushRoundtableRows(
 
         // Cvent rejects a host who is already in another appointment at that time.
         // Only this table's own appointment is left out, so the result doesn't depend on push order.
-        if (hostBusyElsewhere?.(timeslot.startTime, host.cventContactId, row.cventAppointmentId)) {
+        const busyWith = hostBusyElsewhere?.(timeslot.startTime, host.cventContactId, row.cventAppointmentId);
+        if (busyWith) {
+            // When the other appointment is another roundtable's, that table hasn't been pushed since the host moved.
+            const otherTable = busyWith.id ? tableLabelByAppointmentId.get(busyWith.id) : undefined;
             results.push(fail(
                 "host_busy",
-                `${host.name} hosts this table but already hosts another Cvent appointment at this time. Move them off the table.`,
+                otherTable
+                    ? `${host.name} still hosts ${otherTable} in Cvent at this time. Push that table first, then push this one again. If two hosts swapped tables, Unpush one of them first.`
+                    : `${host.name} hosts this table but already hosts another Cvent appointment at this time. Move them off the table.`,
             ));
             continue;
         }

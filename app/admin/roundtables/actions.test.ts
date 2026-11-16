@@ -142,7 +142,7 @@ describe("pushAllRoundtablesForEvent", () => {
 
         const report = await pushAllRoundtablesForEvent("EVT");
 
-        expect(pushRoundtableRows).toHaveBeenCalledWith("EVT", [fresh, modified], seats);
+        expect(pushRoundtableRows).toHaveBeenCalledWith("EVT", [fresh, modified], seats, [fresh, modified, synced]);
         expect(report).toMatchObject({ totalPortalMeetings: 3, alreadySynced: 1, attempted: 2, updated: 1, failed: 1 });
         expect(report.failures[0]).toMatchObject({ meetingId: "rt-new", reason: "missing_theme" });
     });

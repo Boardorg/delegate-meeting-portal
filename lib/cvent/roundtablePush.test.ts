@@ -417,6 +417,33 @@ describe("pushRoundtableRows", () => {
         expect(createAppointment).not.toHaveBeenCalled();
     });
 
+    test("names the other roundtable that still holds the host in Cvent, even when only this table is pushed", async () => {
+        getEventAppointments.mockResolvedValue([
+            { id: "appt-A", startTime: SLOT.startTime, participantContactIds: ["c-sf-a"], hostContactIds: ["c-sf-a"], locationName: null },
+        ]);
+        const tableA = table({ id: "rt-A", themeTitle: "Board Readiness", cventAppointmentId: "appt-A", lastPushedAt: new Date(0) });
+        const tableB = table({ id: "rt-001-1" });
+
+        const summary = await pushRoundtableRows("EVT", [tableB], defaultSeats(), [tableA, tableB]);
+
+        expect(summary.results[0]).toMatchObject({ ok: false, reason: "host_busy" });
+        expect(summary.results[0].error).toBe(
+            "Name sf-a still hosts Board Readiness (Table 1) in Cvent at this time. Push that table first, then push this one again. If two hosts swapped tables, Unpush one of them first.",
+        );
+    });
+
+    test("keeps the generic busy message when the other appointment isn't a roundtable", async () => {
+        getEventAppointments.mockResolvedValue([
+            { id: "appt-other", startTime: SLOT.startTime, participantContactIds: ["c-sf-a"], hostContactIds: ["c-sf-a"], locationName: null },
+        ]);
+
+        const summary = await pushRoundtableRows("EVT", [table()], defaultSeats());
+
+        expect(summary.results[0].error).toBe(
+            "Name sf-a hosts this table but already hosts another Cvent appointment at this time. Move them off the table.",
+        );
+    });
+
     test("finding 6: an unpushed table's host is busy when a Cvent appointment with no id has them as host", async () => {
         getEventAppointments.mockResolvedValue([
             { id: null, startTime: SLOT.startTime, participantContactIds: ["c-sf-a"], hostContactIds: ["c-sf-a"], locationName: null },

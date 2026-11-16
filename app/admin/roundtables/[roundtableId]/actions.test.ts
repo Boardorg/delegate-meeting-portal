@@ -83,7 +83,7 @@ const TABLE: RoundtableRow = {
     timeslotId: "ts-rt",
     locationId: "loc-rt",
     themeTitle: null,
-    discussionPrompt: null,
+    description: null,
     cventAppointmentId: null,
     lastModifiedAt: null,
     lastPushedAt: null,
@@ -175,14 +175,14 @@ describe("moveDelegate", () => {
 });
 
 describe("saveRoundtableText", () => {
-    test("saves the trimmed theme and prompt and marks the table edited", async () => {
-        const result = await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "  Skills  ", discussionPrompt: "" });
+    test("saves the trimmed theme and description and marks the table edited", async () => {
+        const result = await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "  Skills  ", description: "" });
         expect(result).toEqual({ ok: true });
         expect(dbUpdate).toHaveBeenCalledTimes(1);
     });
 
     test("refuses a theme that is too long, with a message", async () => {
-        const result = await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "x".repeat(201), discussionPrompt: "" });
+        const result = await saveRoundtableText({ roundtableId: "rt-1", themeTitle: "x".repeat(201), description: "" });
         expect(result.ok).toBe(false);
         expect(dbUpdate).not.toHaveBeenCalled();
     });

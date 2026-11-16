@@ -19,10 +19,10 @@ import type { Attendee } from "@/types";
 // ---------------------------------------------------------------------------
 // Server actions for /admin/roundtables/[roundtableId], one roundtable.
 //
-// Admins enter the theme title and discussion prompt, and move delegates between tables,
+// Admins enter the theme title, edit the description, and move delegates between tables,
 // alternates and the unassigned list. Every move re-checks the same-company rule and the
 // delegate's busy time, and warnings are shown before saving.
-// Editing a table sets its lastModifiedAt, so a pushed table will read as Modified once pushing is built.
+// Editing a table sets its lastModifiedAt, so a pushed table reads as Modified until it is pushed again.
 // ---------------------------------------------------------------------------
 
 /** One seated delegate or alternate on the roundtable page. */
@@ -46,7 +46,8 @@ export type RoundtableInfo = {
     startTime: string | null;
     day: number;
     themeTitle: string;
-    discussionPrompt: string;
+    /** Exactly what Cvent gets as the appointment's description. Empty when cleared. */
+    description: string;
     seats: number;
     summary: string;
     averageScore: number;
@@ -149,7 +150,7 @@ export async function getRoundtableDetail(params: {
             startTime: ts?.startTime ?? null,
             day: ts?.day ?? 0,
             themeTitle: row.themeTitle ?? "",
-            discussionPrompt: row.discussionPrompt ?? "",
+            description: row.description ?? "",
             seats: settings.seatsPerTable,
             summary: summary.summary,
             averageScore: summary.averageScore,
@@ -175,27 +176,28 @@ export async function getRoundtableDetail(params: {
 export type RoundtableSaveResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Saves a roundtable's theme title and discussion prompt.
- * Both are trimmed, and a blank one is stored as empty.
- * The save marks the table as edited, so a pushed table will read as Modified.
+ * Saves a roundtable's theme title and description.
+ * Both are trimmed. A blank theme is stored as empty.
+ * A cleared description is stored as an empty string and pushed to Cvent empty, never replaced by the default.
+ * The save marks the table as edited, so a pushed table reads as Modified.
  *
- * @param {{ roundtableId: string; themeTitle: string; discussionPrompt: string }} params - The table and its text.
+ * @param {{ roundtableId: string; themeTitle: string; description: string }} params - The table and its text.
  * @returns {Promise<RoundtableSaveResult>} Success, or why nothing was saved.
  */
 export async function saveRoundtableText(params: {
     roundtableId: string;
     themeTitle: string;
-    discussionPrompt: string;
+    description: string;
 }): Promise<RoundtableSaveResult> {
     const themeTitle = params.themeTitle.trim();
-    const discussionPrompt = params.discussionPrompt.trim();
+    const description = params.description.trim();
     if (themeTitle.length > 200) return { ok: false, error: "Error: the theme title must be 200 characters or fewer" };
-    if (discussionPrompt.length > 2000) {
-        return { ok: false, error: "Error: the discussion prompt must be 2,000 characters or fewer" };
+    if (description.length > 2000) {
+        return { ok: false, error: "Error: the description must be 2,000 characters or fewer" };
     }
     const updated = await db
         .update(roundtables)
-        .set({ themeTitle: themeTitle || null, discussionPrompt: discussionPrompt || null, lastModifiedAt: new Date() })
+        .set({ themeTitle: themeTitle || null, description, lastModifiedAt: new Date() })
         .where(eq(roundtables.id, params.roundtableId))
         .returning({ id: roundtables.id });
     if (updated.length === 0) return { ok: false, error: "Error: roundtable not found" };
@@ -235,7 +237,7 @@ async function renumber(roundtableId: string, role: RoundtableSeatRole): Promise
 }
 
 /**
- * Marks tables as edited, so a pushed table will read as Modified.
+ * Marks tables as edited, so a pushed table reads as Modified.
  *
  * @param {string[]} ids - The tables.
  */

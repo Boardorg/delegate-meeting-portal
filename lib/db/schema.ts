@@ -302,10 +302,10 @@ export type NewEventSettings = typeof eventSettings.$inferInsert;
 /**
  * Delegate group roundtables, one row per table.
  * Each table is one Cvent timeslot mapped to `delegate_group`, at that timeslot's location.
- * The roundtable engine creates the rows, and admins add the theme title and discussion prompt.
+ * The roundtable engine creates the rows, and admins add the theme title and edit the description.
  *
  * Sync status works like scheduled_meetings (see lib/cvent/syncStatus.ts).
- * Pushing roundtables to Cvent isn't built yet, so the Cvent columns stay null for now.
+ * Pushing a roundtable sends it to Cvent as one delegate_group appointment (see lib/cvent/roundtablePush.ts).
  */
 export const roundtables = pgTable(
     "roundtables",
@@ -325,13 +325,15 @@ export const roundtables = pgTable(
         // Typed by an admin after grouping. It becomes the Cvent appointment's subject.
         themeTitle: text("theme_title"),
 
-        // Optional, typed by an admin. It becomes the Cvent appointment's description.
-        discussionPrompt: text("discussion_prompt"),
+        // It becomes the Cvent appointment's description, exactly as stored.
+        // New tables start with the default host note, and admins can edit or clear it.
+        // Null or empty means an empty description.
+        description: text("description"),
 
         // Null until the roundtable has been pushed to Cvent.
         cventAppointmentId: text("cvent_appointment_id"),
 
-        // Set when an admin edits the theme, the prompt or the seated delegates.
+        // Set when an admin edits the theme, the description or the seated delegates.
         lastModifiedAt: timestamp("last_modified_at", { withTimezone: true }),
 
         // Time of the last successful push. Null if never pushed.

@@ -72,7 +72,7 @@ function slot(id: string): Timeslot {
  * @returns {RoundtableRow} The row.
  */
 function table(id: string, timeslotId: string, cventAppointmentId: string | null): RoundtableRow {
-    return { id, eventCode: "EVT", timeslotId, locationId: null, themeTitle: "Old", discussionPrompt: null, cventAppointmentId, lastModifiedAt: null, lastPushedAt: null, createdAt: new Date(0) };
+    return { id, eventCode: "EVT", timeslotId, locationId: null, themeTitle: "Old", description: null, cventAppointmentId, lastModifiedAt: null, lastPushedAt: null, createdAt: new Date(0) };
 }
 
 beforeEach(() => {

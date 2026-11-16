@@ -147,7 +147,7 @@ function context(
             timeslotId: s.timeslotId,
             locationId: null,
             themeTitle: null,
-            discussionPrompt: null,
+            description: null,
             cventAppointmentId: null,
             lastModifiedAt: null,
             lastPushedAt: null,

@@ -141,7 +141,8 @@ export type RunRoundtablesResult = { ok: true; report: RoundtableReport } | { ok
 
 /**
  * Runs roundtable grouping for an event.
- * It replaces every roundtable not pushed to Cvent, with its seats, alternates, theme and prompt.
+ * It replaces every roundtable not pushed to Cvent, with its seats, alternates, theme and description.
+ * Each new table starts with the default host note as its description.
  * Pushed roundtables and their delegates are left alone.
  * The run still goes ahead when no D2D meetings exist, but the report warns about it.
  * It stops before changing anything when no delegates loaded or no slot is mapped to delegate_group.
@@ -192,7 +193,7 @@ export async function runRoundtablesForEvent(eventCode: string): Promise<RunRoun
         timeslotId: g.timeslotId,
         locationId: g.locationId,
         themeTitle: null,
-        discussionPrompt: null,
+        description: g.description,
         cventAppointmentId: null,
         lastModifiedAt: null,
         lastPushedAt: null,

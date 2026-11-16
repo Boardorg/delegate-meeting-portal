@@ -24,6 +24,35 @@ import { startMs } from "./d2d";
 // Pure, so it can be tested without the database or Cvent.
 // ---------------------------------------------------------------------------
 
+/**
+ * The description every new roundtable starts with.
+ * Cvent needs a host on every appointment, so one seated delegate hosts each table.
+ * This note tells delegates that the host has no duties, since roundtables are unmoderated.
+ * Admins can edit it, add a discussion prompt to it, or clear it.
+ * "Reset to default" on the roundtable page puts this text back.
+ */
+export const DEFAULT_ROUNDTABLE_DESCRIPTION =
+    "The system requires one attendee to be designated as the meeting host in order to create the meeting. " +
+    "However, this is purely a system requirement and does not involve any hosting or moderation responsibilities, " +
+    "as all meetings are unmoderated.";
+
+/**
+ * The Salesforce id of a roundtable's Cvent host.
+ * The host is the seated delegate with the lowest Salesforce id, so re-runs are stable.
+ * Ids are compared the same way as the D2D host rule.
+ *
+ * @param {string[]} seatedIds - The Salesforce ids of the table's seated delegates.
+ * @returns {string | null} The host's id, or null when no one is seated.
+ */
+export function roundtableHostId(seatedIds: string[]): string | null {
+    let host: string | null = null;
+    for (const id of seatedIds) {
+        if (!id) continue;
+        if (host === null || id < host) host = id;
+    }
+    return host;
+}
+
 /** Why a delegate can't be seated at a roundtable. */
 export type RoundtableExclusion = "conference_only" | "has_meetings" | "cancelled";
 
@@ -56,6 +85,8 @@ export type RoundtableGroup = {
     weak: boolean;
     /** True when fewer delegates qualified than the table seats. */
     short: boolean;
+    /** The table's starting description, the default host note. */
+    description: string;
 };
 
 /** Everything the roundtable engine needs. */
@@ -327,6 +358,7 @@ export function runRoundtableGrouping(input: RoundtableInput): RoundtableResult 
             day: slot.day,
             startTime: slot.startTime,
             ...summary,
+            description: DEFAULT_ROUNDTABLE_DESCRIPTION,
             alternates: alternates[t].map((a) => ({
                 delegateId: a.salesforceId,
                 ...explainSeat(a.profile, members[t].map((m) => m.profile), questions, scales),

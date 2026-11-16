@@ -132,7 +132,7 @@ export default function RoundtablesTable({ selectedEvent, data, timezone }: Prop
                 >
                     <p className="adm-modal-body">
                         This will replace every roundtable for <strong>{selectedEvent}</strong> that hasn&apos;t
-                        been pushed to Cvent, including its seats, alternates, theme title and discussion prompt.
+                        been pushed to Cvent, including its seats, alternates, theme title and description.
                         Only delegates with no meetings are grouped.
                     </p>
                     {data.orderWarning && (

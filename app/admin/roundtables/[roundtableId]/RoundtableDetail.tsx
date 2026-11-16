@@ -39,7 +39,7 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
     const router = useRouter();
     const { table } = detail;
     const [theme, setTheme] = useState(table.themeTitle);
-    const [prompt, setPrompt] = useState(table.discussionPrompt);
+    const [prompt, setPrompt] = useState(table.description);
     const [message, setMessage] = useState<{ tone: "error" | "ok"; text: string } | null>(null);
     const [pending, setPending] = useState<PendingMove | null>(null);
     const [isPending, startTransition] = useTransition();
@@ -101,7 +101,7 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
     /** Saves the theme title and discussion prompt. */
     function saveText() {
         startTransition(async () => {
-            const result = await saveRoundtableText({ roundtableId: table.id, themeTitle: theme, discussionPrompt: prompt });
+            const result = await saveRoundtableText({ roundtableId: table.id, themeTitle: theme, description: prompt });
             setMessage(result.ok ? { tone: "ok", text: "Saved." } : { tone: "error", text: result.error });
             if (result.ok) router.refresh();
         });
@@ -170,7 +170,7 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
                     <button
                         type="button"
                         className="adm-new-btn adm-new-btn-primary"
-                        disabled={isPending || (theme === table.themeTitle && prompt === table.discussionPrompt)}
+                        disabled={isPending || (theme === table.themeTitle && prompt === table.description)}
                         onClick={saveText}
                     >
                         {isPending ? "Saving…" : "Save Theme"}

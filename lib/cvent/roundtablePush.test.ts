@@ -169,6 +169,22 @@ function collision(): Error {
 }
 
 /**
+ * Builds the error Cvent really returns when a location already holds its one appointment at that time.
+ * It is a 422 with the code "invalid", not a 409.
+ *
+ * @returns {Error} An SDK-shaped error with a status code and a JSON body.
+ */
+function locationFull(): Error {
+    return Object.assign(new Error("Response validation failed"), {
+        statusCode: 422,
+        body: JSON.stringify({
+            message: "AppointmentRequest failed to validate. Only 1 Appointment allowed for timeslot in location Table 1.",
+            code: "invalid",
+        }),
+    });
+}
+
+/**
  * Builds one entry of the event's active appointment list, at the roundtable's start time.
  *
  * @param {string} id - The appointment id.
@@ -481,6 +497,50 @@ describe("pushRoundtableRows", () => {
         ]);
         getAppointmentsByEvent.mockResolvedValue([listed("appt-1", "Delegate Group Meetings")]);
         createAppointment.mockRejectedValue(collision());
+        const modified = table({
+            themeTitle: "Board Readiness",
+            cventAppointmentId: "appt-1",
+            lastPushedAt: new Date("2027-01-01T00:00:00Z"),
+            lastModifiedAt: new Date("2027-01-02T00:00:00Z"),
+        });
+
+        const summary = await pushRoundtableRows("EVT", [modified], defaultSeats());
+
+        expect(summary.results[0]).toMatchObject({ ok: true, kind: "update", cventAppointmentId: "appt-1" });
+        expect(created().startTime).toEqual(new Date(SLOT.startTime));
+        expect(created().appointmentTypeId).toBe("type-group");
+        expect(updateAppointment.mock.calls[0][1]).toBe("appt-1");
+        expect(updated().subject).toBe("Board Readiness");
+        expect(cancelAppointment).not.toHaveBeenCalled();
+        expect(saved[0]).toMatchObject({ cventAppointmentId: "appt-1" });
+    });
+
+    test("updates in place when Cvent rejects the replacement because the location is full", async () => {
+        // Table 1 allows one appointment at a time, so its booked 15:00 slot dropped out of the list.
+        const later: Timeslot = { ...SLOT, id: "ts-later", startTime: "2027-01-20T15:45:00.000Z", endTime: "2027-01-20T16:25:00.000Z" };
+        loadEventScheduleData.mockResolvedValue({
+            timeslots: [later],
+            timeslotById: new Map([[later.id, later]]),
+            locations: [{ id: "loc-rt", name: "Table 1", capacity: 1, parentLocationId: null }],
+            locationById: new Map([["loc-rt", { id: "loc-rt", name: "Table 1" }]]),
+            appointmentTypes: [{ id: "type-group", name: "Delegate Group Meetings" }],
+            appointmentTypeKinds: { "type-group": "delegate_group" },
+        });
+        getEventAppointments.mockResolvedValue([
+            {
+                id: "appt-1",
+                startTime: SLOT.startTime,
+                endTime: SLOT.endTime,
+                participantContactIds: ["c-sf-a"],
+                hostContactIds: ["c-sf-a"],
+                locationName: "Table 1",
+                locationId: null,
+                typeName: "Delegate Group Meetings",
+                typeId: null,
+            },
+        ]);
+        getAppointmentsByEvent.mockResolvedValue([listed("appt-1", "Delegate Group Meetings")]);
+        createAppointment.mockRejectedValue(locationFull());
         const modified = table({
             themeTitle: "Board Readiness",
             cventAppointmentId: "appt-1",

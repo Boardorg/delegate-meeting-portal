@@ -24,7 +24,7 @@ const REASON_LABEL: Record<SyncFailureReason, string> = {
     cvent_type_change: "Can't change type",
     missing_theme: "No theme title",
     empty_table: "No one seated",
-    cvent_no_availability: "Host slot full",
+    cvent_no_availability: "Slot full",
     cvent_validation: "Rejected by Cvent",
     cvent_conflict: "Cvent conflict",
     cvent_code_exists: "May already be in Cvent",
@@ -53,7 +53,7 @@ const REASON_HINT: Record<SyncFailureReason, string> = {
     empty_table:
         "Cvent needs a host, and a seated delegate hosts each roundtable. Seat at least one delegate, then push again, or Unpush the table to cancel its Cvent appointment.",
     cvent_no_availability:
-        "Cvent reports the host has no appointment slot free at this time. Move the meeting to another timeslot.",
+        "Cvent reports the host or the location has no appointment free at this time. Move the meeting to another timeslot.",
     cvent_validation:
         "Cvent rejected the appointment data. Check the meeting's participants, location, and time.",
     cvent_conflict:

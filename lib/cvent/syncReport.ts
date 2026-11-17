@@ -26,7 +26,8 @@
  * - empty_table: a roundtable has no seated delegates, so it has no host.
  *
  * Returned by Cvent when the appointment was rejected:
- * - cvent_no_availability: host has no free appointment slot at that time (409).
+ * - cvent_no_availability: the host has no free appointment slot at that time (409),
+ *   or the location already holds as many appointments at that time as it allows (422).
  * - cvent_validation: Cvent rejected the appointment data (400 / 422).
  * - cvent_conflict: a conflicting appointment (409).
  * - cvent_code_exists: Cvent already has an appointment with this meeting's code (409).
@@ -177,7 +178,7 @@ export function classifyPushError(err: unknown): SyncFailureReason {
 
     const e = err as { statusCode?: number; body?: string };
     const status = e.statusCode;
-    const { code } = parseCventError(e.body);
+    const { message, code } = parseCventError(e.body);
 
     // No HTTP status usually means the request never completed — a transport
     // failure rather than a Cvent rejection.
@@ -204,6 +205,11 @@ export function classifyPushError(err: unknown): SyncFailureReason {
         // Each push cycle gets a new code, so a repeat means this exact push already reached Cvent.
         if (code === "APPT_CODE_ALREADY_EXISTS") return "cvent_code_exists";
         return "cvent_conflict";
+    }
+    // A full location comes back as a 422 with the code "invalid", so only its message tells it apart.
+    // An example is "Only 1 Appointment allowed for timeslot in location D2D Table C."
+    if (status === 422 && message && /allowed for timeslot in location/i.test(message)) {
+        return "cvent_no_availability";
     }
     if (status === 400 || status === 422) return "cvent_validation";
     if (status >= 500) return "cvent_server_error";

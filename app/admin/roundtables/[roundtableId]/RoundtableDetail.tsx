@@ -208,6 +208,9 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
 
             <div className="adm-card">
                 <div className="adm-card-title">Theme</div>
+                <div className="adm-card-sub adm-field-mb-lg">
+                    Saving a pushed table marks it Modified until it is pushed again.
+                </div>
                 <label className="adm-field adm-field-mb-lg">
                     <span className="adm-field-label">Theme Title</span>
                     <input
@@ -217,6 +220,10 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
                         onChange={(e) => setTheme(e.target.value)}
                         placeholder="Shown as the appointment's title in Cvent"
                     />
+                    <span className="adm-field-hint">
+                        The theme title is the appointment&apos;s title in Cvent, and a table can&apos;t be pushed
+                        without one.
+                    </span>
                 </label>
                 <label className="adm-field">
                     <span className="adm-field-label">Description</span>
@@ -248,10 +255,6 @@ export default function RoundtableDetailView({ detail, eventCode }: { detail: Ro
                     >
                         {isPending ? "Saving…" : "Save"}
                     </button>
-                    <span className="adm-help-note">
-                        The theme title is the appointment&apos;s title in Cvent, and a table can&apos;t be pushed
-                        without one. Saving a pushed table marks it Modified until it is pushed again.
-                    </span>
                 </div>
             </div>
 

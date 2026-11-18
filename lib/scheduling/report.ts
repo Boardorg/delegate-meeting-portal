@@ -1,9 +1,15 @@
 import { Attendee, MeetingRequest, ScheduledMeeting } from "@/types";
 import { pairKey } from "./helpers";
 import {
+    isPartyCancelled,
     resolvePartyName,
     sponsorCompaniesByAccountId,
 } from "@/lib/attendees/companies";
+import {
+    primaryBoothProblem,
+    type BoothProblem,
+    type CompanyBooth,
+} from "./booths";
 
 // ---------------------------------------------------------------------------
 // Scheduler run report
@@ -31,10 +37,14 @@ import {
  *   never have more meetings than there are distinct start times, however many
  *   parallel slots each one holds.
  * - company_diversity: scheduling it would break the same-company meeting limit.
+ * - no_booth_slots: the sponsor's booth has no timeslots of the pass's kind in Cvent.
+ *   The fix is to add the booth's location to the sponsor appointment type's available times.
  *
  * The engine never attempted the pair (rejected during candidate collection):
  * - self_request: the request targets the requester themselves.
  * - not_an_attendee: requester and/or target isn't in the attendee list.
+ * - attendee_cancelled: requester and/or target cancelled their Cvent registration.
+ *   The scheduler leaves cancelled attendees out, so the pair is never a candidate.
  * - already_scheduled: the pair already meets in Cvent, so the engine treated
  *   it as pre-booked and never considered it a candidate.
  * - no_pass_match: a valid pair that matched none of the scheduling passes'
@@ -44,16 +54,34 @@ import {
  * Placed then dropped:
  * - conflict_existing: engine scheduled it, but reconciliation dropped it for
  *   conflicting with an already-pushed/Cvent meeting.
+ *
+ * The sponsor company can't have meetings at all (see BoothProblem in ./booths):
+ * - no_booth, booth_not_found, booth_conflict, multiple_opportunities and no_package_meetings.
  */
 export type SchedulerFailureReason =
     | "cap_reached"
     | "no_availability"
     | "company_diversity"
+    | "no_booth_slots"
     | "self_request"
     | "not_an_attendee"
+    | "attendee_cancelled"
     | "already_scheduled"
     | "no_pass_match"
-    | "conflict_existing";
+    | "conflict_existing"
+    | BoothProblem;
+
+/** A sponsor company that got no meetings because of its booth or package. */
+export interface CompanyBoothProblem {
+    accountId: string;
+    company: string;
+    /** The booth number from Salesforce. Null when blank. */
+    boothNo: string | null;
+    /** The first problem, used as the reason on its requests. */
+    problem: BoothProblem;
+    /** Every problem that applies. */
+    problems: BoothProblem[];
+}
 
 /** A single request that did not result in a scheduled meeting. */
 export interface UnscheduledRequest {
@@ -87,6 +115,21 @@ export interface SchedulerReport {
     /** Meetings scheduled per engine pass, keyed by pass number. */
     meetingsByPass: Record<number, number>;
     unscheduledRequests: UnscheduledRequest[];
+    /**
+     * Names of the Cvent appointment types with no meeting kind in Event settings.
+     * Their slots were ignored this run. The panel shows them as a warning.
+     */
+    unmappedAppointmentTypes: string[];
+    /**
+     * Sponsor companies that got no meetings because of a booth or package problem, sorted by name.
+     * The panel lists them as a warning and links to the Sponsor booths page.
+     */
+    boothProblems: CompanyBoothProblem[];
+    /**
+     * Warnings that the run happened out of order, such as after D2D meetings or roundtables exist.
+     * The run still went ahead. The panel shows them above the counts.
+     */
+    orderWarnings: string[];
 }
 
 /** Inputs for {@link buildSchedulerReport}. */
@@ -104,6 +147,12 @@ export interface BuildReportArgs {
     reconciledOutPairs: Set<string>;
     /** Pairs that already meet in Cvent, keyed by pairKey (see PreexistingSchedule.pairs). */
     preexistingPairs: Set<string>;
+    /** Names of appointment types with no mapping, whose slots the run ignored. Defaults to none. */
+    unmappedAppointmentTypes?: string[];
+    /** Each sponsor company's booth, keyed by Account id. Defaults to none, so no booth problems are reported. */
+    companyBooths?: Map<string, CompanyBooth>;
+    /** Out-of-order warnings to show in the report. Defaults to none. */
+    orderWarnings?: string[];
 }
 
 // Interest levels the chart always shows a bar for, lowest to highest.
@@ -129,6 +178,9 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         skipReasons,
         reconciledOutPairs,
         preexistingPairs,
+        unmappedAppointmentTypes = [],
+        companyBooths = new Map<string, CompanyBooth>(),
+        orderWarnings = [],
     } = args;
 
     // Name lookup for rendering the unscheduled list without extra queries.
@@ -143,6 +195,19 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
     );
     const partyName = (id: string): string | undefined =>
         resolvePartyName(id, companies, attendeesBySalesforceId)?.name;
+
+    // Parties the scheduler left out because they cancelled in Cvent.
+    const isCancelled = (id: string): boolean =>
+        isPartyCancelled(id, companies, attendeesBySalesforceId);
+
+    /**
+     * The booth or package problem that stops a sponsor company's meetings, if any.
+     *
+     * @param {string} id - The party id.
+     * @returns {BoothProblem | null} The company's first problem, or null.
+     */
+    const boothProblemOf = (id: string): BoothProblem | null =>
+        primaryBoothProblem(companyBooths.get(id));
 
     // The pairs that survived reconciliation — a request is "scheduled" iff its
     // canonical pair is among these.
@@ -180,6 +245,8 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
                 rank: req.rank,
                 reason: classifyUnscheduled(req, {
                     partyName,
+                    isCancelled,
+                    boothProblemOf,
                     reconciledOutPairs,
                     skipReasons,
                     preexistingPairs,
@@ -213,13 +280,45 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         byInterestLevel: INTEREST_LEVELS.map((level) => levelTally.get(level)!),
         meetingsByPass,
         unscheduledRequests,
+        unmappedAppointmentTypes: [...unmappedAppointmentTypes],
+        boothProblems: listBoothProblems(companyBooths, companies),
+        orderWarnings: [...orderWarnings],
     };
+}
+
+/**
+ * Lists the sponsor companies with a booth or package problem, sorted by company name.
+ * Companies not in the attendee list are left out.
+ *
+ * @param {Map<string, CompanyBooth>} companyBooths - Each company's booth.
+ * @param {Map<string, { name: string }>} companies - The event's companies, for their names.
+ * @returns {CompanyBoothProblem[]} One entry per company that can't be scheduled.
+ */
+function listBoothProblems(
+    companyBooths: Map<string, CompanyBooth>,
+    companies: Map<string, { name: string }>,
+): CompanyBoothProblem[] {
+    const out: CompanyBoothProblem[] = [];
+    for (const b of companyBooths.values()) {
+        const problem = primaryBoothProblem(b);
+        const company = companies.get(b.accountId);
+        if (!problem || !company) continue;
+        out.push({
+            accountId: b.accountId,
+            company: company.name,
+            boothNo: b.boothNo,
+            problem,
+            problems: [...b.problems],
+        });
+    }
+    return out.sort((a, b) => a.company.localeCompare(b.company));
 }
 
 /**
  * Determines why a single unscheduled request failed, in precedence order:
  * dropped-in-reconciliation → engine-recorded skip → collection-phase reason
- * (self-request / non-attendee / no matching pass). The last three mirror the
+ * (self-request / non-attendee / already meets in Cvent) → a sponsor company's
+ * booth or package problem → no matching pass. The collection-phase ones mirror the
  * `continue` branches the engine takes while collecting candidates, before any
  * skip reason is recorded — so they're reconstructed here from the request and
  * attendee data rather than reported by the engine.
@@ -232,13 +331,23 @@ function classifyUnscheduled(
     req: MeetingRequest,
     ctx: {
         partyName: (id: string) => string | undefined;
+        isCancelled: (id: string) => boolean;
+        boothProblemOf: (id: string) => BoothProblem | null;
         reconciledOutPairs: Set<string>;
         skipReasons: Map<string, SchedulerFailureReason>;
         preexistingPairs: Set<string>;
         pair: string;
     },
 ): SchedulerFailureReason {
-    const { partyName, reconciledOutPairs, skipReasons, preexistingPairs, pair } = ctx;
+    const {
+        partyName,
+        isCancelled,
+        boothProblemOf,
+        reconciledOutPairs,
+        skipReasons,
+        preexistingPairs,
+        pair,
+    } = ctx;
 
     // Placed by the engine, then dropped for conflicting with a pushed meeting.
     if (reconciledOutPairs.has(pair)) return "conflict_existing";
@@ -256,7 +365,18 @@ function classifyUnscheduled(
     if (!partyName(req.requesterId) || !partyName(req.targetId)) {
         return "not_an_attendee";
     }
+    if (isCancelled(req.requesterId) || isCancelled(req.targetId)) {
+        return "attendee_cancelled";
+    }
     if (req.requesterId === req.targetId) return "self_request";
     if (preexistingPairs.has(pair)) return "already_scheduled";
+
+    // A sponsor company with a booth or package problem gets no meetings at all.
+    // That is the reason even when the pair matched no pass.
+    // A pair the engine attempted already carries it as its skip reason.
+    const boothProblem =
+        boothProblemOf(req.requesterId) ?? boothProblemOf(req.targetId);
+    if (boothProblem) return boothProblem;
+
     return "no_pass_match";
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { loadMockData, loadMockRequests } from '@/lib/scheduling/loader';
 import { runScheduler } from '@/lib/scheduling/engine';
 import { loadEventScheduleData } from '@/lib/cvent/mapper';
+import { loadCompanyBooths } from '@/lib/scheduling/boothData';
 import { getEventCode } from '@/lib/helpers/getEventCode';
 import path from 'path';
 
@@ -18,11 +19,18 @@ export async function GET() {
 		const base = path.join(process.cwd(), 'data', 'mock');
 
 		// Load attendee and request data, plus the event's Cvent availability.
+		const eventCode = await getEventCode();
 		const [attendees, requests, scheduleData] = await Promise.all([
 			loadMockData(path.join(base, 'attendees.json')),
 			loadMockRequests(path.join(base, 'requests.json')),
-			loadEventScheduleData(await getEventCode()),
+			loadEventScheduleData(eventCode),
 		]);
+
+		// Each sponsor company only meets at its booth.
+		const booths = await loadCompanyBooths(eventCode, attendees, scheduleData.locations);
+		if (!booths.ok) {
+			return NextResponse.json({ error: booths.error }, { status: 500 });
+		}
 
 		// Run the scheduler to generate the meeting schedule and individual attendee schedules.
 		const { schedule, attendeeSchedules } = await runScheduler(
@@ -30,6 +38,8 @@ export async function GET() {
 			requests,
 			scheduleData.timeslots,
 			scheduleData.locations,
+			{},
+			booths.booths,
 		);
 
 		// Initialize a constant to count how many meetings were created during each scheduler pass.

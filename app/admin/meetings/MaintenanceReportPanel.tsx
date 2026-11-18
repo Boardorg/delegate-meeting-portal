@@ -89,7 +89,7 @@ export default function MaintenanceReportPanel({
                     {report.notes.length > 0 && (
                         <div style={{ marginTop: 20 }}>
                             <div className="adm-chart-title">
-                                Already gone in Cvent ({report.notes.length})
+                                Already Gone in Cvent ({report.notes.length})
                             </div>
                             <ul className="adm-sync-list">
                                 {report.notes.map((n) => (
@@ -112,7 +112,7 @@ export default function MaintenanceReportPanel({
                     {report.failures.length > 0 && (
                         <div style={{ marginTop: 20 }}>
                             <div className="adm-chart-title">
-                                Failed to unpush ({report.failures.length})
+                                Failed to Unpush ({report.failures.length})
                             </div>
                             <ul className="adm-sync-list">
                                 {report.failures.map((f) => (

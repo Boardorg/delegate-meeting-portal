@@ -1,7 +1,7 @@
 import type { Attendee } from "@/types";
 import type { CventExistingAppointment } from "@/lib/cvent/client";
 import type { PreexistingSchedule } from "@/lib/scheduling/engine";
-import { pairKey } from "@/lib/scheduling/helpers";
+import { pairKey, slotRoomKey } from "@/lib/scheduling/helpers";
 import { partyId } from "@/lib/attendees/companies";
 
 // ---------------------------------------------------------------------------
@@ -21,6 +21,19 @@ import { partyId } from "@/lib/attendees/companies";
  * times union under it and intra-company rep↔rep pairs never form.
  * Unrecognized participants are ignored.
  *
+ * Busy times are a count per start time, one for each appointment the party is in then.
+ * A company can hold more than one meeting at a time, so its existing
+ * appointments count toward that limit instead of blocking the time outright.
+ * Each appointment counts once per party, however many of the company's reps host it.
+ *
+ * It also records, for the run:
+ * - how many appointments each party already has in Cvent, so they count toward its maximum.
+ * - which of a party's contacts host at each start time, so a company's later meeting then only gets free reps.
+ * - how many appointments are at each location and start time, so a slot's room is Cvent's setting minus those.
+ *   Appointments carry only a location name, so slots are matched by name and start time.
+ *
+ * Start times are normalized to ISO strings with milliseconds, the same form the scheduler's timeslots use.
+ *
  * @param {CventExistingAppointment[]} appointments - Existing Cvent appointments.
  * @param {Attendee[]} attendees - Loaded attendees, for contact-id → party-id mapping.
  * @returns {PreexistingSchedule} Pairs + per-party busy times to schedule around.
@@ -35,10 +48,34 @@ export function preexistingFromAppointments(
         if (a.cventContactId) partyIdByContactId.set(a.cventContactId, partyId(a));
     }
 
-    const busyStartTimesByAttendee = new Map<string, Set<string>>();
+    const busyStartTimesByAttendee = new Map<string, Map<string, number>>();
+    const meetingCountByParty = new Map<string, number>();
+    const busyHostsByParty = new Map<string, Map<string, Set<string>>>();
+    const bookedBySlot = new Map<string, number>();
     const pairs = new Set<string>();
 
     for (const appt of appointments) {
+        const parsed = new Date(appt.startTime);
+        if (Number.isNaN(parsed.getTime())) continue;
+        const startTime = parsed.toISOString();
+
+        // One more appointment at this location and start time.
+        if (appt.locationName) {
+            const key = slotRoomKey(appt.locationName, startTime);
+            bookedBySlot.set(key, (bookedBySlot.get(key) ?? 0) + 1);
+        }
+
+        // The hosts are busy at this start time, under their party.
+        for (const hostId of appt.hostContactIds) {
+            const party = partyIdByContactId.get(hostId);
+            if (!party) continue;
+            const byTime = busyHostsByParty.get(party) ?? new Map<string, Set<string>>();
+            const hosts = byTime.get(startTime) ?? new Set<string>();
+            hosts.add(hostId);
+            byTime.set(startTime, hosts);
+            busyHostsByParty.set(party, byTime);
+        }
+
         // Map participants to party ids and dedupe — all of a company's reps
         // collapse to one account id, so a multi-host appointment yields a
         // single company party (no self/rep↔rep pairs).
@@ -50,11 +87,13 @@ export function preexistingFromAppointments(
             ),
         ];
 
-        // Each party is busy at this appointment's start time.
+        // Each party has one more appointment at this start time, and one more in total.
         for (const id of ids) {
-            const set = busyStartTimesByAttendee.get(id) ?? new Set<string>();
-            set.add(appt.startTime);
-            busyStartTimesByAttendee.set(id, set);
+            const counts =
+                busyStartTimesByAttendee.get(id) ?? new Map<string, number>();
+            counts.set(startTime, (counts.get(startTime) ?? 0) + 1);
+            busyStartTimesByAttendee.set(id, counts);
+            meetingCountByParty.set(id, (meetingCountByParty.get(id) ?? 0) + 1);
         }
 
         // Every pair among the parties already meets — don't re-schedule it.
@@ -65,5 +104,11 @@ export function preexistingFromAppointments(
         }
     }
 
-    return { pairs, busyStartTimesByAttendee };
+    return {
+        pairs,
+        busyStartTimesByAttendee,
+        meetingCountByParty,
+        busyHostsByParty,
+        bookedBySlot,
+    };
 }

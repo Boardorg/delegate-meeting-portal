@@ -1,0 +1,3 @@
+# Code owners approve specs and review pull requests.
+# GitHub asks them for a review on every pull request.
+* @petercorlettwiley @mark-c-woodard

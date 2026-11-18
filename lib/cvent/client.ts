@@ -9,6 +9,7 @@ import {
     availableTimesPaginatedResponseFromJSON,
     attendeePaginatedResponseFromJSON,
     appointmentEventFromJSON,
+    appointmentTypesPaginatedResponseFromJSON,
 } from "@cvent/sdk/models/components";
 import type {
     CventLocation,
@@ -16,6 +17,7 @@ import type {
     CventAppointmentEvent,
 } from "@/lib/cvent/types";
 import { getEventSettings } from "@/lib/events/settings";
+import type { AppointmentType } from "@/lib/events/meetingKinds";
 
 /**
  * Client for the Cvent Appointments API, built on the official `@cvent/sdk`.
@@ -23,6 +25,8 @@ import { getEventSettings } from "@/lib/events/settings";
  * Two read operations are exposed today:
  *   - getLocationsByEvent → appointments.listLocations
  *   - getTimeslotsByEvent → appointments.listAvailableTimes
+ *
+ * getAppointmentTypes wraps appointments.listAppointmentTypes.
  *
  * Both walk the SDK's paginated async-iterator to completion and return the
  * full, flattened result set across all pages.
@@ -58,7 +62,7 @@ async function requireEventSettings(eventCode: string) {
     if (!settings) {
         throw new Error(
             `No Cvent settings configured for event "${eventCode}". ` +
-                "Add them in Admin → Event settings.",
+                "Add them in Admin → Event Settings.",
         );
     }
     return settings;
@@ -77,7 +81,7 @@ async function getAppointmentEventId(eventCode: string): Promise<string> {
     if (!cventAppointmentEventId) {
         throw new Error(
             `Event "${eventCode}" has no Cvent Appointment Event ID set ` +
-                "(Admin → Event settings).",
+                "(Admin → Event Settings).",
         );
     }
     return cventAppointmentEventId;
@@ -223,13 +227,138 @@ export async function getTimeslotsByEvent(
     return out;
 }
 
+/** One page of appointment types, reduced to what we need plus the next page token. */
+type AppointmentTypesPage = { data: AppointmentType[]; nextToken?: string };
+
+/**
+ * Reduces raw Cvent appointment-type records to `{ id, name }`.
+ * Records without an id are dropped.
+ * A record without a name falls back to its id, so the admin still sees something to map.
+ *
+ * @param {Array<{ id?: string; name?: string }>} data - Records from the SDK or a recovered body.
+ * @returns {AppointmentType[]} The reduced appointment types.
+ */
+export function toAppointmentTypes(
+    data: Array<{ id?: string; name?: string }>,
+): AppointmentType[] {
+    const out: AppointmentType[] = [];
+    for (const t of data) {
+        if (!t.id) continue;
+        out.push({ id: t.id, name: t.name?.trim() || t.id });
+    }
+    return out;
+}
+
+/**
+ * Parses a raw listAppointmentTypes response body into one page of appointment types.
+ * Used when the SDK rejects a successful response, as fetchAppointmentsPage does for appointments.
+ *
+ * @param {unknown} parsed - The JSON-parsed response body.
+ * @returns {AppointmentTypesPage} The page's appointment types and next token, if any.
+ */
+export function toAppointmentTypesPage(parsed: unknown): AppointmentTypesPage {
+    const body = parsed as {
+        data?: Array<{ id?: string; name?: string }>;
+        paging?: { nextToken?: string };
+    };
+    return {
+        data: toAppointmentTypes(body.data ?? []),
+        nextToken: body.paging?.nextToken,
+    };
+}
+
+/**
+ * Fetches one page of an event's appointment types for a given pagination token.
+ * Driven manually, one token per call, for the same reason as fetchAppointmentsPage.
+ * A page that fails the SDK's response validation on a 2xx is read from the raw body instead.
+ *
+ * @param {string} id - The Cvent appointment-event id.
+ * @param {string | undefined} token - The page token, or undefined for the first page.
+ * @returns {Promise<AppointmentTypesPage>} That page's appointment types and next token, if any.
+ */
+async function fetchAppointmentTypesPage(
+    id: string,
+    token: string | undefined,
+): Promise<AppointmentTypesPage> {
+    try {
+        const page = await getClient().appointments.listAppointmentTypes({
+            id,
+            ...(token ? { token } : {}),
+        });
+        return {
+            data: toAppointmentTypes(page.result.data ?? []),
+            nextToken: page.result.paging?.nextToken,
+        };
+    } catch (err) {
+        const body = recoverableResponseBody(err);
+        if (body) {
+            try {
+                return toAppointmentTypesPage(JSON.parse(body));
+            } catch {
+                // The body wasn't parseable JSON, so fall through and re-throw.
+            }
+        }
+        throw err;
+    }
+}
+
+/**
+ * Lists every appointment type for an event, following pagination to the end.
+ * Event settings uses it to map each type to a meeting kind.
+ * The schedule loader uses it to name each timeslot's type.
+ * Mock mode reads data/mock/cvent/appointment-types.json.
+ * Request-memoized like getAppointmentEvent.
+ *
+ * @param {string} eventCode - Internal event code, translated to the Cvent appointment-event id.
+ * @returns {Promise<AppointmentType[]>} All appointment types across all pages.
+ * @throws {Error} When the event has no Cvent Appointment Event ID, or Cvent can't be reached.
+ */
+export const getAppointmentTypes = cache(
+    async (eventCode: string): Promise<AppointmentType[]> => {
+        if (isMock()) {
+            const data = await readMock(
+                "appointment-types.json",
+                appointmentTypesPaginatedResponseFromJSON,
+            );
+            return toAppointmentTypes(data);
+        }
+
+        const id = await getAppointmentEventId(eventCode);
+        const out: AppointmentType[] = [];
+        let token: string | undefined;
+
+        do {
+            const page = await fetchAppointmentTypesPage(id, token);
+            out.push(...page.data);
+            token = page.nextToken;
+        } while (token);
+
+        return out;
+    },
+);
+
 /** Minimal appointment fields needed to resolve a synced meeting's display time and location. */
 export type CventAppointmentSummary = {
     id: string;
     startTime: Date;
     endTime: Date;
     locationName: string | null;
+    /**
+     * The appointment type's name, e.g. "Delegate Group Meetings". Null when Cvent omits it.
+     * Cvent's list sends the type as `{ name }` only, with no id.
+     */
+    typeName: string | null;
 };
+
+/**
+ * Reads an appointment type's name from a listed appointment, trimmed. Blank becomes null.
+ *
+ * @param {{ name?: unknown } | undefined} type - The appointment's `type` field.
+ * @returns {string | null} The name, or null.
+ */
+function typeNameOf(type: { name?: unknown } | undefined): string | null {
+    return typeof type?.name === "string" && type.name.trim() ? type.name.trim() : null;
+}
 
 /** One page of raw listAppointments data, reduced to what we need plus the next page token. */
 type AppointmentsPage = { data: CventAppointmentSummary[]; nextToken?: string };
@@ -243,13 +372,14 @@ type AppointmentsPage = { data: CventAppointmentSummary[]; nextToken?: string };
  * @param {unknown} parsed - The JSON-parsed response body.
  * @returns {AppointmentsPage} The page's appointments and next token, if any.
  */
-function toAppointmentsPage(parsed: unknown): AppointmentsPage {
+export function toAppointmentsPage(parsed: unknown): AppointmentsPage {
     const body = parsed as {
         data?: Array<{
             id: string;
             start: string | Date;
             end: string | Date;
             location?: { name?: string };
+            type?: { name?: unknown };
         }>;
         paging?: { nextToken?: string };
     };
@@ -259,6 +389,7 @@ function toAppointmentsPage(parsed: unknown): AppointmentsPage {
             startTime: new Date(a.start),
             endTime: new Date(a.end),
             locationName: a.location?.name ?? null,
+            typeName: typeNameOf(a.type),
         })),
         nextToken: body.paging?.nextToken,
     };
@@ -291,6 +422,7 @@ async function fetchAppointmentsPage(
                 startTime: a.start,
                 endTime: a.end,
                 locationName: a.location?.name ?? null,
+                typeName: typeNameOf(a.type),
             })),
             nextToken: page.result.paging.nextToken,
         };
@@ -310,8 +442,12 @@ async function fetchAppointmentsPage(
 /**
  * Lists every appointment for an event, following pagination to the end.
  * Used to resolve a synced meeting's display time and location from the
- * appointment itself, since listAvailableTimes/listLocations only reflect
- * currently open capacity and stop including a slot once it's fully booked.
+ * appointment itself, since a slot in listAvailableTimes/listLocations can't say which appointment holds it.
+ * Full slots are still listed, and availableAppointments is the location's max-at-same-time setting, not the room left.
+ *
+ * Push also uses it to read an existing appointment's type before editing it in place.
+ * Cvent's get-appointment call returns 404 for appointments that do exist, so the list is the only reliable source.
+ * Every page is read, even when a page fails the SDK's validation, since each page carries its own next token.
  *
  * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
  * @returns {Promise<CventAppointmentSummary[]>} All appointments across all pages.
@@ -371,20 +507,26 @@ export type CventEventAttendee = {
     contactId: string;
     /** Contact email — the key used to match against Salesforce attendees. */
     email: string;
+    /** True when the registration's Cvent status is Cancelled. */
+    cancelled: boolean;
 };
 
 /**
- * Reduces raw Cvent attendee records to `{ contactId, email }`, dropping any
- * record missing either field (both are required to match + push).
+ * Reduces raw Cvent attendee records to `{ contactId, email, cancelled }`, dropping any
+ * record missing either id field (both are required to match + push).
  */
 function toCventEventAttendees(
-    data: Array<{ contact?: { id?: string; email?: string } }>,
+    data: Array<{ contact?: { id?: string; email?: string }; status?: string }>,
 ): CventEventAttendee[] {
     const out: CventEventAttendee[] = [];
     for (const a of data) {
         const contactId = a.contact?.id;
         const email = a.contact?.email;
-        if (contactId && email) out.push({ contactId, email });
+        if (contactId && email) {
+            // Cvent drops cancelled registrants from the appointment roster.
+            // Pushing one as a participant fails with ATTENDEE_NOT_FOUND.
+            out.push({ contactId, email, cancelled: a.status === "Cancelled" });
+        }
     }
     return out;
 }
@@ -418,7 +560,7 @@ export const getEventAttendees = cache(
         const { cventEventId } = await requireEventSettings(eventCode);
         if (!cventEventId) {
             throw new Error(
-                `Event "${eventCode}" has no Cvent Event ID set (Admin → Event settings).`,
+                `Event "${eventCode}" has no Cvent Event ID set (Admin → Event Settings).`,
             );
         }
 
@@ -435,10 +577,37 @@ export const getEventAttendees = cache(
 
 /** An existing Cvent appointment, reduced to what pre-blocking the scheduler needs. */
 export type CventExistingAppointment = {
+    /** Cvent appointment id. Null when Cvent omits it. */
+    id: string | null;
     /** ISO 8601 UTC start time of the appointment. */
     startTime: string;
+    /** ISO 8601 UTC end time of the appointment. Null when Cvent omits it. */
+    endTime: string | null;
     /** Cvent contact ids of the appointment's participants (hosts + attendees). */
     participantContactIds: string[];
+    /**
+     * Cvent contact ids of the participants whose `type` is "host".
+     * A rep listed here is busy hosting at this start time.
+     * Cvent rejects a host who is already in another appointment at that time.
+     */
+    hostContactIds: string[];
+    /**
+     * The appointment's location name. Null when Cvent omits it.
+     * Appointments carry only the location's name, not its id.
+     */
+    locationName: string | null;
+    /**
+     * The location's id, when the record has one.
+     * The SDK's appointment type has no location id, so this is usually null.
+     */
+    locationId: string | null;
+    /** The appointment type's name, trimmed. Null when Cvent omits it. */
+    typeName: string | null;
+    /**
+     * The appointment type's id, when the record has one.
+     * The SDK's appointment type only names the type, so this is usually null.
+     */
+    typeId: string | null;
 };
 
 /**
@@ -447,7 +616,11 @@ export type CventExistingAppointment = {
  * recovered from a response-validation failure (`start` is an ISO string).
  */
 type RawCventAppointment = {
+    id?: string;
     start?: Date | string;
+    end?: Date | string;
+    location?: { id?: string | null; name?: string | null } | null;
+    type?: { id?: unknown; name?: unknown } | null;
     deleted?: boolean;
     /** e.g. "ACTIVE", "CONFIRMED", "CANCELLED" — see AppointmentStatusJson. */
     status?: string;
@@ -482,12 +655,28 @@ export function toExistingAppointments(
         const participantContactIds = (appt.participants ?? [])
             .map((p) => p.attendee?.contact?.id ?? p.attendee?.id)
             .filter((id): id is string => !!id);
+        // The hosts alone, read the same way, so push and the scheduler know which reps are busy.
+        const hostContactIds = (appt.participants ?? [])
+            .filter((p) => p.type?.toLowerCase() === "host")
+            .map((p) => p.attendee?.contact?.id ?? p.attendee?.id)
+            .filter((id): id is string => !!id);
         out.push({
+            id: appt.id ?? null,
             startTime:
                 typeof appt.start === "string"
                     ? appt.start
                     : appt.start.toISOString(),
+            endTime: !appt.end
+                ? null
+                : typeof appt.end === "string"
+                  ? appt.end
+                  : appt.end.toISOString(),
             participantContactIds,
+            hostContactIds,
+            locationName: appt.location?.name ?? null,
+            locationId: appt.location?.id ?? null,
+            typeName: typeNameOf(appt.type ?? undefined),
+            typeId: typeof appt.type?.id === "string" && appt.type.id ? appt.type.id : null,
         });
     }
     return out;
@@ -567,6 +756,10 @@ async function fetchExistingAppointmentsPage(
  * these to avoid re-booking a pair that already meets, or putting an attendee
  * in a time they're already booked. Deleted appointments are skipped.
  *
+ * Each appointment also carries its `id`, its `hostContactIds` and its `locationName`.
+ * Push's busy-host lookup uses the ids and hosts to leave off reps already hosting at that time.
+ * The scheduler uses the hosts the same way, and the location name to take existing appointments off a slot's room.
+ *
  * Mock mode reads the optional data/mock/cvent/appointments.json fixture (raw
  * Cvent appointment records) so reconciliation — including multi-host
  * appointments — can be exercised end-to-end; if the fixture is absent, mock
@@ -614,6 +807,12 @@ export const getEventAppointments = cache(
 export type CventAppointmentInput = {
     /** Appointment title shown in Cvent. */
     subject: string;
+    /**
+     * Appointment description, shown as the appointment's message in Cvent.
+     * Roundtables send their description, even when it is empty.
+     * Sponsor and D2D meetings leave it out, so Cvent gets no description field.
+     */
+    description?: string;
     /** Appointment start (UTC). */
     startTime: Date;
     /** Appointment end (UTC). */
@@ -628,9 +827,16 @@ export type CventAppointmentInput = {
     appointmentTypeId: string;
     /** Cvent location id. Omitted from the request when null/undefined. */
     locationId?: string | null;
-    /** Cvent contact ids of the appointment attendees (the requested delegate). */
+    /**
+     * Cvent contact ids of the appointment attendees (the requested delegate).
+     * On update, an empty list removes every attendee, and undefined leaves them out of the request.
+     */
     attendeeContactIds?: string[];
-    /** External reference code (we pass our meeting id) for traceability. */
+    /**
+     * External reference code, built by appointmentCode() in lib/cvent/push.ts.
+     * It starts with our meeting id for traceability.
+     * Cvent rejects a code it has seen before, even on a cancelled appointment.
+     */
     code?: string;
 };
 
@@ -652,6 +858,7 @@ function toUuidList(ids: string[]): Array<{ id: string }> {
 export function buildCreateAppointmentRequest(input: CventAppointmentInput) {
     return {
         subject: input.subject,
+        ...(input.description !== undefined ? { description: input.description } : {}),
         startTime: input.startTime,
         endTime: input.endTime,
         hosts: toUuidList(input.hostContactIds),
@@ -668,7 +875,37 @@ export function buildCreateAppointmentRequest(input: CventAppointmentInput) {
 }
 
 /**
- * Whether to suppress Cvent notifications (invite/update emails) when pushing
+ * Builds the Cvent `updateAppointmentRequest` payload from our input. Shaped
+ * like the create payload, minus the fields Cvent's update endpoint doesn't
+ * accept: appointmentTypeId, autoAccept and code. Exported so the shaping can
+ * be unit-tested without the SDK.
+ *
+ * @param {string} apptId - The existing Cvent appointment id being updated.
+ * @param {CventAppointmentInput} input - The appointment fields.
+ * @returns The SDK update-appointment request body.
+ */
+export function buildUpdateAppointmentRequest(
+    apptId: string,
+    input: CventAppointmentInput,
+) {
+    return {
+        id: apptId,
+        subject: input.subject,
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        startTime: input.startTime,
+        endTime: input.endTime,
+        hosts: toUuidList(input.hostContactIds),
+        ...(input.locationId ? { location: input.locationId } : {}),
+        // An empty list is still sent, so an update can remove every attendee.
+        // Leaving attendeeContactIds undefined leaves the attendees out of the request.
+        ...(input.attendeeContactIds !== undefined
+            ? { attendees: toUuidList(input.attendeeContactIds) }
+            : {}),
+    };
+}
+
+/**
+ * Whether to suppress Cvent notifications (invite/update/cancel emails) when pushing
  * appointments. Controlled by CVENT_SUPPRESS_NOTIFICATIONS; defaults to false
  * (notifications sent as configured in Cvent).
  */
@@ -755,14 +992,51 @@ export async function createAppointment(
 }
 
 /**
+ * Updates an existing Cvent appointment in place and returns its id. Used when
+ * a re-push can't create a replacement because the old appointment still holds
+ * the same participants at the same time (see lib/cvent/push.ts). In mock mode
+ * is a no-op that returns the given apptId.
+ *
+ * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
+ * @param {string} apptId - The existing Cvent appointment id to update.
+ * @param {CventAppointmentInput} input - The updated appointment fields.
+ * @returns {Promise<string>} The appointment's Cvent id.
+ */
+export async function updateAppointment(
+    eventCode: string,
+    apptId: string,
+    input: CventAppointmentInput,
+): Promise<string> {
+    if (isMock()) return apptId;
+
+    const id = await getAppointmentEventId(eventCode);
+
+    try {
+        const res = await getClient().appointments.updateAppointment({
+            id,
+            apptId,
+            suppressNotifications: suppressNotifications(),
+            updateAppointmentRequest: buildUpdateAppointmentRequest(
+                apptId,
+                input,
+            ),
+        });
+        return res.id;
+    } catch (err) {
+        // Treat an over-strict response-validation failure on a real 2xx as success.
+        return recoverAppointmentId(err);
+    }
+}
+
+/**
  * Cancels an existing Cvent appointment (used when a pushed portal meeting is
  * deleted, so the Cvent side doesn't end up with an orphaned appointment). In
  * mock mode is a no-op.
  *
  * Note: cancelling does not free the appointment's `code` for reuse — Cvent
  * keeps it reserved even after cancellation, so callers must mint a fresh
- * code rather than reusing a cancelled appointment's (see the timestamp
- * suffix in lib/cvent/push.ts and the engine's id generation).
+ * code rather than reusing a cancelled appointment's (see appointmentCode()
+ * in lib/cvent/push.ts and the engine's id generation).
  *
  * @param {string} eventCode - Internal event code; translated to the Cvent appointment-event id.
  * @param {string} apptId - The Cvent appointment id to cancel.
@@ -775,5 +1049,10 @@ export async function cancelAppointment(
     if (isMock()) return;
 
     const id = await getAppointmentEventId(eventCode);
-    await getClient().appointments.cancelAppointment({ id, apptId });
+    // Cancelling emails the participants unless notifications are suppressed, the same as create and update.
+    await getClient().appointments.cancelAppointment({
+        id,
+        apptId,
+        suppressNotifications: suppressNotifications(),
+    });
 }

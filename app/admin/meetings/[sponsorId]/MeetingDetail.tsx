@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { fmtTime, fmtWeekday } from "@/lib/format";
-import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail } from "@/types";
 import type { SyncReport } from "@/lib/cvent/syncReport";
 import SyncReportPanel from "../SyncReportPanel";
@@ -19,11 +18,21 @@ import {
     removeMeeting,
     type DelegateOption,
     type MeetingRow,
-    type SlotOption,
-    type SyncStatus,
 } from "./actions";
+import {
+    slotLocationWarning,
+    slotTypeWarning,
+    type SlotOption,
+} from "@/lib/scheduling/slotOptions";
 import { StatChip } from "../_components/StatChip";
 import { TierPill } from "../_components/TierPill";
+import { SlotSelect } from "../_components/SlotSelect";
+import {
+    LegendItem,
+    MatchKindChip,
+    SourceChip,
+    SyncChip,
+} from "../_components/MeetingChips";
 
 // ---------------------------------------------------------------------------
 // MeetingDetail — per-sponsor meeting table for /admin/meetings/[sponsorId].
@@ -38,8 +47,11 @@ type Props = {
 
 export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }: Props) {
     const router = useRouter();
-    const total = sponsor.contracted + sponsor.bonus;
+    // The target is the company's maximum, the same number the scheduler uses.
+    const total = sponsor.maximum;
     const listHref = `/admin/meetings`;
+    // Meetings in Cvent that this portal's database doesn't have.
+    const cventOnlyCount = meetings.filter((m) => m.source === "cvent").length;
 
     const [editTarget, setEditTarget] = useState<MeetingRow | null>(null);
     const [showCreate, setShowCreate] = useState(false);
@@ -89,7 +101,7 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
         <div className="adm-page">
             {/* Breadcrumb */}
             <nav className="adm-breadcrumb">
-                <Link href={listHref}>Manage Meetings</Link>
+                <Link href={listHref}>Sponsor Meetings</Link>
                 <span className="adm-breadcrumb-sep">›</span>
                 <span>{sponsor.company}</span>
             </nav>
@@ -113,12 +125,18 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
 
                 {/* Stat chips + push all */}
                 <div className="adm-card-row">
-                    <StatChip label="Contracted" value={String(sponsor.contracted)} />
+                    <StatChip
+                        label="Purchased"
+                        value={sponsor.purchased !== null ? String(sponsor.purchased) : "—"}
+                    />
                     <StatChip
                         label="Bonus"
-                        value={sponsor.bonus > 0 ? `+${sponsor.bonus}` : "—"}
+                        value={sponsor.bonus !== null && sponsor.bonus > 0 ? `+${sponsor.bonus}` : "—"}
                     />
-                    <StatChip label="Total Target" value={String(total)} />
+                    <StatChip
+                        label={sponsor.maximumFromTier ? "Maximum (from tier)" : "Maximum"}
+                        value={String(total)}
+                    />
                     <StatChip label="Requests Filed" value={String(sponsor.requestCount)} />
                     <StatChip
                         label="Scheduled"
@@ -176,6 +194,15 @@ export default function MeetingDetail({ sponsor, meetings, eventCode, timezone }
                     + Create Meeting
                 </button>
             </div>
+
+            {/* Rows that are only in Cvent, so nobody expects to change them here. */}
+            {cventOnlyCount > 0 && (
+                <p className="adm-help-note">
+                    {cventOnlyCount === 1
+                        ? "1 meeting was already in Cvent. It counts toward the maximum and is read-only here. To change it, you'll need to do so in Cvent."
+                        : `${cventOnlyCount} meetings were already in Cvent. They count toward the maximum and are read-only here. To change them, you'll need to do so in Cvent.`}
+                </p>
+            )}
 
             {/* Meeting table */}
             {meetings.length === 0 ? (
@@ -289,7 +316,14 @@ function MeetingTableRow({
             <td>
                 <div className="adm-party-name">{m.delegateName}</div>
                 <div className="adm-chip-mt">
-                    <MatchKindChip kind={m.matchKind} />
+                    {/* A Cvent-only row has no match kind, since the portal didn't schedule it. */}
+                    {!isCvent && <MatchKindChip kind={m.matchKind} />}
+                    {m.delegateCancelled && (
+                        <>
+                            {" "}
+                            <span className="adm-chip adm-chip-cancelled">Cancelled in Cvent</span>
+                        </>
+                    )}
                 </div>
             </td>
 
@@ -428,7 +462,11 @@ function EditMeetingModal({
         getSlotOptions({ meetingId: meeting.id, eventCode })
             .then(({ current, options: opts }) => {
                 setOptions(opts);
-                if (current) setSelectedKey(slotKey(current));
+                // The current slot is preselected only when it is offered.
+                // It isn't when it sits at another company's booth.
+                if (current && opts.some((o) => slotKey(o) === slotKey(current))) {
+                    setSelectedKey(slotKey(current));
+                }
             })
             .catch(() => setLoadError("Failed to load slot options."));
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -447,12 +485,17 @@ function EditMeetingModal({
         startTransition(async () => {
             try {
                 setSaveError(null);
-                await editMeeting({
+                const result = await editMeeting({
                     id: meeting.id,
                     timeslotId: opt.timeslotId,
                     day: opt.day,
                     locationId: opt.locationId,
                 });
+                // The server refuses a slot at another company's booth, and says why.
+                if (!result.ok) {
+                    setSaveError(result.error);
+                    return;
+                }
                 onSaved();
             } catch (e) {
                 setSaveError(e instanceof Error ? e.message : "Failed to save.");
@@ -477,21 +520,22 @@ function EditMeetingModal({
                 ) : (
                     <label className="adm-field adm-field-mb-lg">
                         <span className="adm-field-label">Time Slot</span>
-                        <select
-                            className="adm-input adm-select"
+                        <SlotSelect
+                            options={options}
                             value={selectedKey}
-                            onChange={(e) => setSelectedKey(e.target.value)}
+                            onChange={setSelectedKey}
                             disabled={isPending}
-                        >
-                            {options.map((o) => (
-                                <option key={slotKey(o)} value={slotKey(o)}>
-                                    Day {o.day} – {fmtTime(o.startTime, timezone)}
-                                    {o.locationName ? ` · ${o.locationName}` : ""}
-                                </option>
-                            ))}
-                        </select>
+                            timezone={timezone}
+                        />
                     </label>
                 )}
+
+                <SlotTypeWarning
+                    option={options?.find((o) => slotKey(o) === selectedKey)}
+                />
+                <SlotLocationWarning
+                    option={options?.find((o) => slotKey(o) === selectedKey)}
+                />
 
                 {saveError && <div className="adm-modal-error">{saveError}</div>}
 
@@ -580,7 +624,7 @@ function CreateMeetingModal({
         startTransition(async () => {
             try {
                 setSaveError(null);
-                await createMeeting({
+                const result = await createMeeting({
                     eventCode,
                     sponsorId,
                     delegateId: selected.salesforceId,
@@ -588,6 +632,11 @@ function CreateMeetingModal({
                     day: opt.day,
                     locationId: opt.locationId,
                 });
+                // The server refuses a slot at another company's booth, and says why.
+                if (!result.ok) {
+                    setSaveError(result.error);
+                    return;
+                }
                 onCreated();
             } catch (e) {
                 setSaveError(e instanceof Error ? e.message : "Failed to create meeting.");
@@ -692,21 +741,26 @@ function CreateMeetingModal({
                                 No mutual available timeslots for this pair.
                             </span>
                         ) : (
-                            <select
-                                className="adm-input adm-select"
+                            <SlotSelect
+                                options={slotOptions ?? []}
                                 value={selectedKey}
-                                onChange={(e) => setSelectedKey(e.target.value)}
+                                onChange={setSelectedKey}
                                 disabled={isPending || !slotOptions}
-                            >
-                                {(slotOptions ?? []).map((o) => (
-                                    <option key={o.timeslotId} value={o.timeslotId}>
-                                        Day {o.day} – {fmtTime(o.startTime, timezone)}
-                                        {o.locationName ? ` · ${o.locationName}` : ""}
-                                    </option>
-                                ))}
-                            </select>
+                                timezone={timezone}
+                            />
                         )}
                     </label>
+                )}
+
+                {selected && !slotsLoading && (
+                    <SlotTypeWarning
+                        option={slotOptions?.find((o) => slotKey(o) === selectedKey)}
+                    />
+                )}
+                {selected && !slotsLoading && (
+                    <SlotLocationWarning
+                        option={slotOptions?.find((o) => slotKey(o) === selectedKey)}
+                    />
                 )}
 
                 {saveError && <div className="adm-modal-error">{saveError}</div>}
@@ -730,52 +784,39 @@ function CreateMeetingModal({
 }
 
 // ---------------------------------------------------------------------------
-// Chips + small display components
+// Time slot picker shared by the Edit and Create Meeting windows
 // ---------------------------------------------------------------------------
 
-function MatchKindChip({ kind }: { kind: MeetingMatchKind }) {
-    const classMap: Record<MeetingMatchKind, string> = {
-        mutual:          "adm-chip-mutual",
-        sponsor_choice:  "adm-chip-sponsor-choice",
-        delegate_choice: "adm-chip-delegate-choice",
-        admin:           "adm-chip-admin",
-    };
-    const labelMap: Record<MeetingMatchKind, string> = {
-        mutual:          "Mutual",
-        sponsor_choice:  "Sponsor choice",
-        delegate_choice: "Delegate choice",
-        admin:           "Admin created",
-    };
-    return <span className={`adm-chip ${classMap[kind]}`}>{labelMap[kind]}</span>;
-}
-
-function SyncChip({ status }: { status: SyncStatus }) {
-    const classMap: Record<SyncStatus, string> = {
-        synced:     "adm-chip-synced",
-        modified:   "adm-chip-modified",
-        not_pushed: "adm-chip-not-pushed",
-    };
-    const labelMap: Record<SyncStatus, string> = {
-        synced:     "Synced",
-        modified:   "Modified",
-        not_pushed: "Not pushed",
-    };
-    return <span className={`adm-chip ${classMap[status]}`}>{labelMap[status]}</span>;
-}
-
-function SourceChip({ source }: { source: MeetingSource }) {
+/**
+ * Warns when the chosen slot isn't a sponsor slot, since Cvent will file the meeting under that slot's type.
+ * Renders nothing for a sponsor_delegate slot.
+ *
+ * @param {{ option: SlotOption | undefined }} props
+ * @returns {JSX.Element | null} The warning, or nothing.
+ */
+function SlotTypeWarning({ option }: { option: SlotOption | undefined }) {
+    const warning = slotTypeWarning(option);
+    if (!warning) return null;
     return (
-        <span className={`adm-chip ${source === "portal" ? "adm-chip-portal" : "adm-chip-cvent"}`}>
-            {source === "portal" ? "Portal" : "Cvent"}
-        </span>
+        <div className="adm-modal-warn-at adm-field-mb-lg" role="alert">
+            {warning}
+        </div>
     );
 }
 
-function LegendItem({ swatch, label }: { swatch: React.CSSProperties; label: string; }) {
+/**
+ * Warns when the chosen slot isn't at the sponsor's own booth, naming its location.
+ * Renders nothing for a slot at the sponsor's booth.
+ *
+ * @param {{ option: SlotOption | undefined }} props
+ * @returns {JSX.Element | null} The warning, or nothing.
+ */
+function SlotLocationWarning({ option }: { option: SlotOption | undefined }) {
+    const warning = slotLocationWarning(option);
+    if (!warning) return null;
     return (
-        <span className="adm-legend-item">
-            <span className="adm-legend-swatch" style={swatch} />
-            {label}
-        </span>
+        <div className="adm-modal-warn-at adm-field-mb-lg" role="alert">
+            {warning}
+        </div>
     );
 }

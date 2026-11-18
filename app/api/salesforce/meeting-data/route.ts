@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     }
     try {
         // Single round-trip to Salesforce: returns { delegates, sponsors }.
-        let data = await getMeetingDataByEvent(eventCode);
+        const data = await getMeetingDataByEvent(eventCode);
 
         if (writeJson) {
             // Convert raw SF records into the normalized Attendee shape used

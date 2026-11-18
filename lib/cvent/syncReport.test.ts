@@ -62,6 +62,28 @@ describe("classifyPushError", () => {
             JSON.stringify({ code: "DUPLICATE_CODE" }),
         );
         expect(classifyPushError(conflict)).toBe("cvent_conflict");
+
+        const codeExists = cventError(
+            "code exists",
+            409,
+            JSON.stringify({ code: "APPT_CODE_ALREADY_EXISTS" }),
+        );
+        expect(classifyPushError(codeExists)).toBe("cvent_code_exists");
+    });
+
+    it("treats Cvent's 422 for a full location as no availability", () => {
+        const full = cventError(
+            "Response validation failed",
+            422,
+            JSON.stringify({
+                message: "AppointmentRequest failed to validate. Only 1 Appointment allowed for timeslot in location D2D Table C.",
+                code: "invalid",
+            }),
+        );
+        expect(classifyPushError(full)).toBe("cvent_no_availability");
+
+        const other = cventError("invalid", 422, JSON.stringify({ message: "Subject is required.", code: "invalid" }));
+        expect(classifyPushError(other)).toBe("cvent_validation");
     });
 
     it("treats a status-less transport failure as a network error", () => {
@@ -185,5 +207,32 @@ describe("buildSyncReport", () => {
             results: [],
         });
         expect(JSON.parse(JSON.stringify(report))).toEqual(report);
+    });
+
+    it("lists a meeting pushed under another appointment type as a warning, not a failure", () => {
+        const report = buildSyncReport({
+            eventCode: "NALES",
+            generatedAt: "2026-10-22T00:00:00.000Z",
+            totalPortalMeetings: 1,
+            alreadySynced: 0,
+            results: [
+                {
+                    meetingId: "m1",
+                    label: "Acme & Dee",
+                    ok: true,
+                    kind: "create",
+                    warning: "Pushed as Delegate Group Meetings.",
+                },
+            ],
+        });
+        expect(report.failed).toBe(0);
+        expect(report.created).toBe(1);
+        expect(report.warnings).toEqual([
+            {
+                meetingId: "m1",
+                label: "Acme & Dee",
+                detail: "Pushed as Delegate Group Meetings.",
+            },
+        ]);
     });
 });

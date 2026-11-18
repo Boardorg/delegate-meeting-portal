@@ -106,6 +106,22 @@ a { color: inherit; text-decoration: none; }
 .logout-btn:hover:not(:disabled) { background:var(--s3); color:var(--text); }
 .logout-btn:disabled { opacity:.5; cursor:not-allowed; }
 
+/* ── TOP PROGRESS BAR (TopProgressBar component) ──
+   Thin bar pinned above everything while the app waits on the server.
+   It slides rather than fills, since there's no real way to know how far along a request is. */
+.top-progress { position:fixed; top:0; left:0; right:0; height:3px; z-index:1000; overflow:hidden; pointer-events:none; opacity:0; transition:opacity .3s var(--ease); }
+.top-progress-loading, .top-progress-finishing { opacity:1; }
+.top-progress-bar { position:absolute; top:0; bottom:0; left:0; width:35%; background:var(--accent); border-radius:0 2px 2px 0; transform:translateX(-100%); }
+.top-progress-loading .top-progress-bar { animation:topProgressSlide 1.1s var(--ease) infinite; }
+/* On finish the bar fills the width, then the wrapper fades it out. */
+.top-progress-finishing .top-progress-bar { width:100%; transform:none; transition:width .2s var(--ease); }
+.top-progress-finishing { opacity:0; transition-delay:.1s; }
+@keyframes topProgressSlide { from { transform:translateX(-100%); } to { transform:translateX(300%); } }
+/* No sliding for people who've asked for less motion. A steady full bar still shows something is happening. */
+@media (prefers-reduced-motion: reduce) {
+  .top-progress-loading .top-progress-bar { animation:none; width:100%; transform:none; opacity:.7; }
+}
+
 /* ── Animations + scrollbar (global utility) ── */
 @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
 @keyframes pop { from { transform:scale(.4); opacity:0; } to { transform:scale(1); opacity:1; } }

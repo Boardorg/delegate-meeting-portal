@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, DM_Mono } from "next/font/google";
 import "./globals.css";
 import TestingBar from "@/app/components/TestingBar";
+import TopProgressBar from "@/app/components/TopProgressBar";
 
 const inter = Inter({
     variable: "--font-inter",
@@ -31,6 +32,7 @@ export default function RootLayout({
             className={`${inter.variable} ${dmMono.variable}`}
         >
             <body>
+                <TopProgressBar />
                 <TestingBar />
                 {children}
             </body>

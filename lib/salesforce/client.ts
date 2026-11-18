@@ -230,6 +230,18 @@ const MEETING_DATA_FIELDS = [
     "Registration__r.Discount_Code__c",
     "Registration__r.RecordType.Name",
     "Registration__r.Sponsorship_Package__c",
+    // The sponsor Opportunity itself. A sponsor company is the Opportunity's
+    // account, not the rep's Contact account (see lib/salesforce/attendeeMapper.ts).
+    "Registration__c",
+    "Registration__r.AccountId",
+    "Registration__r.Account.Name",
+    // The company's booth and meeting package, read on every attendee load.
+    // Booth_No__c is free text. The four counts are numbers and can be blank.
+    "Registration__r.Booth_No__c",
+    "Registration__r.Meetings__c",
+    "Registration__r.Cvent_Bonus_Meetings__c",
+    "Registration__r.Cvent_Maximum_Meetings__c",
+    "Registration__r.Cvent_Number_Diaries__c",
 ] as const;
 
 // Discount codes that mark an Opportunity as a test/placeholder and should be
@@ -356,6 +368,11 @@ const CVENT_ATTENDEE_FIELDS = [
     // Account ids this delegate asked to meet, which becomes the delegate side
     // of the scheduling engine's request graph.
     "CventEvents_NP_People_to_Meet__c",
+    // Formula checkboxes that decide who delegate matching may use.
+    // Only delegates with a complete Networking Profile get D2D meetings.
+    // Conference-only delegates get no D2D meetings and no roundtable seat.
+    "CventEvents_NP_Profile_Complete__c",
+    "CventEvents_Conference_Only__c",
 ] as const;
 
 /**
@@ -372,13 +389,13 @@ async function requireCventEventId(eventCode: string): Promise<string> {
     if (!settings) {
         throw new Error(
             `No Cvent settings configured for event "${eventCode}". ` +
-                "Add them in Admin → Event settings.",
+                "Add them in Admin → Event Settings.",
         );
     }
     if (!settings.cventEventId) {
         throw new Error(
             `Event "${eventCode}" has no Cvent Event ID set ` +
-                "(Admin → Event settings).",
+                "(Admin → Event Settings).",
         );
     }
     return settings.cventEventId;

@@ -2,7 +2,6 @@
 
 import "@/app/frontend.css";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { contractedMeetings } from "@/lib/attendees/caps";
 import { partyId } from "@/lib/attendees/companies";
 import { Attendee, AttendeeProfile, MeetingRequest } from "@/types";
 import TopBar, { type TopBarEventLogo } from "@/app/components/TopBar";
@@ -82,9 +81,25 @@ type ValueOrder = Record<ScalarProfileField, string[]>;
 /** How many interest-area pills a compact view shows before collapsing to "+N". */
 const PILL_LIMIT = 3;
 
+/**
+ * A delegate who cancelled their Cvent registration.
+ * Only what the request drawer needs to label and remove a request for them.
+ */
+export type CancelledDelegate = Pick<
+    Attendee,
+    "salesforceId" | "name" | "company"
+>;
+
 interface Props {
     delegates: Attendee[];
+    /** Delegates who cancelled in Cvent. They're not in the catalog, but their requests show in the drawer. */
+    cancelledDelegates: CancelledDelegate[];
     currentSponsor: Attendee;
+    /**
+     * The sponsor company's meeting maximum, worked out on the server by
+     * companyMaximumMeetings() in lib/attendees/caps.ts, the same rule the scheduler uses.
+     */
+    maxMeetings: number;
     /** Current-event logo for the header, or null when the event has none. */
     eventLogo?: TopBarEventLogo | null;
 }
@@ -215,6 +230,40 @@ function RequestActions({
         <button className="req-btn" onClick={() => onStartPick(d)}>
             + Request Meeting
         </button>
+    );
+}
+
+/**
+ * A drawer entry for a request whose delegate cancelled their Cvent registration.
+ * It can't be edited or scheduled, so the only action is removing it.
+ */
+function CancelledDrawerItem({
+    d,
+    onRemove,
+}: {
+    d: CancelledDelegate;
+    onRemove: (delegate: CancelledDelegate) => void;
+}) {
+    return (
+        <div className="d-item d-item-cancelled">
+            <div className="d-item-hero">
+                <div className="d-meta">
+                    <div className="d-company">{d.company}</div>
+                    <div className="d-name">{d.name}</div>
+                    <div className="d-cancelled-note">
+                        Cancelled their registration. This request won&apos;t
+                        be scheduled.
+                    </div>
+                </div>
+                <button
+                    className="d-remove"
+                    onClick={() => onRemove(d)}
+                    title="Remove"
+                >
+                    ✕
+                </button>
+            </div>
+        </div>
     );
 }
 
@@ -452,9 +501,20 @@ function FiltersPanel({
 
 // ── Main component ─────────────────────────────────────────────────────────
 
+/**
+ * The catalog sponsors use to browse delegates and request meetings.
+ *
+ * @todo Support delegates as viewers once the portal opens to them.
+ * The package bar, tier label and meeting count assume the viewer is a sponsor.
+ * The filters and "Request Meeting" cards assume the catalog lists delegates.
+ * Delegates will need sponsor company cards instead.
+ * That could live here behind a role check, or in a separate component.
+ */
 export default function SponsorCatalog({
     delegates,
+    cancelledDelegates,
     currentSponsor,
+    maxMeetings,
     eventLogo,
 }: Props) {
     // The current company's party id (its Account id) — the key the server uses
@@ -496,12 +556,18 @@ export default function SponsorCatalog({
     const [catalogWidth, setCatalogWidth] = useState(999);
     const catalogRef = useRef<HTMLDivElement>(null);
 
-    // The contracted amount is a reference point, not a cap: requesters can
+    // The company's maximum is a reference point, not a cap: requesters can
     // file as many requests as they like (the scheduling engine still only
-    // schedules up to the contracted amount). `reachedPackage` just drives an
+    // schedules up to the maximum). `reachedPackage` just drives an
     // informational nudge once they've filed enough to fill that amount.
-    const maxMeetings = contractedMeetings(currentSponsor.sponsorTier);
-    const reqCount = requests.length;
+    // Requests for delegates who cancelled won't become meetings, so they don't count toward the package.
+    const cancelledBySf = useMemo(
+        () => new Map(cancelledDelegates.map((d) => [d.salesforceId, d])),
+        [cancelledDelegates],
+    );
+    const reqCount = requests.filter(
+        (r) => !cancelledBySf.has(r.targetId),
+    ).length;
     const reachedPackage = reqCount >= maxMeetings;
 
     // ── Filter config ──
@@ -599,9 +665,14 @@ export default function SponsorCatalog({
         ].filter((f) => f.options.length > 0);
     }, [collectTags, interestAreaOrder, valueOrder]);
 
-    useEffect(() => {
+    // Open the first two filter sections whenever the filter list changes.
+    // This adjusts state during render, React's pattern for resetting state when an input changes.
+    // It avoids the extra render a useEffect would cause.
+    const [accordionsFor, setAccordionsFor] = useState<FilterConfig[] | null>(null);
+    if (accordionsFor !== filterConfig) {
+        setAccordionsFor(filterConfig);
         setOpenAccordions(new Set(filterConfig.slice(0, 2).map((f) => f.id)));
-    }, [filterConfig]);
+    }
 
     // ── Resize observer ──
 
@@ -770,7 +841,7 @@ export default function SponsorCatalog({
 
     // Remove a delegate's request: optimistically drop it, then tell the server.
     const deleteRequest = useCallback(
-        (target: Attendee) => {
+        (target: Pick<Attendee, "salesforceId">) => {
             if (!requestByTarget.has(target.salesforceId)) return;
             setRequests((prev) =>
                 prev.filter((r) => r.targetId !== target.salesforceId),
@@ -1365,6 +1436,11 @@ export default function SponsorCatalog({
         .filter((e): e is { d: Attendee; rank: number } => Boolean(e.d))
         .sort((a, b) => b.rank - a.rank);
 
+    // Requests for delegates who cancelled in Cvent, listed separately at the bottom of the drawer.
+    const cancelledEntries = requests
+        .map((req) => cancelledBySf.get(req.targetId))
+        .filter((d): d is CancelledDelegate => Boolean(d));
+
     const pkgLabel =
         currentSponsor.sponsorTier === "diamond" ? "◆ Diamond" : "● Standard";
     // Counter sits on the solid --blue-deep "My Requests" button, so this needs
@@ -1583,7 +1659,8 @@ export default function SponsorCatalog({
                             {maxMeetings} meetings, unlimited requests
                         </span>
                     </div>
-                    {drawerEntries.length === 0 ? (
+                    {drawerEntries.length === 0 &&
+                    cancelledEntries.length === 0 ? (
                         <div className="drawer-empty">
                             <div className="drawer-empty-icon">○</div>
                             <div
@@ -1601,16 +1678,30 @@ export default function SponsorCatalog({
                             </div>
                         </div>
                     ) : (
-                        drawerEntries.map(({ d, rank }) => (
-                            <DrawerItem
-                                key={d.id}
-                                d={d}
-                                revenueClass={revenueClass(d)}
-                                rank={rank}
-                                onRank={saveRequest}
-                                onRemove={deleteRequest}
-                            />
-                        ))
+                        <>
+                            {drawerEntries.map(({ d, rank }) => (
+                                <DrawerItem
+                                    key={d.id}
+                                    d={d}
+                                    revenueClass={revenueClass(d)}
+                                    rank={rank}
+                                    onRank={saveRequest}
+                                    onRemove={deleteRequest}
+                                />
+                            ))}
+                            {cancelledEntries.length > 0 && (
+                                <div className="drawer-section-label">
+                                    No longer attending
+                                </div>
+                            )}
+                            {cancelledEntries.map((d) => (
+                                <CancelledDrawerItem
+                                    key={d.salesforceId}
+                                    d={d}
+                                    onRemove={deleteRequest}
+                                />
+                            ))}
+                        </>
                     )}
                 </div>
             </div>

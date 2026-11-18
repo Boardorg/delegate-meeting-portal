@@ -1,4 +1,5 @@
 import type { User, MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
+import type { MeetingKind } from "@/lib/events/meetingKinds";
 
 export type CachedAuth = {
     accessToken: string;
@@ -14,15 +15,17 @@ export type AttendeeRecordSF = {
 
 /**
  * Attendee role. Determines scheduling rules, day eligibility, and meeting caps.
- * - `delegate`: Event attendee; eligible for sponsor meetings on Day 1 and peer meetings on Day 2.
- * - `sponsor`: Paying sponsor; eligible for delegate meetings on Day 1 only.
+ * - `delegate`: Event attendee. Eligible for sponsor meetings, D2D meetings and roundtables.
+ * - `sponsor`: Paying sponsor. Eligible for delegate meetings on Day 1, and on Day 2 for diamond sponsors when Day 1 is full.
  */
 export type AttendeeRole = "delegate" | "sponsor";
 
 /**
- * Sponsor package tier. Determines the sponsor's meeting cap in Pass 5.
- * - `diamond`: Highest tier; guaranteed 8 package meetings, cap raised to 10 in Pass 5.
- * - `standard`: All other tiers; guaranteed 5 package meetings, cap raised to 7 in Pass 5.
+ * Sponsor package tier, from the package name.
+ * A diamond sponsor may spill over to Day 2.
+ * The tier only sets a meeting count when all of the sponsor's Salesforce count fields are blank (see lib/attendees/caps.ts).
+ * - `diamond`: The package name contains "diamond". Falls back to 8 meetings.
+ * - `standard`: Any other package. Falls back to 5 meetings.
  * - `null`: Not applicable (delegates).
  */
 export type SponsorTier = "diamond" | "standard" | null;
@@ -41,7 +44,12 @@ export interface Timeslot {
     /** Cvent available-time id. Stored on ScheduledMeeting.timeslotId. */
     id: string;
 
-    /** The event day this timeslot belongs to. Day 1 = sponsor/delegate; Day 2 = delegate/delegate. */
+    /**
+     * The event day this timeslot belongs to, from date order. Day 1 is the earliest date.
+     * Used for display and for the day rules.
+     * Sponsor meetings use Day 1, and diamond sponsors may spill into Day 2.
+     * Which meetings a slot can hold comes from `kind`, not from the day.
+     */
     day: 1 | 2;
 
     /** ISO 8601 UTC start time, sourced from Cvent. */
@@ -61,6 +69,19 @@ export interface Timeslot {
 
     /** Cvent appointment-type id this timeslot belongs to (e.g. a specific networking break). */
     appointmentTypeId: string;
+
+    /**
+     * Cvent's name for the appointment type, e.g. "Sponsor to Delegate Meetings".
+     * Null when the type list couldn't be loaded from Cvent.
+     */
+    appointmentTypeName: string | null;
+
+    /**
+     * The meeting kind the event maps this slot's appointment type to, in Event settings.
+     * Unmapped types are `ignore`.
+     * The scheduler only books sponsor meetings into `sponsor_delegate` slots.
+     */
+    kind: MeetingKind;
 }
 
 /**
@@ -83,7 +104,8 @@ export interface Location {
 
 /**
  * Profile attributes used by the browse and filter UI when attendees are submitting meeting requests.
- * These fields are not used by the scheduling engine.
+ * The sponsor scheduling engine doesn't use them.
+ * D2D and roundtable matching compare the multiple-choice answers (see lib/matching/questions.ts).
  *
  * For DELEGATES, all but `industrySectors` come from the event's intake form,
  * landing on CventEvents__Attendee__c (see lib/salesforce/client.ts). Salesforce
@@ -181,6 +203,14 @@ export interface Attendee {
     cventContactId: string;
 
     /**
+     * True when this attendee's Cvent registration is cancelled.
+     * They stay in the attendee list so admins can find and reassign their meetings.
+     * Sponsors don't see them in the catalog, the scheduler skips them, and push won't send them to Cvent.
+     * Absent or false for everyone else, including mock data.
+     */
+    cventCancelled?: boolean;
+
+    /**
      * Salesforce Contact/Attendee record ID.
      * Used by the Salesforce integration to query and update the correct record.
      */
@@ -220,12 +250,66 @@ export interface Attendee {
     title: string;
 
     /**
-     * Sponsor package tier. Determines meeting caps in Pass 5.
+     * Sponsor package tier. Decides the Day 2 spillover and the fallback meeting count.
      * Null for delegates.
      */
     sponsorTier: SponsorTier;
 
-    /** Profile attributes used by the browse and filter UI. */
+    /**
+     * Salesforce Opportunity id of the rep's sponsor registration (`Registration__c`).
+     * Every value below comes from this Opportunity.
+     * Reps of one company normally share it.
+     * Absent or null for delegates.
+     */
+    opportunityId?: string | null;
+
+    /**
+     * The sponsor's booth number from `Registration__r.Booth_No__c`, trimmed.
+     * Free text in Salesforce, holding values like "3" or "Booth 3".
+     * Null when blank. Absent or null for delegates.
+     */
+    boothNo?: string | null;
+
+    /**
+     * Meetings in the sponsor's package, from `Registration__r.Meetings__c`.
+     * Null when blank, which is not the same as 0. Absent or null for delegates.
+     */
+    purchasedMeetings?: number | null;
+
+    /**
+     * Extra meetings on top of the package, from `Registration__r.Cvent_Bonus_Meetings__c`.
+     * Null when blank. Absent or null for delegates.
+     */
+    bonusMeetings?: number | null;
+
+    /**
+     * The total meetings the sponsor may have, from `Registration__r.Cvent_Maximum_Meetings__c`.
+     * Null when blank. Absent or null for delegates.
+     * See companyMaximumMeetings() in lib/attendees/caps.ts for how the maximum is worked out.
+     */
+    maximumMeetings?: number | null;
+
+    /**
+     * How many meetings the sponsor may hold at the same time, from `Registration__r.Cvent_Number_Diaries__c`.
+     * Null when blank, which counts as 1. Absent or null for delegates.
+     */
+    meetingsAtOnce?: number | null;
+
+    /**
+     * True when the delegate's Networking Profile is complete, from `CventEvents_NP_Profile_Complete__c` on the Cvent Attendee.
+     * Only delegates with a complete profile are matched for D2D meetings.
+     * Absent or false for sponsors and for mock data without it.
+     */
+    networkingProfileComplete?: boolean;
+
+    /**
+     * True when the delegate only attends the conference, with no meetings, from `CventEvents_Conference_Only__c` on the Cvent Attendee.
+     * Conference-only delegates get no D2D meetings and no roundtable seat.
+     * Absent or false for sponsors and for mock data without it.
+     */
+    conferenceOnly?: boolean;
+
+    /** Profile attributes used by the browse and filter UI, and for delegate matching. */
     profile: AttendeeProfile;
 
     /**
@@ -270,8 +354,14 @@ export type SponsorDetail = Attendee & {
     accountId: string;
     /** All reps belonging to the company (each hosts the company's Cvent appointments). */
     reps: Attendee[];
-    contracted: number;
-    bonus: number;
+    /** Meetings__c on the sponsor Opportunity. Null when blank. */
+    purchased: number | null;
+    /** Cvent_Bonus_Meetings__c on the sponsor Opportunity. Null when blank. */
+    bonus: number | null;
+    /** The company's meeting maximum, worked out by companyMaximumMeetings() in lib/attendees/caps.ts. */
+    maximum: number;
+    /** True when the maximum is the tier count, because all three Salesforce count fields are blank. */
+    maximumFromTier: boolean;
     requestCount: number;
     scheduledCount: number;
 };
@@ -311,17 +401,18 @@ export interface ScheduledMeeting {
     /**
      * Party id of the first participant.
      *
-     * INVARIANT: on a sponsor↔delegate meeting this is always the sponsor
-     * COMPANY (its Account id), whichever side actually requested the meeting.
+     * INVARIANT: attendee_a is the sponsor company on an S2D meeting, as its
+     * Account id, whichever side actually requested the meeting.
      * The per-sponsor admin page and the Cvent push both rely on it to tell the
-     * company side from the delegate side. Delegate↔delegate meetings (Day 2)
-     * carry no meaningful orientation.
+     * company side from the delegate side.
+     * On a D2D meeting it is the host delegate, the one with the lower Salesforce id.
      */
     attendeeA: string;
 
     /**
-     * Party id of the second participant — the delegate on a sponsor↔delegate
-     * meeting. See the invariant on `attendeeA`.
+     * Party id of the second participant.
+     * It is the delegate on a sponsor↔delegate meeting, or the other delegate on a D2D meeting.
+     * See the invariant on `attendeeA`.
      */
     attendeeB: string;
 
@@ -332,7 +423,8 @@ export interface ScheduledMeeting {
     timeslotId: string;
 
     /**
-     * Which algorithm pass produced this meeting (1–7).
+     * Which algorithm pass produced this meeting (1–5 for sponsor meetings).
+     * D2D meetings use D2D_PASS_NUMBER from lib/matching/d2d.ts.
      * Retained on output for auditing, spot-checking, and human review.
      * 0 for admin-created meetings (no engine pass).
      */
@@ -385,7 +477,8 @@ export interface ScheduledMeeting {
 
     /**
      * ISO 8601 timestamp of when this meeting was last pushed to Cvent.
-     * Null if never pushed. A meeting is "modified since push" when
+     * Null if never pushed. Kept after the meeting is unpushed, since the next push builds its Cvent code from it.
+     * A pushed meeting is "modified since push" when
      * lastModifiedAt !== null && lastModifiedAt > lastPushedAt.
      */
     lastPushedAt: string | null;

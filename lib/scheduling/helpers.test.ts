@@ -1,7 +1,8 @@
 import { describe, test, expect } from 'vitest';
-import { pairKey, computeMutualPairs, findAvailableTimeslot, withDelegatePreferences, wouldViolateCompanyDiversity, DELEGATE_PREFERENCE_RANK } from './helpers';
+import { pairKey, computeMutualPairs, findAvailableTimeslot, reconcileWithPushed, withDelegatePreferences, wouldViolateCompanyDiversity, DELEGATE_PREFERENCE_RANK } from './helpers';
 import { emptyProfile } from '@/lib/attendees/formatProfile';
 import type { Attendee, MeetingRequest, Timeslot, ScheduledMeeting } from '@/types';
+import type { MeetingKind } from '@/lib/events/meetingKinds';
 
 // ---------------------------------------------------------------------------
 // Helpers for generating test data
@@ -25,10 +26,17 @@ function makeRequest(requesterId: string, targetId: string): MeetingRequest {
  * @param {1 | 2} day - The event day this timeslot belongs to.
  * @param {string} startTime - Start time string (treated opaquely).
  * @param {number} [capacity=1] - How many meetings may book this timeslot.
+ * @param {MeetingKind} [kind] - The slot's meeting kind. Defaults to sponsor_delegate on Day 1 and delegate_delegate on Day 2.
  * @returns {Timeslot} A timeslot object with the specified properties.
  */
-function makeTimeslot(id: string, day: 1 | 2, startTime: string, capacity = 1): Timeslot {
-    return { id, day, startTime, endTime: startTime, capacity, locationId: null, appointmentTypeId: 'type-1' };
+function makeTimeslot(
+    id: string,
+    day: 1 | 2,
+    startTime: string,
+    capacity = 1,
+    kind: MeetingKind = day === 1 ? 'sponsor_delegate' : 'delegate_delegate',
+): Timeslot {
+    return { id, day, startTime, endTime: startTime, capacity, locationId: null, appointmentTypeId: `type-${kind}`, appointmentTypeName: null, kind };
 }
 
 /** Builds the remaining-capacity map findAvailableTimeslot expects. */
@@ -107,36 +115,122 @@ describe('findAvailableTimeslot', () => {
     const empty = new Set<string>();
 
     test('returns null when there are no timeslots', () => {
-        expect(findAvailableTimeslot([], 1, empty, empty, new Map())).toBeNull();
+        expect(findAvailableTimeslot([], 1, empty, empty, new Map(), 'sponsor_delegate')).toBeNull();
     });
 
     test('returns null when the only timeslot is on a different day', () => {
-        const timeslots = [makeTimeslot('ts-1', 2, '09:00')];
-        expect(findAvailableTimeslot(timeslots, 1, new Set(), new Set(), remainingOf(timeslots))).toBeNull();
+        const timeslots = [makeTimeslot('ts-1', 2, '09:00', 1, 'sponsor_delegate')];
+        expect(findAvailableTimeslot(timeslots, 1, new Set(), new Set(), remainingOf(timeslots), 'sponsor_delegate')).toBeNull();
     });
 
     test('returns null when the timeslot has no remaining capacity', () => {
         const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
         const remaining = new Map([['ts-1', 0]]);
-        expect(findAvailableTimeslot(timeslots, 1, new Set(), new Set(), remaining)).toBeNull();
+        expect(findAvailableTimeslot(timeslots, 1, new Set(), new Set(), remaining, 'sponsor_delegate')).toBeNull();
     });
 
     test('returns null when one attendee is already busy at that start time', () => {
         const timeslots = [makeTimeslot('ts-1', 1, '09:00')];
         const busyA = new Set(['09:00']);
-        expect(findAvailableTimeslot(timeslots, 1, busyA, new Set(), remainingOf(timeslots))).toBeNull();
+        expect(findAvailableTimeslot(timeslots, 1, busyA, new Set(), remainingOf(timeslots), 'sponsor_delegate')).toBeNull();
     });
 
     test('returns the timeslot when both attendees are free and capacity remains', () => {
         const ts = makeTimeslot('ts-1', 1, '09:00');
-        expect(findAvailableTimeslot([ts], 1, new Set(), new Set(), remainingOf([ts]))).toEqual(ts);
+        expect(findAvailableTimeslot([ts], 1, new Set(), new Set(), remainingOf([ts]), 'sponsor_delegate')).toEqual(ts);
     });
 
     test('returns the first usable timeslot when several exist', () => {
         const busy = new Set(['09:00']); // both busy at 09:00, so the 10:00 slot wins
         const ts1 = makeTimeslot('ts-1', 1, '09:00');
         const ts2 = makeTimeslot('ts-2', 1, '10:00');
-        expect(findAvailableTimeslot([ts1, ts2], 1, busy, busy, remainingOf([ts1, ts2]))).toEqual(ts2);
+        expect(findAvailableTimeslot([ts1, ts2], 1, busy, busy, remainingOf([ts1, ts2]), 'sponsor_delegate')).toEqual(ts2);
+    });
+
+    test('skips a free, earlier timeslot of another meeting kind', () => {
+        const group = makeTimeslot('ts-group', 1, '09:00', 1, 'delegate_group');
+        const ignored = makeTimeslot('ts-ignore', 1, '09:30', 1, 'ignore');
+        const sponsor = makeTimeslot('ts-s2d', 1, '10:00', 1, 'sponsor_delegate');
+        const all = [group, ignored, sponsor];
+        expect(findAvailableTimeslot(all, 1, new Set(), new Set(), remainingOf(all), 'sponsor_delegate')).toEqual(sponsor);
+    });
+
+    test('returns null when only slots of another kind are free', () => {
+        const group = makeTimeslot('ts-group', 1, '09:00', 1, 'delegate_group');
+        expect(findAvailableTimeslot([group], 1, new Set(), new Set(), remainingOf([group]), 'sponsor_delegate')).toBeNull();
+    });
+
+    test('only considers the allowed location when one is given', () => {
+        const other = { ...makeTimeslot('ts-other', 1, '09:00', 5), locationId: 'booth-1' };
+        const own = { ...makeTimeslot('ts-own', 1, '10:00', 5), locationId: 'booth-3' };
+        const all = [other, own];
+        expect(findAvailableTimeslot(all, 1, new Map(), new Map(), remainingOf(all), 'sponsor_delegate', { locationId: 'booth-3' })).toEqual(own);
+    });
+
+    test('lets a party with an at-once limit of 2 take a second meeting at a busy start time', () => {
+        const ts = makeTimeslot('ts-1', 1, '09:00', 2);
+        const busyA = new Map([['09:00', 1]]);
+        expect(findAvailableTimeslot([ts], 1, busyA, new Map(), remainingOf([ts]), 'sponsor_delegate', { limitA: 2 })).toEqual(ts);
+        expect(findAvailableTimeslot([ts], 1, busyA, new Map(), remainingOf([ts]), 'sponsor_delegate')).toBeNull();
+    });
+
+    test('never gives the other party a second meeting at the same start time', () => {
+        const ts = makeTimeslot('ts-1', 1, '09:00', 2);
+        const busyB = new Map([['09:00', 1]]);
+        expect(findAvailableTimeslot([ts], 1, new Map(), busyB, remainingOf([ts]), 'sponsor_delegate', { limitA: 2 })).toBeNull();
+    });
+});
+
+describe('reconcileWithPushed', () => {
+    const SLOTS = new Map([
+        ['ts-9a', { startTime: '2026-01-20T09:00:00Z' }],
+        ['ts-9b', { startTime: '2026-01-20T09:00:00Z' }],
+        ['ts-10', { startTime: '2026-01-20T10:00:00Z' }],
+    ]);
+
+    /**
+     * Builds a meeting row.
+     *
+     * @param {string} a - The sponsor company.
+     * @param {string} b - The delegate.
+     * @param {string} timeslotId - The slot.
+     * @returns {{ attendeeA: string; attendeeB: string; timeslotId: string }} The meeting.
+     */
+    const m = (a: string, b: string, timeslotId: string) => ({ attendeeA: a, attendeeB: b, timeslotId });
+
+    test('drops a fresh meeting whose pair is already pushed', () => {
+        const { kept, droppedPairs } = reconcileWithPushed([m('acct-a', 'd1', 'ts-10')], [m('acct-a', 'd1', 'ts-9a')], SLOTS, () => 1);
+        expect(kept).toHaveLength(0);
+        expect([...droppedPairs]).toEqual([pairKey('acct-a', 'd1')]);
+    });
+
+    test('keeps a second same-time meeting for a company that may hold two at once', () => {
+        /**
+         * Lets acct-a hold two meetings at once, and everyone else one.
+         *
+         * @param {string} p - The party id.
+         * @returns {number} The at-once limit.
+         */
+        const atOnce = (p: string) => (p === 'acct-a' ? 2 : 1);
+        const { kept } = reconcileWithPushed([m('acct-a', 'd2', 'ts-9a')], [m('acct-a', 'd1', 'ts-9a')], SLOTS, atOnce);
+        expect(kept).toHaveLength(1);
+    });
+
+    test('drops a fresh meeting that would give a company more than it may hold at once', () => {
+        const { kept } = reconcileWithPushed([m('acct-a', 'd2', 'ts-9b')], [m('acct-a', 'd1', 'ts-9a')], SLOTS, () => 1);
+        expect(kept).toHaveLength(0);
+    });
+
+    test('drops a fresh meeting that would put a delegate in two meetings at once', () => {
+        /**
+         * Lets every company hold two meetings at once, and each delegate one.
+         *
+         * @param {string} p - The party id.
+         * @returns {number} The at-once limit.
+         */
+        const atOnce = (p: string) => (p.startsWith('acct') ? 2 : 1);
+        const { kept } = reconcileWithPushed([m('acct-b', 'd1', 'ts-9b')], [m('acct-a', 'd1', 'ts-9a')], SLOTS, atOnce);
+        expect(kept).toHaveLength(0);
     });
 });
 

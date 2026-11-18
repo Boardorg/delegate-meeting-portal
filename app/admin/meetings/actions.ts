@@ -5,22 +5,22 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import {
     meetingRequests,
+    roundtableSeats,
+    roundtables,
     scheduledMeetings,
     type NewScheduledMeeting,
 } from "@/lib/db/schema";
 import { loadAttendees } from "@/lib/attendees/loader";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
-import { getEventAppointments, cancelAppointment } from "@/lib/cvent/client";
-import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
+import { getEventAppointments } from "@/lib/cvent/client";
+import { unpushMeetingRows } from "@/lib/cvent/unpush";
+import { pushMeetingRows, needsSync, loadStoredSlots } from "@/lib/cvent/push";
 import { preexistingFromAppointments } from "@/lib/cvent/preexisting";
-import {
-    buildSyncReport,
-    isAppointmentAlreadyGone,
-    parseCventError,
-    type SyncReport,
-} from "@/lib/cvent/syncReport";
+import { countAppointmentsNotInPortal } from "@/lib/cvent/cventOnly";
+import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import {
     runScheduler,
+    toBusyCounts,
     type PreexistingSchedule,
 } from "@/lib/scheduling/engine";
 import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
@@ -28,10 +28,21 @@ import {
     buildSchedulerReport,
     type SchedulerReport,
 } from "@/lib/scheduling/report";
-import { pairKey } from "@/lib/scheduling/helpers";
+import {
+    NO_ATTENDEES_MESSAGE,
+    hasSponsorsAndDelegates,
+    reconcileWithPushed,
+} from "@/lib/scheduling/helpers";
 import { loadMockRequests } from "@/lib/scheduling/loader";
 import { paginate, type Page } from "@/lib/admin/pagination";
-import { contractedMeetings } from "@/lib/attendees/caps";
+import {
+    companyMaximumMeetings,
+    companyMeetingsAtOnce,
+} from "@/lib/attendees/caps";
+import { loadCompanyBooths } from "@/lib/scheduling/boothData";
+import { countBoothProblems } from "@/lib/scheduling/booths";
+import { checkAppointmentTypeMapping } from "@/lib/events/meetingKinds";
+import { s2dOrderWarning } from "@/lib/matching/d2d";
 import type { Attendee, MeetingRequest } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -41,9 +52,10 @@ import type { Attendee, MeetingRequest } from "@/types";
 // scheduledMeetings table (scheduled counts). Sponsor profiles come from
 // the attendee loader (Salesforce or mock, depending on USE_MOCK).
 //
-// Contracted meeting counts are derived from sponsorTier (diamond: 8,
-// standard: 5). Bonus meetings are not yet in the attendee data source and
-// show as 0 until that field is available from Salesforce.
+// Purchased and bonus meetings come from the sponsor Opportunity in
+// Salesforce. Each company's target is its maximum, worked out by
+// companyMaximumMeetings() in lib/attendees/caps.ts, the same rule the
+// scheduler uses.
 // ---------------------------------------------------------------------------
 
 /** One company row as returned to the client table (one row per sponsor company). */
@@ -52,10 +64,14 @@ export type SponsorRow = {
     accountId: string;
     company: string;
     sponsorTier: "diamond" | "standard";
-    /** Package meetings guaranteed by tier (shared company budget). Diamond: 8, Standard: 5. */
-    contracted: number;
-    /** Bonus meetings beyond the package. Not yet in attendee data; always 0. */
-    bonus: number;
+    /** Meetings__c on the sponsor Opportunity. Null when blank. */
+    purchased: number | null;
+    /** Cvent_Bonus_Meetings__c on the sponsor Opportunity. Null when blank. */
+    bonus: number | null;
+    /** The company's meeting maximum, its target (shared company budget). */
+    maximum: number;
+    /** True when the maximum is the tier count, because all three count fields are blank. */
+    maximumFromTier: boolean;
     requestCount: number;
     scheduledCount: number;
 };
@@ -72,6 +88,7 @@ export type SponsorsPage = Page<SponsorRow>;
 /**
  * Returns a sorted, searched, paginated page of sponsors for an event,
  * with their request and scheduled meeting counts attached.
+ * A company's scheduled count includes its Cvent appointments that this database has no meeting for.
  *
  * @param {{ eventCode: string; q?: string; sortField?: SponsorSortField; sortDir?: "asc" | "desc"; page?: number }} params
  * @returns {Promise<SponsorsPage>} The page of sponsor rows plus totals.
@@ -84,7 +101,7 @@ export async function listSponsorsPage(params: {
     page?: number;
 }): Promise<SponsorsPage> {
     // Get all attendees, meeting requests, and scheduled meetings for this event in parallel.
-    const [attendees, requestRows, meetingRows] = await Promise.all([
+    const [attendees, requestRows, meetingRows, activeAppointments] = await Promise.all([
         loadAttendees(false, params.eventCode),
         db
             .select({ requesterId: meetingRequests.requesterId })
@@ -94,9 +111,18 @@ export async function listSponsorsPage(params: {
             .select({
                 attendeeA: scheduledMeetings.attendeeA,
                 attendeeB: scheduledMeetings.attendeeB,
+                cventAppointmentId: scheduledMeetings.cventAppointmentId,
             })
             .from(scheduledMeetings)
             .where(eq(scheduledMeetings.eventCode, params.eventCode)),
+        // The list still loads without them when Cvent can't be read.
+        getEventAppointments(params.eventCode).catch((err) => {
+            console.warn(
+                `listSponsorsPage: could not load Cvent appointments for "${params.eventCode}". ` +
+                    `${err instanceof Error ? err.message : String(err)}`,
+            );
+            return [];
+        }),
     ]);
 
     // Build a map of request counts keyed by requester party id (company
@@ -123,19 +149,39 @@ export async function listSponsorsPage(params: {
         );
     }
 
+    // Add each company's Cvent appointments that this database has no meeting for.
+    // Another environment pushed them, or someone made them in Cvent.
+    const knownAppointmentIds = new Set(
+        meetingRows
+            .map((m) => m.cventAppointmentId)
+            .filter((id): id is string => !!id),
+    );
+    for (const [accountId, count] of countAppointmentsNotInPortal(
+        activeAppointments,
+        attendees,
+        knownAppointmentIds,
+    )) {
+        scheduledCountMap.set(accountId, (scheduledCountMap.get(accountId) ?? 0) + count);
+    }
+
     // Group sponsor reps into companies — one row per company.
     const companies = sponsorCompaniesByAccountId(attendees);
 
     // Map companies to SponsorRow, attaching request and scheduled counts.
-    let rows: SponsorRow[] = [...companies.values()].map((c) => ({
-        accountId: c.accountId,
-        company: c.name,
-        sponsorTier: c.tier === "diamond" ? "diamond" : "standard",
-        contracted: contractedMeetings(c.tier),
-        bonus: 0,
-        requestCount: requestCountMap.get(c.accountId) ?? 0,
-        scheduledCount: scheduledCountMap.get(c.accountId) ?? 0,
-    }));
+    let rows: SponsorRow[] = [...companies.values()].map((c) => {
+        const max = companyMaximumMeetings(c);
+        return {
+            accountId: c.accountId,
+            company: c.name,
+            sponsorTier: c.tier === "diamond" ? "diamond" : "standard",
+            purchased: c.purchasedMeetings,
+            bonus: c.bonusMeetings,
+            maximum: max.maximum,
+            maximumFromTier: max.source === "tier",
+            requestCount: requestCountMap.get(c.accountId) ?? 0,
+            scheduledCount: scheduledCountMap.get(c.accountId) ?? 0,
+        };
+    });
 
     // Apply search filter if q is provided. Search matches company, case-insensitive.
     const q = (params.q ?? "").trim().toLowerCase();
@@ -173,6 +219,62 @@ export async function listSponsorsPage(params: {
 }
 
 /**
+ * Counts the sponsor companies whose booth or package stops their meetings.
+ * "Run Scheduling Engine" warns before running when this is above 0.
+ * Returns null when the booths couldn't be checked.
+ *
+ * @param {string} eventCode - The event to check.
+ * @returns {Promise<number | null>} How many companies have a booth problem, or null.
+ */
+export async function countBoothProblemsForEvent(
+    eventCode: string,
+): Promise<number | null> {
+    const [attendees, scheduleData] = await Promise.all([
+        loadAttendees(false, eventCode),
+        loadEventScheduleData(eventCode),
+    ]);
+    const booths = await loadCompanyBooths(
+        eventCode,
+        attendees,
+        scheduleData.locations,
+    );
+    return booths.ok ? countBoothProblems(booths.booths) : null;
+}
+
+/**
+ * Counts each party's meetings, from both sides of each meeting.
+ *
+ * @param {{ attendeeA: string; attendeeB: string }[]} rows - The meetings.
+ * @returns {Map<string, number>} The count per party id.
+ */
+function countMeetingsByParty(
+    rows: { attendeeA: string; attendeeB: string }[],
+): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+        counts.set(r.attendeeA, (counts.get(r.attendeeA) ?? 0) + 1);
+        counts.set(r.attendeeB, (counts.get(r.attendeeB) ?? 0) + 1);
+    }
+    return counts;
+}
+
+/**
+ * Merges two counts per party, keeping the larger one for each.
+ *
+ * @param {Map<string, number> | undefined} a - One count, such as Cvent's.
+ * @param {Map<string, number>} b - The other count, such as the pushed DB rows.
+ * @returns {Map<string, number>} The larger count per party.
+ */
+function largerCounts(
+    a: Map<string, number> | undefined,
+    b: Map<string, number>,
+): Map<string, number> {
+    const out = new Map(a ?? []);
+    for (const [party, n] of b) out.set(party, Math.max(out.get(party) ?? 0, n));
+    return out;
+}
+
+/**
  * Builds the engine's pre-existing schedule from the event's current Cvent
  * appointments. Wraps preexistingFromAppointments (which maps participant
  * contact ids to party ids) around the Cvent fetch, returning an empty schedule
@@ -202,8 +304,17 @@ async function buildPreexistingFromCvent(
 }
 
 /**
- * Runs the scheduling engine for an event and replaces all un-pushed portal meetings
- * with the fresh engine output. Meetings already pushed to Cvent are preserved via
+ * Result of a scheduler run.
+ * A run that stops before changing anything returns a message instead of a report.
+ * It is a return value rather than a thrown error, so the message reaches the admin in production builds too.
+ */
+export type RunSchedulerResult =
+    | { ok: true; report: SchedulerReport }
+    | { ok: false; error: string };
+
+/**
+ * Runs the scheduling engine for an event and replaces all un-pushed portal sponsor meetings
+ * with the fresh engine output. D2D meetings are left alone, and their times count as busy. Meetings already pushed to Cvent are preserved via
  * post-reconciliation: the engine runs freely, then any fresh meeting that duplicates
  * or conflicts with a pushed meeting is dropped before insert.
  *
@@ -211,18 +322,28 @@ async function buildPreexistingFromCvent(
  * the sponsor side, a delegate salesforceId on the other), so no id translation
  * is needed here in either mock or production mode.
  *
+ * The run stops before changing anything when no appointment type is mapped to `sponsor_delegate`.
+ * Otherwise it would delete every un-pushed meeting and create none.
+ * It also stops when the attendees it would use have no sponsors or no delegates, for the same reason.
+ * It also stops when the event's booth mapping can't be read, since meetings could land in the wrong booth.
+ * Types with no mapping are listed in the report as a warning.
+ *
+ * Each sponsor company only gets meetings at its booth.
+ * Companies with a booth or package problem get none, and the report lists them.
+ *
  * @param {string} eventCode - The event to schedule meetings for.
- * @returns {Promise<SchedulerReport>} A DB-friendly summary of the run: counts,
+ * @returns {Promise<RunSchedulerResult>} A DB-friendly summary of the run: counts,
  *   per-interest-level breakdown, and unscheduled requests with reasons.
+ *   Or a message saying why the run stopped.
  */
 export async function runSchedulerForEvent(
     eventCode: string,
-): Promise<SchedulerReport> {
+): Promise<RunSchedulerResult> {
     const isMock = process.env.USE_MOCK === "true";
     const mockRequestsPath = `${process.cwd()}/data/mock/requests.json`;
 
-    // Load attendees, requests, the event's Cvent availability, and already-pushed meetings.
-    const [attendees, requestRows, scheduleData, pushedRows] =
+    // Load attendees, requests, the event's Cvent availability, already-pushed meetings and D2D meetings.
+    const [attendees, requestRows, scheduleData, pushedRows, d2dRows, roundtableRows, seatRows] =
         await Promise.all([
             loadAttendees(false, eventCode),
             isMock
@@ -241,7 +362,69 @@ export async function runSchedulerForEvent(
                         isNotNull(scheduledMeetings.cventAppointmentId),
                     ),
                 ),
+            db
+                .select()
+                .from(scheduledMeetings)
+                .where(
+                    and(
+                        eq(scheduledMeetings.eventCode, eventCode),
+                        eq(scheduledMeetings.kind, "delegate_delegate"),
+                    ),
+                ),
+            db.select().from(roundtables).where(eq(roundtables.eventCode, eventCode)),
+            db.select().from(roundtableSeats).where(eq(roundtableSeats.eventCode, eventCode)),
         ]);
+
+    // D2D meetings not pushed yet. This run keeps them, so their delegates are busy at those times.
+    // Pushed ones are already in pushedRows and in Cvent's appointment list.
+    const unpushedD2D = d2dRows.filter((r) => !r.cventAppointmentId);
+
+    // A roundtable seat is a meeting at its table's time, pushed or not, so seated delegates are busy then.
+    // Each seat reads as a meeting with a stand-in for the table, so the busy time and reconciliation below cover it.
+    const tableSlot = new Map(roundtableRows.map((r) => [r.id, r.timeslotId]));
+    const seatMeetings = seatRows
+        .filter((s) => s.role === "seated" && tableSlot.has(s.roundtableId))
+        .map((s) => ({
+            attendeeA: s.delegateId,
+            attendeeB: `roundtable:${s.roundtableId}`,
+            timeslotId: tableSlot.get(s.roundtableId)!,
+        }));
+
+    // Scheduling runs S2D first, then D2D, then roundtables.
+    // Running S2D after the others still goes ahead, but the report says so.
+    const orderWarning = s2dOrderWarning(d2dRows.length, seatMeetings.length);
+
+    // Attendees who cancelled in Cvent are left out, so no new meetings are made with them.
+    // Un-pushed meetings are rebuilt from scratch below, so cancelled attendees drop out of those.
+    // Meetings already pushed to Cvent are kept for an admin to reassign.
+    // The report below still gets everyone, so it can say why those requests went unscheduled.
+    const schedulable = attendees.filter((a) => !a.cventCancelled);
+
+    // Stop before changing anything when the scheduler would have no sponsors or no delegates.
+    // loadAttendees returns no one when Cvent's attendee lookup fails, while timeslots load separately.
+    if (!hasSponsorsAndDelegates(schedulable)) {
+        return { ok: false, error: NO_ATTENDEES_MESSAGE };
+    }
+
+    // Stop before changing anything when sponsor meetings have no slots to use.
+    // The engine only books sponsor meetings into sponsor_delegate slots.
+    // This also covers a stale mapping and an empty slot list from Cvent.
+    const mapping = checkAppointmentTypeMapping(
+        scheduleData.appointmentTypes,
+        scheduleData.appointmentTypeKinds,
+        scheduleData.timeslots,
+    );
+    if (!mapping.ok) return { ok: false, error: mapping.message };
+
+    // Each sponsor company's booth, built from every attendee so a booth claim
+    // doesn't depend on who is still registered. Stop before changing anything
+    // when the manual booth mapping can't be read.
+    const booths = await loadCompanyBooths(
+        eventCode,
+        attendees,
+        scheduleData.locations,
+    );
+    if (!booths.ok) return { ok: false, error: booths.error };
 
     const engineRequests: MeetingRequest[] = requestRows.map((r) => ({
         id: String(r.id),
@@ -256,6 +439,47 @@ export async function runSchedulerForEvent(
     // unavailable — the DB-based reconciliation below still guards pushed rows.
     const preexisting = await buildPreexistingFromCvent(eventCode, attendees);
 
+    // Stored meetings' and roundtables' slots, for their busy time and the reconciliation below.
+    // A pushed row whose time Cvent no longer lists gets its slot from its Cvent appointment.
+    // Cvent's appointment list is only read when a slot is missing, and a failed read is logged.
+    const slotById = await loadStoredSlots(eventCode, scheduleData, [
+        ...pushedRows,
+        ...unpushedD2D,
+        ...roundtableRows,
+    ]);
+
+    // Existing meetings count toward each company's maximum before the run books anything.
+    // Cvent's appointment list already includes pushed meetings, so the two counts overlap.
+    // The larger one is used per party, which still counts pushed meetings when Cvent
+    // couldn't be read, or in mock mode where Cvent lists none.
+    preexisting.meetingCountByParty = largerCounts(
+        preexisting.meetingCountByParty,
+        countMeetingsByParty(pushedRows),
+    );
+
+    // When Cvent's appointment list couldn't be read, a slot's room can't be matched by location name.
+    // The pushed meetings in each timeslot are taken off its room instead.
+    if (!preexisting.bookedBySlot) {
+        const byTimeslot = new Map<string, number>();
+        for (const r of pushedRows) {
+            byTimeslot.set(r.timeslotId, (byTimeslot.get(r.timeslotId) ?? 0) + 1);
+        }
+        preexisting.bookedByTimeslotId = byTimeslot;
+    }
+
+    // Each engine treats every meeting already scheduled as busy time, so add the unpushed D2D meetings and roundtable seats.
+    const busy = new Map(preexisting.busyStartTimesByAttendee ?? []);
+    for (const r of [...unpushedD2D, ...seatMeetings]) {
+        const start = slotById.get(r.timeslotId)?.startTime;
+        if (!start) continue;
+        for (const party of [r.attendeeA, r.attendeeB]) {
+            const counts = toBusyCounts(busy.get(party));
+            counts.set(start, (counts.get(start) ?? 0) + 1);
+            busy.set(party, counts);
+        }
+    }
+    preexisting.busyStartTimesByAttendee = busy;
+
     // Run the engine. It avoids the pre-existing Cvent pairs/times; pushed DB
     // meetings are additionally guarded via post-reconciliation below.
     //
@@ -263,54 +487,61 @@ export async function runSchedulerForEvent(
     // requests above plus one delegate→sponsor request per entry in each
     // delegate's intake-form "sponsors I want to meet" answer. The report is
     // built from it so its tallies match the run.
+    //
+    // The engine only gets `schedulable`, the attendees who haven't cancelled (see above).
     const { schedule, skipReasons, effectiveRequests } = await runScheduler(
-        attendees,
+        schedulable,
         engineRequests,
         scheduleData.timeslots,
         scheduleData.locations,
         preexisting,
+        booths.booths,
     );
 
-    // Build reconciliation sets from pushed meetings. Party ids (company account
+    // Reconcile against pushed meetings. Party ids (company account
     // ids / delegate salesforceIds) are used throughout — the same keys the
     // engine emits — so no conversion is needed here.
-    const pushedPairs = new Set<string>();
-    const blockedSlots = new Set<string>(); // "${attendeeId}:${timeslotId}"
-    for (const row of pushedRows) {
-        pushedPairs.add(pairKey(row.attendeeA, row.attendeeB));
-        blockedSlots.add(`${row.attendeeA}:${row.timeslotId}`);
-        blockedSlots.add(`${row.attendeeB}:${row.timeslotId}`);
-    }
-
-    // Drop any fresh meeting that duplicates a pushed pair or reuses a timeslot already
-    // held by a pushed meeting for either attendee. Everything else is safe to insert.
+    //
+    // Drop any fresh meeting that duplicates a pushed pair, or that would give either
+    // party more meetings at that time than it may hold. A delegate holds 1 at a time,
+    // and a sponsor company up to its meetings-at-once limit.
+    // Everything else is safe to insert.
     // The engine's own ids are timestamp-suffixed (see lib/scheduling/engine.ts), so
-    // they stay unique across runs and are safe to push to Cvent as-is.
+    // they stay unique across runs. A never-pushed id is safe to send to Cvent as its code
+    // (see appointmentCode() in lib/cvent/push.ts).
     //
     // Dropped pairs are also collected here as reconciledOutPairs: the report
     // attributes these to "conflict_existing" rather than an engine skip reason.
-    const reconciledSchedule: typeof schedule = [];
-    const reconciledOutPairs = new Set<string>();
-    for (const m of schedule) {
-        const pair = pairKey(m.attendeeA, m.attendeeB);
-        const dropped =
-            pushedPairs.has(pair) ||
-            blockedSlots.has(`${m.attendeeA}:${m.timeslotId}`) ||
-            blockedSlots.has(`${m.attendeeB}:${m.timeslotId}`);
-        if (dropped) {
-            reconciledOutPairs.add(pair);
-        } else {
-            reconciledSchedule.push(m);
-        }
-    }
+    const schedulableCompanies = sponsorCompaniesByAccountId(schedulable);
+    /**
+     * How many meetings a party may hold at one start time.
+     * A sponsor company may hold up to its meetings-at-once limit, and anyone else 1.
+     *
+     * @param {string} party - The party id.
+     * @returns {number} The at-once limit.
+     */
+    const atOnceOf = (party: string): number => {
+        const company = schedulableCompanies.get(party);
+        return company ? companyMeetingsAtOnce(company) : 1;
+    };
+    const { kept: reconciledSchedule, droppedPairs: reconciledOutPairs } =
+        reconcileWithPushed(
+            schedule,
+            // Unpushed D2D meetings and roundtable seats stay too, so they guard their delegates' times the same way.
+            [...pushedRows, ...unpushedD2D, ...seatMeetings],
+            slotById,
+            atOnceOf,
+        );
 
-    // Replace all un-pushed portal meetings for this event with the reconciled output.
+    // Replace all un-pushed portal sponsor meetings for this event with the reconciled output.
+    // D2D meetings belong to the D2D run, so they are left alone.
     await db
         .delete(scheduledMeetings)
         .where(
             and(
                 eq(scheduledMeetings.eventCode, eventCode),
                 eq(scheduledMeetings.source, "portal"),
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
                 isNull(scheduledMeetings.cventAppointmentId),
             ),
         );
@@ -339,16 +570,22 @@ export async function runSchedulerForEvent(
     // Revalidate the admin meetings page to reflect the new schedule.
     revalidatePath("/admin/meetings");
 
-    return buildSchedulerReport({
-        eventCode,
-        generatedAt: new Date().toISOString(),
-        attendees,
-        requests: effectiveRequests,
-        reconciled: reconciledSchedule,
-        skipReasons,
-        reconciledOutPairs,
-        preexistingPairs: preexisting.pairs ?? new Set(),
-    });
+    return {
+        ok: true,
+        report: buildSchedulerReport({
+            eventCode,
+            generatedAt: new Date().toISOString(),
+            attendees,
+            requests: effectiveRequests,
+            reconciled: reconciledSchedule,
+            skipReasons,
+            reconciledOutPairs,
+            preexistingPairs: preexisting.pairs ?? new Set(),
+            unmappedAppointmentTypes: mapping.unmappedTypeNames,
+            companyBooths: booths.booths,
+            orderWarnings: orderWarning ? [orderWarning] : [],
+        }),
+    };
 }
 
 /**
@@ -366,8 +603,9 @@ export async function runSchedulerForEvent(
  *   failures — an actionable reason per meeting.
  */
 export async function pushAllForEvent(eventCode: string): Promise<SyncReport> {
-    // Load every portal meeting for this event, so the report can distinguish
+    // Load every portal sponsor meeting for this event, so the report can distinguish
     // meetings that still need pushing from ones already synced and up to date.
+    // D2D meetings are pushed from the Delegate Meetings page.
     const portalRows = await db
         .select()
         .from(scheduledMeetings)
@@ -375,6 +613,7 @@ export async function pushAllForEvent(eventCode: string): Promise<SyncReport> {
             and(
                 eq(scheduledMeetings.eventCode, eventCode),
                 eq(scheduledMeetings.source, "portal"),
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         );
 
@@ -385,7 +624,9 @@ export async function pushAllForEvent(eventCode: string): Promise<SyncReport> {
     const toPush = portalRows.filter(needsSync);
     const alreadySynced = portalRows.length - toPush.length;
 
-    const summary = await pushMeetingRows(eventCode, toPush);
+    // Every portal meeting goes in as well, so the host split for same-time meetings
+    // counts the ones already synced (see lib/cvent/hostSplit.ts).
+    const summary = await pushMeetingRows(eventCode, toPush, portalRows);
 
     // Revalidate the admin meetings page to reflect the updated push status.
     revalidatePath("/admin/meetings");
@@ -453,12 +694,14 @@ export async function clearUnsyncedForEvent(
     // Only un-synced (cventAppointmentId IS NULL) portal rows. Cvent-native
     // rows (source "cvent") are read-only and excluded. RETURNING gives us the
     // deleted count for the report.
+    // Only sponsor meetings. D2D meetings are cleared from the Delegate Meetings page.
     const deleted = await db
         .delete(scheduledMeetings)
         .where(
             and(
                 eq(scheduledMeetings.eventCode, eventCode),
                 eq(scheduledMeetings.source, "portal"),
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
                 isNull(scheduledMeetings.cventAppointmentId),
             ),
         )
@@ -477,19 +720,20 @@ export async function clearUnsyncedForEvent(
 
 /**
  * Cancels the Cvent appointment behind every synced portal meeting for an
- * event, then clears that meeting's sync link (cventAppointmentId + lastPushedAt)
- * so it reads as un-synced again. The DB row itself is kept — this only unwinds
- * the push to Cvent, not the schedule.
+ * event, then clears that meeting's cventAppointmentId so it reads as
+ * un-synced again. The DB row itself is kept — this only unwinds the push to
+ * Cvent, not the schedule.
+ * Only sponsor meetings are unpushed. D2D meetings are unpushed from the Delegate Meetings page.
  *
  * The DB link is cleared only after the Cvent cancel succeeds, so a failed
  * cancel leaves the row pointing at a still-live appointment rather than
  * silently orphaning it. Per-meeting failures are collected and skipped so one
  * bad cancel doesn't abort the batch.
  *
- * Note: Cvent never frees a cancelled appointment's `code`, so re-pushing these
- * exact rows would collide (APPT_CODE_ALREADY_EXISTS). The normal reset flow
- * regenerates ids first — unpush, then clear/re-run the engine — so codes stay
- * fresh; see lib/cvent/push.ts.
+ * lastPushedAt is deliberately kept.
+ * Cvent never frees a cancelled appointment's `code`, and appointmentCode() in lib/cvent/push.ts builds the next code from lastPushedAt.
+ * Keeping it lets these same rows be pushed again without re-running the scheduler.
+ * Clearing it would make the next push reuse an old code and fail with APPT_CODE_ALREADY_EXISTS.
  *
  * @param {string} eventCode - The event whose synced meetings to unpush.
  * @returns {Promise<MaintenanceReport>} Counts plus per-meeting failure detail.
@@ -506,6 +750,7 @@ export async function unpushAllForEvent(
             and(
                 eq(scheduledMeetings.eventCode, eventCode),
                 eq(scheduledMeetings.source, "portal"),
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
                 isNotNull(scheduledMeetings.cventAppointmentId),
             ),
         );
@@ -516,60 +761,14 @@ export async function unpushAllForEvent(
     const attendeeById = new Map(attendees.map((a) => [a.salesforceId, a]));
     const companiesByAccountId = sponsorCompaniesByAccountId(attendees);
 
-    const failures: { meetingId: string; label: string; detail: string }[] = [];
-    const notes: { meetingId: string; label: string; detail: string }[] = [];
-    let unpushed = 0;
-    let alreadyGone = 0;
-
-    for (const row of syncedRows) {
-        // Guarded by the query above, but keep the type narrow for the DB call.
-        if (!row.cventAppointmentId) continue;
-        const label = `${companiesByAccountId.get(row.attendeeA)?.name ?? row.attendeeA} & ${
-            attendeeById.get(row.attendeeB)?.name ?? row.attendeeB
-        }`;
-
-        // Unlinks the meeting in the DB so it reads as un-synced (row kept).
-        const unlink = () =>
-            db
-                .update(scheduledMeetings)
-                .set({ cventAppointmentId: null, lastPushedAt: null })
-                .where(eq(scheduledMeetings.id, row.id));
-
-        try {
-            // Cancel in Cvent first, then unlink. Only clear once the cancel
-            // succeeds, so a real failure leaves the row pointing at a live
-            // appointment rather than silently orphaning it.
-            await cancelAppointment(eventCode, row.cventAppointmentId);
-            await unlink();
-            unpushed++;
-        } catch (err) {
-            // If the appointment is already gone in Cvent (cancelled manually or
-            // missing), there's nothing left to cancel — unlink locally anyway
-            // and note it rather than treating it as a failure.
-            if (isAppointmentAlreadyGone(err)) {
-                await unlink();
-                alreadyGone++;
-                notes.push({
-                    meetingId: row.id,
-                    label,
-                    detail: "Already cancelled or missing in Cvent — unsynced locally.",
-                });
-                continue;
-            }
-
-            // A genuine failure: leave the row synced. Prefer Cvent's
-            // human-readable message when present.
-            const base = err instanceof Error ? err.message : String(err);
-            const cventMessage = parseCventError(
-                (err as { body?: string }).body,
-            ).message;
-            failures.push({
-                meetingId: row.id,
-                label,
-                detail: cventMessage ?? base,
-            });
-        }
-    }
+    const { unpushed, alreadyGone, failures, notes } = await unpushMeetingRows(
+        eventCode,
+        syncedRows,
+        (row) =>
+            `${companiesByAccountId.get(row.attendeeA)?.name ?? row.attendeeA} & ${
+                attendeeById.get(row.attendeeB)?.name ?? row.attendeeB
+            }`,
+    );
 
     // Revalidate the admin meetings page to reflect the updated sync status.
     revalidatePath("/admin/meetings");

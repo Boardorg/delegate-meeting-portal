@@ -402,7 +402,7 @@ export default function RequestsTable({
     return (
         <div className="adm-page">
             <div className="adm-page-head">
-                <h1 className="adm-page-title">Meeting requests</h1>
+                <h1 className="adm-page-title">Sponsor Meeting Requests</h1>
                 <button
                     type="button"
                     className="adm-new-btn adm-new-btn-primary"
@@ -606,12 +606,22 @@ function RowFragment(props: RowFragmentProps) {
                         the company identity — the company subtitle is redundant
                         here and is intentionally omitted. */}
                     <div className="adm-party-name">{r.requesterName}</div>
+                    {r.requesterCancelled && (
+                        <div className="adm-chip-mt">
+                            <span className="adm-chip adm-chip-cancelled">Cancelled in Cvent</span>
+                        </div>
+                    )}
                 </td>
                 <td>
                     <div className="adm-party-name">{r.targetName}</div>
                     {r.targetCompany && (
                         <div className="adm-party-company">
                             {r.targetCompany}
+                        </div>
+                    )}
+                    {r.targetCancelled && (
+                        <div className="adm-chip-mt">
+                            <span className="adm-chip adm-chip-cancelled">Cancelled in Cvent</span>
                         </div>
                     )}
                 </td>

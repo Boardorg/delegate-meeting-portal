@@ -1435,6 +1435,28 @@ button.tag-pill-more:hover {
     font-size: 11px;
     color: var(--t3);
 }
+
+/* Requests for delegates who cancelled in Cvent, listed after the active ones. */
+.drawer-section-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--t3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 18px 0 8px;
+}
+.d-item-cancelled {
+    background: var(--s2, var(--surface));
+}
+.d-item-cancelled .d-company,
+.d-item-cancelled .d-name {
+    color: var(--t3);
+}
+.d-cancelled-note {
+    font-size: 11px;
+    color: var(--t3);
+    margin-top: 4px;
+}
 .d-remove {
     background: none;
     border: none;

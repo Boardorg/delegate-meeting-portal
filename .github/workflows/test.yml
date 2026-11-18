@@ -1,4 +1,4 @@
-name: Unit Tests
+name: Checks
 
 on:
   push:
@@ -7,17 +7,33 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  checks:
     runs-on: ubuntu-latest
+
+    # The build imports the database client, which needs a URL to load.
+    # It never connects during the build, so a placeholder is enough. No real secrets are used in CI.
+    env:
+      DATABASE_URL: postgres://ci:ci@localhost:5432/ci
 
     steps:
       - uses: actions/checkout@v4
 
+      # Matches the Node version production runs on Vercel.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - run: npm ci
 
-      - run: npm test
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build

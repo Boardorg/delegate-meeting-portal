@@ -1,12 +1,21 @@
 import "@/app/frontend.css";
 import { redirect } from "next/navigation";
 import { loadAttendees } from "@/lib/attendees/loader";
+import { isOwnParty } from "@/lib/attendees/self";
+import {
+    partyId,
+    resolveCompanyPackage,
+    sponsorCompaniesByAccountId,
+} from "@/lib/attendees/companies";
+import { companyMaximumMeetings } from "@/lib/attendees/caps";
 import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import { getEventCode } from "@/lib/helpers/getEventCode";
 import { getEventSettings } from "@/lib/events/settings";
 import { eventThemeVars } from "@/lib/events/theme";
 import type { TopBarEventLogo } from "@/app/components/TopBar";
-import SponsorCatalog from "@/app/components/SponsorCatalog";
+import SponsorCatalog, {
+    type CancelledDelegate,
+} from "@/app/components/SponsorCatalog";
 
 export default async function Home() {
     // The session must resolve to a known identity to view the catalog; the
@@ -16,8 +25,41 @@ export default async function Home() {
     // Admins can't act on the frontend — send them to the admin portal.
     if (identity.role === "admin") redirect("/admin");
 
+    // TODO: Show delegates a catalog of sponsor companies once the portal opens to them.
+    // Today every viewer gets the delegate catalog, so a logged-in delegate only sees other delegates.
+    // Build one card per company with sponsorCompaniesByAccountId(), not one per rep.
+    // A delegate's request then targets the company's Account id, the same party id sponsors use.
     const attendees = await loadAttendees();
-    const delegates = attendees.filter((a) => a.role === "delegate");
+    // The logged-in person never sees themselves in the catalog.
+    // A sponsor rep also doesn't see anyone from their own company.
+    const allDelegates = attendees.filter(
+        (a) => a.role === "delegate" && !isOwnParty(a, identity.attendee),
+    );
+
+    // The viewer's company maximum, the same number the scheduler and the admin pages use.
+    // A viewer from the local users table may not be in the attendee list, so their own record stands in.
+    const company = sponsorCompaniesByAccountId(attendees).get(
+        partyId(identity.attendee),
+    );
+    const maxMeetings = companyMaximumMeetings(
+        company ?? {
+            tier: identity.attendee.sponsorTier,
+            ...resolveCompanyPackage([identity.attendee]),
+        },
+    ).maximum;
+
+    // Delegates who cancelled in Cvent aren't attending, so they're left out of the catalog.
+    const delegates = allDelegates.filter((a) => !a.cventCancelled);
+
+    // The drawer still lists any requests the sponsor made for them, marked as no longer attending.
+    // It only needs enough to label and remove the request, so the full profile isn't sent.
+    const cancelledDelegates: CancelledDelegate[] = allDelegates
+        .filter((a) => a.cventCancelled)
+        .map((a) => ({
+            salesforceId: a.salesforceId,
+            name: a.name,
+            company: a.company,
+        }));
 
     // Resolve the active event's per-event Brand Color (drives the catalog's
     // --accent accent) and its header logo URL. Any failure to resolve an event
@@ -43,7 +85,9 @@ export default async function Home() {
         <div style={{ display: "contents", ...eventThemeVars(themeColor) }}>
             <SponsorCatalog
                 delegates={delegates}
+                cancelledDelegates={cancelledDelegates}
                 currentSponsor={identity.attendee}
+                maxMeetings={maxMeetings}
                 eventLogo={eventLogo}
             />
         </div>

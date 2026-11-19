@@ -11,6 +11,7 @@ import {
     TAG_COLOR_COUNT,
     str,
     hasValue,
+    preferenceTarget,
 } from "./catalogFormat";
 
 // ---------------------------------------------------------------------------
@@ -322,5 +323,17 @@ describe("dotTags / str / hasValue", () => {
         expect(hasValue("x")).toBe(true);
         expect(hasValue("")).toBe(false);
         expect(hasValue(null)).toBe(false);
+    });
+});
+
+describe("preferenceTarget", () => {
+    test("asks for 20 when the package has more than 5 meetings", () => {
+        expect(preferenceTarget(6)).toBe(20);
+        expect(preferenceTarget(8)).toBe(20);
+    });
+
+    test("asks for 10 when the package has 5 meetings or fewer", () => {
+        expect(preferenceTarget(5)).toBe(10);
+        expect(preferenceTarget(0)).toBe(10);
     });
 });

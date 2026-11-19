@@ -38,7 +38,7 @@ export type TopBarEventLogo = {
 export type TopBarProps = {
     /** Optional user-identity chip shown to the left of `actions`. */
     user?: TopBarUser;
-    /** Page-specific buttons (e.g. "My Requests") rendered to the left of logout. */
+    /** Page-specific buttons (e.g. "My Meeting Preferences") rendered to the left of logout. */
     actions?: ReactNode;
     /** Optional current-event logo shown next to the Assemble mark. */
     eventLogo?: TopBarEventLogo | null;

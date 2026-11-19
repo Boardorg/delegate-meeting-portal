@@ -23,6 +23,13 @@
     display: flex;
     flex-direction: column;
 }
+/* The top bar isn't sticky below 900px, so the column sticks to the top of the screen. */
+@media (max-width: 900px) {
+    .admin-sidebar-col {
+        top: 0;
+        height: 100vh;
+    }
+}
 /* .admin-event-switcher* live in globals.css — shared with the testing bar, which renders on the frontend too. */
 .admin-sidebar {
     flex: 1;

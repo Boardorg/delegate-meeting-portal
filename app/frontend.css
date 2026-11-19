@@ -69,6 +69,13 @@
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
 }
+/* The top bar isn't sticky below 900px, so the column sticks to the top of the screen. */
+@media (max-width: 900px) {
+    .filter-col {
+        top: 0;
+        height: 100vh;
+    }
+}
 .filter-overlay {
     display: none;
     position: fixed;

@@ -1659,9 +1659,8 @@ button.tag-pill-more:hover {
     color: var(--t2);
     font-size: 13px;
 }
-/* Informational nudge shown once a requester has filed enough requests to meet
-   their package amount. Positive/green — it's guidance to keep going, not a
-   warning or a cap. */
+/* Guidance above the catalog on how many requests to submit.
+   It is green because it is advice, not a warning or a cap. */
 .info-banner {
     display: flex;
     align-items: center;

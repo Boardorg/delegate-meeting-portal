@@ -210,7 +210,7 @@ function RequestActions({
         if (justRequested) {
             return (
                 <button className="requested-btn" disabled>
-                    👍 Requested
+                    👍 Submitted
                 </button>
             );
         }
@@ -228,7 +228,7 @@ function RequestActions({
 
     return (
         <button className="req-btn" onClick={() => onStartPick(d)}>
-            + Request Meeting
+            + Submit Meeting Preference
         </button>
     );
 }
@@ -558,8 +558,7 @@ export default function SponsorCatalog({
 
     // The company's maximum is a reference point, not a cap: requesters can
     // file as many requests as they like (the scheduling engine still only
-    // schedules up to the maximum). `reachedPackage` just drives an
-    // informational nudge once they've filed enough to fill that amount.
+    // schedules up to the maximum).
     // Requests for delegates who cancelled won't become meetings, so they don't count toward the package.
     const cancelledBySf = useMemo(
         () => new Map(cancelledDelegates.map((d) => [d.salesforceId, d])),
@@ -568,7 +567,6 @@ export default function SponsorCatalog({
     const reqCount = requests.filter(
         (r) => !cancelledBySf.has(r.targetId),
     ).length;
-    const reachedPackage = reqCount >= maxMeetings;
 
     // ── Filter config ──
 
@@ -1007,7 +1005,7 @@ export default function SponsorCatalog({
             if (justRequestedIds.has(d.salesforceId)) {
                 return (
                     <button className="requested-btn" disabled>
-                        👍 Requested
+                        👍 Submitted
                     </button>
                 );
             }
@@ -1020,7 +1018,7 @@ export default function SponsorCatalog({
 
         return (
             <button className="req-btn" onClick={() => setPickingId(d.id)}>
-                + Request Meeting
+                + Submit Meeting Preference
             </button>
         );
     }
@@ -1172,7 +1170,7 @@ export default function SponsorCatalog({
                             // Locked confirmation for 2s, then editable.
                             action = justRequestedIds.has(d.salesforceId) ? (
                                 <button className="list-requested-btn" disabled>
-                                    👍 Requested
+                                    👍 Submitted
                                 </button>
                             ) : (
                                 <div className="list-edit-actions">
@@ -1196,7 +1194,7 @@ export default function SponsorCatalog({
                                     className="list-req-btn"
                                     onClick={() => setPickingId(d.id)}
                                 >
-                                    + Request
+                                    + Submit
                                 </button>
                             );
                         }
@@ -1323,7 +1321,7 @@ export default function SponsorCatalog({
                         // Locked confirmation for 2s, then editable.
                         action = justRequestedIds.has(d.salesforceId) ? (
                             <button className="requested-btn" disabled>
-                                👍 Requested
+                                👍 Submitted
                             </button>
                         ) : (
                             <button
@@ -1339,7 +1337,7 @@ export default function SponsorCatalog({
                                 className="req-btn"
                                 onClick={() => setPickingId(d.id)}
                             >
-                                + Request Meeting
+                                + Submit Meeting Preference
                             </button>
                         );
                     }
@@ -1466,7 +1464,7 @@ export default function SponsorCatalog({
                         className={`requests-btn ${reqCount > 0 ? "has-items" : ""}`}
                         onClick={() => setDrawerOpen(true)}
                     >
-                        My Requests{" "}
+                        My Meeting Preferences{" "}
                         <span
                             style={{
                                 fontFamily: "var(--mono)",
@@ -1572,17 +1570,15 @@ export default function SponsorCatalog({
                         </span>
                     </div>
 
-                    {reachedPackage && (
-                        <div className="info-banner">
-                            <span className="info-banner-icon">✓</span>
-                            <span>
-                                You&apos;ve made enough requests to meet your
-                                package amount. Keep adding requests so we can
-                                provide you the best match based on delegate
-                                availability.
-                            </span>
-                        </div>
-                    )}
+                    {/* Always shown, since the target is more than double the package so meetings can be booked and replaced onsite. */}
+                    <div className="info-banner">
+                        <span className="info-banner-icon">ℹ</span>
+                        <span>
+                            Please submit at least 20 requests if your package
+                            has more than 5 meetings, or at least 10 if it has 5
+                            or fewer.
+                        </span>
+                    </div>
 
                     <div ref={catalogRef}>
                         {viewMode === "grid" && renderGrid()}
@@ -1632,7 +1628,7 @@ export default function SponsorCatalog({
             />
             <div className={`drawer ${drawerOpen ? "open" : ""}`}>
                 <div className="drawer-head">
-                    <span className="drawer-title">My Requests</span>
+                    <span className="drawer-title">My Meeting Preferences</span>
                     <button
                         className="drawer-close"
                         onClick={() => setDrawerOpen(false)}
@@ -1641,9 +1637,9 @@ export default function SponsorCatalog({
                     </button>
                 </div>
                 <div className="drawer-notice">
-                    <strong>Requests are saved automatically.</strong> You can
-                    edit interest levels or remove requests at any time before
-                    the window closes.
+                    <strong>Meeting preferences are saved automatically.</strong>{" "}
+                    You can edit interest levels or remove them at any time
+                    before the window closes.
                 </div>
                 <div className="drawer-body">
                     <div className="pkg-bar">
@@ -1670,10 +1666,10 @@ export default function SponsorCatalog({
                                     marginBottom: "6px",
                                 }}
                             >
-                                No requests yet
+                                No meeting preferences yet
                             </div>
                             <div style={{ fontSize: "12px" }}>
-                                Click &quot;+ Request Meeting&quot; on any
+                                Click &quot;+ Submit Meeting Preference&quot; on any
                                 delegate to get started.
                             </div>
                         </div>

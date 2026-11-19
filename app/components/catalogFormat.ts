@@ -11,6 +11,18 @@
 // `orderValues` below.
 // ---------------------------------------------------------------------------
 
+/**
+ * How many meeting preferences a sponsor is asked to submit.
+ * The team needs more than double the package, so meetings can be booked and replaced onsite.
+ * A package of more than 5 meetings asks for 20, and a smaller one asks for 10.
+ *
+ * @param {number} maxMeetings - The company's meeting maximum.
+ * @returns {number} The number of meeting preferences to ask for.
+ */
+export function preferenceTarget(maxMeetings: number): number {
+    return maxMeetings > 5 ? 20 : 10;
+}
+
 /** How many `rev-N` color classes app/frontend.css defines (rev-1 … rev-7). */
 const REV_CLASS_COUNT = 7;
 

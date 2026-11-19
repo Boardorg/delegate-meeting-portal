@@ -15,6 +15,7 @@ import {
     tagColorClass,
     str,
     hasValue,
+    preferenceTarget,
 } from "@/app/components/catalogFormat";
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -567,6 +568,8 @@ export default function SponsorCatalog({
     const reqCount = requests.filter(
         (r) => !cancelledBySf.has(r.targetId),
     ).length;
+    // Sponsors are asked for more than double their package, so meetings can be booked and replaced onsite.
+    const reachedTarget = reqCount >= preferenceTarget(maxMeetings);
 
     // ── Filter config ──
 
@@ -1570,14 +1573,25 @@ export default function SponsorCatalog({
                         </span>
                     </div>
 
-                    {/* Always shown, since the target is more than double the package so meetings can be booked and replaced onsite. */}
+                    {/* Always shown. It asks for the target until the sponsor reaches it, then confirms. */}
                     <div className="info-banner">
-                        <span className="info-banner-icon">ℹ</span>
-                        <span>
-                            Please submit at least 20 meeting preferences if
-                            your package has more than 5 meetings, or at least
-                            10 if it has 5 or fewer.
+                        <span className="info-banner-icon">
+                            {reachedTarget ? "✓" : "ℹ"}
                         </span>
+                        {reachedTarget ? (
+                            <span>
+                                You&apos;ve submitted enough meeting
+                                preferences. Keep adding more so we can provide
+                                you the best match based on delegate
+                                availability.
+                            </span>
+                        ) : (
+                            <span>
+                                Please submit at least 20 meeting preferences if
+                                your package has more than 5 meetings, or at
+                                least 10 if it has 5 or fewer.
+                            </span>
+                        )}
                     </div>
 
                     <div ref={catalogRef}>

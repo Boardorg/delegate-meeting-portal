@@ -176,7 +176,7 @@ function RequestActions({
     req: MeetingRequest | undefined;
     /** True while this delegate's interest-level picker is open. */
     isPicking: boolean;
-    /** True during the 2s locked "Requested" confirmation after a save. */
+    /** True during the 2s locked "Submitted" confirmation after a save. */
     justRequested: boolean;
     onStartPick: (d: Attendee) => void;
     onCancelPick: () => void;
@@ -217,7 +217,7 @@ function RequestActions({
         return (
             <div className="req-edit-actions">
                 <button className="req-btn" onClick={() => onStartPick(d)}>
-                    Edit request
+                    Edit Preference
                 </button>
                 <button className="req-remove-btn" onClick={() => onRemove(d)}>
                     Remove
@@ -251,8 +251,8 @@ function CancelledDrawerItem({
                     <div className="d-company">{d.company}</div>
                     <div className="d-name">{d.name}</div>
                     <div className="d-cancelled-note">
-                        Cancelled their registration. This request won&apos;t
-                        be scheduled.
+                        Cancelled their registration. This meeting preference
+                        won&apos;t be scheduled.
                     </div>
                 </div>
                 <button
@@ -528,7 +528,7 @@ export default function SponsorCatalog({
     const [pickingId, setPickingId] = useState<string | null>(null);
     // Targets (by salesforceId) whose request was just placed/edited in this
     // session. Each shows a locked "Requested" confirmation for 2s before the
-    // button re-enables as "Edit request". Requests loaded from the server are
+    // button re-enables as "Edit Preference". Requests loaded from the server are
     // never in this set, so they're editable immediately.
     const [justRequestedIds, setJustRequestedIds] = useState<Set<string>>(
         new Set(),
@@ -857,7 +857,7 @@ export default function SponsorCatalog({
     );
 
     // Mark a target as just-requested, then clear that flag after 2s so the
-    // button re-enables as "Edit request". Re-requesting restarts the timer.
+    // button re-enables as "Edit Preference". Re-requesting restarts the timer.
     const markJustRequested = useCallback((targetId: string) => {
         setJustRequestedIds((prev) => new Set(prev).add(targetId));
         const timers = justRequestedTimers.current;
@@ -1011,7 +1011,7 @@ export default function SponsorCatalog({
             }
             return (
                 <button className="req-btn" onClick={() => setPickingId(d.id)}>
-                    Edit Request
+                    Edit Preference
                 </button>
             );
         }
@@ -1328,7 +1328,7 @@ export default function SponsorCatalog({
                                 className="req-btn"
                                 onClick={() => setPickingId(d.id)}
                             >
-                                Edit Request
+                                Edit Preference
                             </button>
                         );
                     } else {
@@ -1574,9 +1574,9 @@ export default function SponsorCatalog({
                     <div className="info-banner">
                         <span className="info-banner-icon">ℹ</span>
                         <span>
-                            Please submit at least 20 requests if your package
-                            has more than 5 meetings, or at least 10 if it has 5
-                            or fewer.
+                            Please submit at least 20 meeting preferences if
+                            your package has more than 5 meetings, or at least
+                            10 if it has 5 or fewer.
                         </span>
                     </div>
 
@@ -1649,10 +1649,10 @@ export default function SponsorCatalog({
                             {pkgLabel} package
                         </span>
                         {/* The package amount is a reference, not a cap: show
-                            the contracted meeting count and make clear requests
-                            themselves are unlimited. */}
+                            the contracted meeting count and make clear meeting
+                            preferences themselves are unlimited. */}
                         <span className="pkg-val pkg-ok">
-                            {maxMeetings} meetings, unlimited requests
+                            {maxMeetings} meetings, unlimited preferences
                         </span>
                     </div>
                     {drawerEntries.length === 0 &&

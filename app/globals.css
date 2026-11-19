@@ -98,7 +98,19 @@ a { color: inherit; text-decoration: none; }
 .brand-divider { width:1px; height:26px; background:var(--border); flex-shrink:0; }
 .brand-product { font-family:var(--body); font-size:13px; font-weight:500; color:var(--t2); white-space:nowrap; }
 .topbar-spacer { flex:1; }
-.topbar-right { display:flex; align-items:center; gap:10px; }
+.topbar-right { display:flex; align-items:center; gap:10px; min-width:0; }
+/* The name shrinks with an ellipsis, so the buttons always fit on one line. */
+.user-chip, .user-chip > div { min-width:0; }
+.user-name, .user-sub { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.logout-btn, .requests-btn { white-space:nowrap; flex-shrink:0; }
+/* On narrow screens the name and buttons move to a second row, so nothing runs off the edge. */
+/* The taller header stops being sticky there, so the sticky side columns start at the top. */
+@media (max-width: 900px) {
+  .topbar { position:static; height:auto; flex-wrap:wrap; padding:10px 16px; row-gap:8px; }
+  .topbar-spacer { display:none; }
+  .topbar-right { width:100%; }
+  .user-chip { flex:1; padding:0; }
+}
 .user-chip { display:flex; align-items:center; gap:8px; background:none; border:none; padding:0 12px; }
 .user-name { font-size:12px; font-weight:500; }
 .user-sub { font-size:11px; color:var(--t2); }

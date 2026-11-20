@@ -74,9 +74,9 @@ export type RequestRow = {
     requesterCompany: string;
     targetName: string;
     targetCompany: string;
-    /** True when the requester cancelled in Cvent. A company counts only when all its reps cancelled. */
+    /** True when the requester isn't registered in Cvent. A company counts only when none of its reps are. */
     requesterCancelled: boolean;
-    /** True when the target cancelled their Cvent registration. */
+    /** True when the target isn't registered in Cvent, such as cancelled or never registered. */
     targetCancelled: boolean;
     rank: number;
     createdAt: Date;

@@ -18,7 +18,8 @@
  * - missing_location: the meeting has no location assigned to send.
  * - host_not_in_cvent: the requester (appointment host) has no Cvent contact id.
  * - host_busy: no host is free at that time, because they already host another Cvent appointment then or are needed for another meeting in the same push.
- * - attendee_cancelled: the delegate, or every rep of the company, cancelled their Cvent registration.
+ * - attendee_cancelled: the delegate, or every rep of the company, isn't registered in Cvent.
+ *   They cancelled, or were invited and never registered. Cvent's ATTENDEE_NOT_FOUND maps here too.
  * - cvent_type_change: a re-push would need to edit the old appointment in place to a slot of another
  *   appointment type, which Cvent can't do. Also used when the old appointment's type can't be checked.
  *   Nothing changes in Cvent or the portal, and the meeting stays in Cvent under its old type.
@@ -194,6 +195,9 @@ export function classifyPushError(err: unknown): SyncFailureReason {
     }
 
     if (status === 401 || status === 403) return "cvent_auth";
+    // Cvent rejects a participant who isn't registered for the event with this code, on a 422.
+    // The portal normally catches them before the call, so this covers a status that changed since the load.
+    if (code === "ATTENDEE_NOT_FOUND") return "attendee_cancelled";
     if (status === 404) return "cvent_not_found";
     if (status === 429) return "cvent_rate_limited";
     if (status === 409) {

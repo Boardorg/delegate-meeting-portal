@@ -40,7 +40,7 @@ type Props = {
 const EXCLUSION_LABEL: Record<NonNullable<DelegateDetail["exclusion"]>, string> = {
     conference_only: "Conference only, so no D2D meetings",
     incomplete_profile: "Networking Profile not complete, so no D2D matching",
-    cancelled: "Cancelled in Cvent",
+    cancelled: "Not registered in Cvent",
     seated_at_roundtable: "Seated at a roundtable",
 };
 
@@ -260,7 +260,7 @@ function DelegateMeetingTableRow({
                     {m.otherCancelled && (
                         <>
                             {" "}
-                            <span className="adm-chip adm-chip-cancelled">Cancelled in Cvent</span>
+                            <span className="adm-chip adm-chip-cancelled">Not registered in Cvent</span>
                         </>
                     )}
                 </div>

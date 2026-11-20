@@ -6,7 +6,7 @@ export type NormalizedCventAttendee = {
     email: string;
     /** Cvent contact id, used as the appointment host or attendee id. */
     contactId: string;
-    /** True when the registration's Cvent status is Cancelled. */
+    /** True when the person isn't registered in Cvent, such as Cancelled or No Response. */
     cancelled: boolean;
 };
 

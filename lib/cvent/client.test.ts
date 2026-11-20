@@ -4,7 +4,9 @@ import {
     buildUpdateAppointmentRequest,
     getAppointmentTypes,
     getTimeslotsByEvent,
+    isRegisteredStatus,
     toAppointmentsPage,
+    toCventEventAttendees,
     toAppointmentTypes,
     toAppointmentTypesPage,
     toExistingAppointments,
@@ -217,6 +219,38 @@ describe("toExistingAppointments", () => {
     test("gives a null end time when Cvent omits it", () => {
         const out = toExistingAppointments([{ id: "appt-1", start: "2026-10-31T14:30:00Z" }]);
         expect(out[0].endTime).toBeNull();
+    });
+});
+
+describe("isRegisteredStatus", () => {
+    test("counts only Accepted as registered, and a missing status as registered", () => {
+        expect(isRegisteredStatus("Accepted")).toBe(true);
+        expect(isRegisteredStatus(undefined)).toBe(true);
+    });
+
+    test("treats every other Cvent status as not registered, since Cvent rejects them with ATTENDEE_NOT_FOUND", () => {
+        for (const status of ["Cancelled", "No Response", "Declined", "Visited", "Waitlisted", "Pending Approval", "Denied Approval"]) {
+            expect(isRegisteredStatus(status)).toBe(false);
+        }
+    });
+});
+
+describe("toCventEventAttendees", () => {
+    test("flags an invitee who never registered, as well as a cancelled one", () => {
+        const out = toCventEventAttendees([
+            { contact: { id: "c1", email: "a@x.com" }, status: "Accepted" },
+            { contact: { id: "c2", email: "b@x.com" }, status: "No Response" },
+            { contact: { id: "c3", email: "c@x.com" }, status: "Cancelled" },
+        ]);
+        expect(out).toEqual([
+            { contactId: "c1", email: "a@x.com", cancelled: false },
+            { contactId: "c2", email: "b@x.com", cancelled: true },
+            { contactId: "c3", email: "c@x.com", cancelled: true },
+        ]);
+    });
+
+    test("drops a record with no contact id or email", () => {
+        expect(toCventEventAttendees([{ contact: { id: "c1" }, status: "Accepted" }, { status: "Accepted" }])).toEqual([]);
     });
 });
 

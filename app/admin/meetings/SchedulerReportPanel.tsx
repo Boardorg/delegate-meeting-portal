@@ -42,7 +42,7 @@ const REASON_LABEL: Record<SchedulerFailureReason, string> = {
     no_booth_slots: "No sponsor timeslots at booth in Cvent",
     self_request: "Self request",
     not_an_attendee: "Not in attendee list",
-    attendee_cancelled: "Cancelled in Cvent",
+    attendee_cancelled: "Not registered in Cvent",
     already_scheduled: "Already meets in Cvent",
     no_pass_match: "No matching pass",
     conflict_existing: "Conflicts with pushed meeting",

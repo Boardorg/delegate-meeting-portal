@@ -203,7 +203,8 @@ export interface Attendee {
     cventContactId: string;
 
     /**
-     * True when this attendee's Cvent registration is cancelled.
+     * True when this attendee isn't registered for the event in Cvent.
+     * That means any Cvent status but Accepted, such as Cancelled or No Response (invited, never registered).
      * They stay in the attendee list so admins can find and reassign their meetings.
      * Sponsors don't see them in the catalog, the scheduler skips them, and push won't send them to Cvent.
      * Absent or false for everyone else, including mock data.

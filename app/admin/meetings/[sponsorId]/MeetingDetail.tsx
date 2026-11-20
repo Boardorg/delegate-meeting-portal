@@ -321,7 +321,7 @@ function MeetingTableRow({
                     {m.delegateCancelled && (
                         <>
                             {" "}
-                            <span className="adm-chip adm-chip-cancelled">Cancelled in Cvent</span>
+                            <span className="adm-chip adm-chip-cancelled">Not registered in Cvent</span>
                         </>
                     )}
                 </div>

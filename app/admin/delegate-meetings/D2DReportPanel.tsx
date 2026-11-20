@@ -69,7 +69,7 @@ export default function D2DReportPanel({
             <p className="adm-help-note">
                 Left out: {excluded.incompleteProfile} without a completed Networking Profile,{" "}
                 {excluded.conferenceOnly} conference-only, {excluded.seatedAtRoundtable} seated at a roundtable and{" "}
-                {excluded.cancelled} cancelled in Cvent.
+                {excluded.cancelled} not registered in Cvent.
             </p>
 
             <div style={{ marginTop: 20 }}>

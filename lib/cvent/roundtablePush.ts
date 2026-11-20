@@ -172,14 +172,14 @@ export async function pushRoundtableRows(
             continue;
         }
 
-        // A delegate who cancelled their Cvent registration can't be an appointment participant.
+        // A delegate who isn't registered in Cvent can't be an appointment participant.
         const cancelled = seatedIds
             .map((id) => attendeeById.get(id))
             .find((d) => d?.cventCancelled);
         if (cancelled) {
             results.push(fail(
                 "attendee_cancelled",
-                `${cancelled.name} cancelled their Cvent registration. Move them off this table.`,
+                `${cancelled.name} isn't registered in Cvent for this event. Move them off this table.`,
             ));
             continue;
         }

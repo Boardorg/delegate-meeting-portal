@@ -94,7 +94,7 @@ export type D2DResult = {
 /**
  * Why a delegate can't be matched for D2D, or null when they can.
  * Conference-only delegates and delegates without a completed profile are never matched.
- * Delegates who cancelled in Cvent aren't either, since Cvent won't take them.
+ * Delegates who aren't registered in Cvent aren't either, since Cvent won't take them.
  *
  * @param {Attendee} a - The attendee, already known to be a delegate.
  * @returns {D2DExclusion | null} The reason, or null.

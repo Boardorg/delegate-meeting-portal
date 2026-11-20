@@ -129,7 +129,7 @@ export type RoundtableResult = {
 /**
  * Why a delegate can't be seated at a roundtable, or null when they can.
  * Roundtables are for delegates with no S2D and no D2D meeting, in the portal or in Cvent.
- * Conference-only delegates never get a seat, and delegates who cancelled in Cvent can't be pushed.
+ * Conference-only delegates never get a seat, and delegates who aren't registered in Cvent can't be pushed.
  *
  * @param {Attendee} a - The delegate.
  * @param {Map<string, DelegateCounts>} counts - Each delegate's meetings.
@@ -434,7 +434,7 @@ export function checkSeatMove(params: {
     } else if (params.exclusion === "conference_only") {
         warnings.push(`${params.delegate.name} is conference-only, so they shouldn't get a seat.`);
     } else if (params.exclusion === "cancelled") {
-        warnings.push(`${params.delegate.name} cancelled in Cvent.`);
+        warnings.push(`${params.delegate.name} isn't registered in Cvent.`);
     }
     return { errors, warnings };
 }

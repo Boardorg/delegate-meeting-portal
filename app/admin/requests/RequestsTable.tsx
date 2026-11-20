@@ -608,7 +608,7 @@ function RowFragment(props: RowFragmentProps) {
                     <div className="adm-party-name">{r.requesterName}</div>
                     {r.requesterCancelled && (
                         <div className="adm-chip-mt">
-                            <span className="adm-chip adm-chip-cancelled">Cancelled in Cvent</span>
+                            <span className="adm-chip adm-chip-cancelled">Not registered in Cvent</span>
                         </div>
                     )}
                 </td>
@@ -621,7 +621,7 @@ function RowFragment(props: RowFragmentProps) {
                     )}
                     {r.targetCancelled && (
                         <div className="adm-chip-mt">
-                            <span className="adm-chip adm-chip-cancelled">Cancelled in Cvent</span>
+                            <span className="adm-chip adm-chip-cancelled">Not registered in Cvent</span>
                         </div>
                     )}
                 </td>

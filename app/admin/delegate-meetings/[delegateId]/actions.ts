@@ -46,7 +46,7 @@ export type DelegateMeetingRow = {
     /** The other delegate on a D2D meeting, or the sponsor company on an S2D meeting. */
     otherName: string;
     otherCompany: string;
-    /** True when the other delegate cancelled their Cvent registration. */
+    /** True when the other delegate isn't registered in Cvent, such as cancelled or never registered. */
     otherCancelled: boolean;
     /** True when this delegate hosts the D2D meeting in Cvent. Null for S2D and Cvent-only rows. */
     isHost: boolean | null;

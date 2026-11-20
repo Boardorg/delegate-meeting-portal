@@ -66,7 +66,7 @@ export default function RoundtableReportPanel({
 
             <p className="adm-help-note">
                 Left out: {report.excluded.hasMeetings} with meetings, {report.excluded.conferenceOnly} conference-only
-                and {report.excluded.cancelled} cancelled in Cvent.
+                and {report.excluded.cancelled} not registered in Cvent.
             </p>
 
             <div style={{ marginTop: 20 }}>

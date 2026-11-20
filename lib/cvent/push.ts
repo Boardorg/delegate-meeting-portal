@@ -496,7 +496,7 @@ export async function pushMeetingRows(
             continue;
         }
 
-        // A delegate who cancelled their Cvent registration can't be an appointment participant.
+        // A delegate who isn't registered in Cvent can't be an appointment participant.
         // Cvent rejects them with ATTENDEE_NOT_FOUND, so skip the meeting and say why.
         if (target?.cventCancelled) {
             results.push({
@@ -505,7 +505,7 @@ export async function pushMeetingRows(
                 ok: false,
                 kind,
                 reason: "attendee_cancelled",
-                error: `${target.name} cancelled their Cvent registration. Reassign or delete this meeting.`,
+                error: `${target.name} isn't registered in Cvent for this event. Reassign or delete this meeting.`,
             });
             continue;
         }
@@ -519,7 +519,7 @@ export async function pushMeetingRows(
                 ok: false,
                 kind,
                 reason: "attendee_cancelled",
-                error: `Every rep of ${company?.name ?? row.attendeeA} cancelled their Cvent registration. Reassign or delete this meeting.`,
+                error: `No rep of ${company?.name ?? row.attendeeA} is registered in Cvent for this event. Reassign or delete this meeting.`,
             });
             continue;
         }
@@ -606,14 +606,14 @@ export async function pushMeetingRows(
                 ? `${missingHostReps.join(", ")} ${missingHostReps.length === 1 ? "isn't" : "aren't"} linked in Cvent, so ${missingHostReps.length === 1 ? "that rep was not added as a host" : "those reps were not added as hosts"}.`
                 : undefined;
 
-        // Reps who cancelled in Cvent are left off as hosts too.
+        // Reps who aren't registered in Cvent are left off as hosts too.
         // The meeting still goes ahead with the company's remaining reps.
         const cancelledHostReps = reps
             .filter((r) => r.cventCancelled)
             .map((r) => r.name);
         const cancelledHostWarning =
             cancelledHostReps.length > 0
-                ? `${cancelledHostReps.join(", ")} cancelled in Cvent, so ${cancelledHostReps.length === 1 ? "that rep was not added as a host" : "those reps were not added as hosts"}.`
+                ? `${cancelledHostReps.join(", ")} ${cancelledHostReps.length === 1 ? "isn't" : "aren't"} registered in Cvent, so ${cancelledHostReps.length === 1 ? "that rep was not added as a host" : "those reps were not added as hosts"}.`
                 : undefined;
 
         // A sponsor meeting in a slot that isn't sponsor_delegate still goes ahead.
@@ -743,10 +743,10 @@ export async function pushDelegateMeetingRows(
             continue;
         }
 
-        // A delegate who cancelled their Cvent registration can't be an appointment participant.
+        // A delegate who isn't registered in Cvent can't be an appointment participant.
         const cancelled = [host, guest].find((d) => d?.cventCancelled);
         if (cancelled) {
-            results.push(fail("attendee_cancelled", `${cancelled.name} cancelled their Cvent registration. Remove this meeting.`));
+            results.push(fail("attendee_cancelled", `${cancelled.name} isn't registered in Cvent for this event. Remove this meeting.`));
             continue;
         }
 

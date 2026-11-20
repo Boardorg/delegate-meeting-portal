@@ -394,7 +394,7 @@ export async function runSchedulerForEvent(
     // Running S2D after the others still goes ahead, but the report says so.
     const orderWarning = s2dOrderWarning(d2dRows.length, seatMeetings.length);
 
-    // Attendees who cancelled in Cvent are left out, so no new meetings are made with them.
+    // Attendees who aren't registered in Cvent are left out, so no new meetings are made with them.
     // Un-pushed meetings are rebuilt from scratch below, so cancelled attendees drop out of those.
     // Meetings already pushed to Cvent are kept for an admin to reassign.
     // The report below still gets everyone, so it can say why those requests went unscheduled.
@@ -488,7 +488,7 @@ export async function runSchedulerForEvent(
     // delegate's intake-form "sponsors I want to meet" answer. The report is
     // built from it so its tallies match the run.
     //
-    // The engine only gets `schedulable`, the attendees who haven't cancelled (see above).
+    // The engine only gets `schedulable`, the attendees who are registered in Cvent (see above).
     const { schedule, skipReasons, effectiveRequests } = await runScheduler(
         schedulable,
         engineRequests,

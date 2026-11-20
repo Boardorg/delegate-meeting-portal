@@ -51,7 +51,7 @@ export type MeetingRow = {
     delegateSalesforceId: string;
     delegateName: string;
     delegateCompany: string;
-    /** True when the delegate cancelled their Cvent registration. Push skips these meetings. */
+    /** True when the delegate isn't registered in Cvent, such as cancelled or never registered. Push skips these meetings. */
     delegateCancelled: boolean;
     matchKind: MeetingMatchKind;
     /**

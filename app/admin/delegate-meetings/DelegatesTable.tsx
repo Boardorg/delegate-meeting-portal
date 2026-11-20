@@ -409,7 +409,7 @@ function DelegateTableRow({ row, onView }: { row: DelegateRow; onView: () => voi
 const EXCLUSION_LABEL: Record<NonNullable<DelegateRow["exclusion"]>, string> = {
     conference_only: "Conference only",
     incomplete_profile: "Profile not complete",
-    cancelled: "Cancelled in Cvent",
+    cancelled: "Not registered in Cvent",
     seated_at_roundtable: "Seated at a roundtable",
 };
 

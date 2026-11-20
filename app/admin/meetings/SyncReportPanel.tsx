@@ -19,9 +19,12 @@ const REASON_LABEL: Record<SyncFailureReason, string> = {
     missing_timeslot: "Timeslot missing",
     missing_location: "No location",
     host_not_in_cvent: "Host not in Cvent",
-    attendee_cancelled: "Cancelled in Cvent",
+    host_busy: "Host busy",
+    attendee_cancelled: "Not registered in Cvent",
     cvent_type_change: "Can't change type",
-    cvent_no_availability: "Host slot full",
+    missing_theme: "No theme title",
+    empty_table: "No one seated",
+    cvent_no_availability: "Slot full",
     cvent_validation: "Rejected by Cvent",
     cvent_conflict: "Cvent conflict",
     cvent_code_exists: "May already be in Cvent",
@@ -39,12 +42,18 @@ const REASON_HINT: Record<SyncFailureReason, string> = {
     missing_location: "Assign a location to the meeting before syncing.",
     host_not_in_cvent:
         "The requester (appointment host) isn't a Cvent attendee for this event. Add them in Cvent, then sync again.",
+    host_busy:
+        "No host is free at this time. Each one already hosts another Cvent appointment then, or is needed for another meeting in this push. Move the meeting to another time, or for a roundtable, move the host off the table.",
     attendee_cancelled:
-        "A participant cancelled their Cvent registration, so Cvent won't accept them. Reassign or delete the meeting.",
+        "A participant isn't registered in Cvent for this event. They cancelled, or were invited and never registered. Reassign or delete the meeting.",
     cvent_type_change:
         "Cvent can't change a meeting's appointment type, so the meeting is still in Cvent under its old type. Remove the meeting and create it again in the new slot, or use Unpush All Synced and push again.",
+    missing_theme:
+        "The roundtable's theme title is its title in Cvent. Enter a theme title on the table's page, then push again.",
+    empty_table:
+        "Cvent needs a host, and a seated delegate hosts each roundtable. Seat at least one delegate, then push again, or Unpush the table to cancel its Cvent appointment.",
     cvent_no_availability:
-        "Cvent reports the host has no appointment slot free at this time. Move the meeting to another timeslot.",
+        "Cvent reports the host or the location has no appointment free at this time. Move the meeting to another timeslot.",
     cvent_validation:
         "Cvent rejected the appointment data. Check the meeting's participants, location, and time.",
     cvent_conflict:

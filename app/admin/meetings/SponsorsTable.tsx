@@ -15,6 +15,8 @@ import { useDebounce } from "use-debounce";
 import { SortableHeaders } from "../_components/SortableHeaders";
 import { TablePagination } from "../_components/TablePagination";
 import { TierPill } from "./_components/TierPill";
+import { ConfirmModal } from "./_components/ConfirmModal";
+import { ProgressCell } from "./_components/ProgressCell";
 import SchedulerReportPanel from "./SchedulerReportPanel";
 import SyncReportPanel from "./SyncReportPanel";
 import MaintenanceReportPanel from "./MaintenanceReportPanel";
@@ -444,43 +446,6 @@ function SponsorRow({
 }
 
 // ---------------------------------------------------------------------------
-// ProgressCell — a "count / total" bar shared by the Requests and Scheduled
-// columns. Color reflects standing against the target: blue while under 80%,
-// gold from 80-99%, green at exactly 100%, red once over.
-// ---------------------------------------------------------------------------
-
-function ProgressCell({
-    count,
-    total,
-    percent,
-}: {
-    count: number;
-    total: number;
-    percent: number;
-}) {
-    const isOver = count > total;
-    const barColor = isOver
-        ? "var(--red)"
-        : percent >= 100
-          ? "var(--progress-full)"
-          : percent >= 80
-            ? "var(--gold)"
-            : "var(--progress-mid)";
-
-    return (
-        <div className="adm-progress">
-            <div className="adm-progress-track">
-                <div
-                    className="adm-progress-bar"
-                    style={{ width: `${Math.min(percent, 100)}%`, background: barColor }}
-                />
-            </div>
-            <span className="adm-progress-label">{count} / {total}</span>
-        </div>
-    );
-}
-
-// ---------------------------------------------------------------------------
 // PushAllModal — confirmation dialog for the event-wide bulk push.
 // ---------------------------------------------------------------------------
 
@@ -498,24 +463,22 @@ function PushAllModal({
     onCancel: () => void;
 }) {
     return (
-        <div className="adm-modal-overlay">
-            <div className="adm-modal adm-modal-md">
-                <div className="adm-modal-title">Push All to Cvent?</div>
-                <p className="adm-modal-body">
-                    This will push all un-synced portal meetings for{" "}
-                    <strong>{eventCode}</strong>{" "}
-                    to Cvent, including meetings that have been modified since their
-                    last push.
-                </p>
-                {error && <div className="adm-modal-error">{error}</div>}
-                <div className="adm-modal-actions">
-                    <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
-                    <button className="adm-btn adm-btn-primary" onClick={onConfirm} disabled={isPending}>
-                        {isPending ? "Pushing…" : "Push All"}
-                    </button>
-                </div>
-            </div>
-        </div>
+        <ConfirmModal
+            title="Push All to Cvent?"
+            confirmLabel="Push All"
+            pendingLabel="Pushing…"
+            isPending={isPending}
+            error={error}
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+        >
+            <p className="adm-modal-body">
+                This will push all un-synced portal meetings for{" "}
+                <strong>{eventCode}</strong>{" "}
+                to Cvent, including meetings that have been modified since their
+                last push.
+            </p>
+        </ConfirmModal>
     );
 }
 
@@ -537,24 +500,23 @@ function ClearUnsyncedModal({
     onCancel: () => void;
 }) {
     return (
-        <div className="adm-modal-overlay">
-            <div className="adm-modal adm-modal-md">
-                <div className="adm-modal-title">Clear All Unsynced Meetings?</div>
-                <p className="adm-modal-body">
-                    This permanently deletes every meeting for{" "}
-                    <strong>{eventCode}</strong>{" "}
-                    that has not been pushed to Cvent. Meetings already synced to
-                    Cvent are kept. This cannot be undone.
-                </p>
-                {error && <div className="adm-modal-error">{error}</div>}
-                <div className="adm-modal-actions">
-                    <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
-                    <button className="adm-btn adm-btn-danger" onClick={onConfirm} disabled={isPending}>
-                        {isPending ? "Clearing…" : "Clear Unsynced"}
-                    </button>
-                </div>
-            </div>
-        </div>
+        <ConfirmModal
+            title="Clear All Unsynced Meetings?"
+            confirmLabel="Clear Unsynced"
+            pendingLabel="Clearing…"
+            tone="danger"
+            isPending={isPending}
+            error={error}
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+        >
+            <p className="adm-modal-body">
+                This permanently deletes every sponsor meeting for{" "}
+                <strong>{eventCode}</strong>{" "}
+                that has not been pushed to Cvent. Meetings already synced to
+                Cvent are kept. This cannot be undone.
+            </p>
+        </ConfirmModal>
     );
 }
 
@@ -577,23 +539,22 @@ function UnpushAllModal({
     onCancel: () => void;
 }) {
     return (
-        <div className="adm-modal-overlay">
-            <div className="adm-modal adm-modal-md">
-                <div className="adm-modal-title">Unpush All Synced Meetings?</div>
-                <p className="adm-modal-body">
-                    This cancels the Cvent appointment behind every synced meeting
-                    for <strong>{eventCode}</strong>. The meetings stay in the
-                    portal but return to un-synced. This cannot be undone.
-                </p>
-                {error && <div className="adm-modal-error">{error}</div>}
-                <div className="adm-modal-actions">
-                    <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
-                    <button className="adm-btn adm-btn-danger" onClick={onConfirm} disabled={isPending}>
-                        {isPending ? "Unpushing…" : "Unpush All"}
-                    </button>
-                </div>
-            </div>
-        </div>
+        <ConfirmModal
+            title="Unpush All Synced Meetings?"
+            confirmLabel="Unpush All"
+            pendingLabel="Unpushing…"
+            tone="danger"
+            isPending={isPending}
+            error={error}
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+        >
+            <p className="adm-modal-body">
+                This cancels the Cvent appointment behind every synced sponsor meeting
+                for <strong>{eventCode}</strong>. The meetings stay in the
+                portal but return to un-synced. This cannot be undone.
+            </p>
+        </ConfirmModal>
     );
 }
 
@@ -618,30 +579,28 @@ function RunEngineModal({
 }) {
     const boothWarning = runBoothWarning(boothProblemCount);
     return (
-        <div className="adm-modal-overlay">
-            <div className="adm-modal adm-modal-md">
-                <div className="adm-modal-title">Run Scheduling Engine?</div>
-                <p className="adm-modal-body">
-                    This will replace all un-pushed meetings for{" "}
-                    <strong>{eventCode}</strong>{" "}
-                    with fresh engine output. Meetings already pushed to Cvent are
-                    preserved and count against per-sponsor caps.
-                </p>
-                {/* Companies with a booth problem get no meetings, so say so before running. */}
-                {boothWarning && (
-                    <div className="adm-modal-warn-at" role="alert" style={{ marginBottom: 16 }}>
-                        {boothWarning} See the{" "}
-                        <Link href="/admin/booths">Sponsor Booths</Link> page.
-                    </div>
-                )}
-                {error && <div className="adm-modal-error">{error}</div>}
-                <div className="adm-modal-actions">
-                    <button className="adm-btn" onClick={onCancel} disabled={isPending}>Cancel</button>
-                    <button className="adm-btn adm-btn-primary" onClick={onConfirm} disabled={isPending}>
-                        {isPending ? "Running…" : "Run Engine"}
-                    </button>
+        <ConfirmModal
+            title="Run Scheduling Engine?"
+            confirmLabel="Run Engine"
+            pendingLabel="Running…"
+            isPending={isPending}
+            error={error}
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+        >
+            <p className="adm-modal-body">
+                This will replace all un-pushed sponsor meetings for{" "}
+                <strong>{eventCode}</strong>{" "}
+                with fresh engine output. Meetings already pushed to Cvent are
+                preserved and count against per-sponsor caps.
+            </p>
+            {/* Companies with a booth problem get no meetings, so say so before running. */}
+            {boothWarning && (
+                <div className="adm-modal-warn-at" role="alert" style={{ marginBottom: 16 }}>
+                    {boothWarning} See the{" "}
+                    <Link href="/admin/booths">Sponsor Booths</Link> page.
                 </div>
-            </div>
-        </div>
+            )}
+        </ConfirmModal>
     );
 }

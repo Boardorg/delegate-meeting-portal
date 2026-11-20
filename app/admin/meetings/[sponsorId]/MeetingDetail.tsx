@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { fmtTime, fmtWeekday } from "@/lib/format";
-import type { MeetingMatchKind, MeetingSource } from "@/lib/db/schema";
 import type { SponsorDetail } from "@/types";
 import type { SyncReport } from "@/lib/cvent/syncReport";
 import SyncReportPanel from "../SyncReportPanel";
@@ -20,15 +19,20 @@ import {
     type DelegateOption,
     type MeetingRow,
 } from "./actions";
-import type { SyncStatus } from "@/lib/cvent/syncStatus";
 import {
-    groupSlotOptions,
     slotLocationWarning,
     slotTypeWarning,
     type SlotOption,
 } from "@/lib/scheduling/slotOptions";
 import { StatChip } from "../_components/StatChip";
 import { TierPill } from "../_components/TierPill";
+import { SlotSelect } from "../_components/SlotSelect";
+import {
+    LegendItem,
+    MatchKindChip,
+    SourceChip,
+    SyncChip,
+} from "../_components/MeetingChips";
 
 // ---------------------------------------------------------------------------
 // MeetingDetail — per-sponsor meeting table for /admin/meetings/[sponsorId].
@@ -317,7 +321,7 @@ function MeetingTableRow({
                     {m.delegateCancelled && (
                         <>
                             {" "}
-                            <span className="adm-chip adm-chip-cancelled">Cancelled in Cvent</span>
+                            <span className="adm-chip adm-chip-cancelled">Not registered in Cvent</span>
                         </>
                     )}
                 </div>
@@ -784,54 +788,6 @@ function CreateMeetingModal({
 // ---------------------------------------------------------------------------
 
 /**
- * The Time Slot dropdown. Options are grouped by Cvent appointment type, sponsor slots first.
- * Each option also names its type, so the choice is clear while the list is closed.
- *
- * @param {{ options: SlotOption[]; value: string; onChange: (key: string) => void; disabled: boolean; timezone: string }} props
- * @returns {JSX.Element} The select element.
- */
-function SlotSelect({
-    options,
-    value,
-    onChange,
-    disabled,
-    timezone,
-}: {
-    options: SlotOption[];
-    value: string;
-    onChange: (key: string) => void;
-    disabled: boolean;
-    timezone: string;
-}) {
-    return (
-        <select
-            className="adm-input adm-select"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            disabled={disabled}
-        >
-            {/* Nothing is chosen yet, for example when the current slot is at another company's booth. */}
-            {value === "" && (
-                <option value="" disabled>
-                    Choose a time slot
-                </option>
-            )}
-            {groupSlotOptions(options).map((g, i) => (
-                <optgroup key={`${i}-${g.label}`} label={g.label}>
-                    {g.options.map((o) => (
-                        <option key={o.timeslotId} value={o.timeslotId}>
-                            Day {o.day} – {fmtTime(o.startTime, timezone)}
-                            {o.locationName ? ` · ${o.locationName}` : ""}
-                            {` · ${g.label}`}
-                        </option>
-                    ))}
-                </optgroup>
-            ))}
-        </select>
-    );
-}
-
-/**
  * Warns when the chosen slot isn't a sponsor slot, since Cvent will file the meeting under that slot's type.
  * Renders nothing for a sponsor_delegate slot.
  *
@@ -862,56 +818,5 @@ function SlotLocationWarning({ option }: { option: SlotOption | undefined }) {
         <div className="adm-modal-warn-at adm-field-mb-lg" role="alert">
             {warning}
         </div>
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Chips + small display components
-// ---------------------------------------------------------------------------
-
-function MatchKindChip({ kind }: { kind: MeetingMatchKind }) {
-    const classMap: Record<MeetingMatchKind, string> = {
-        mutual:          "adm-chip-mutual",
-        sponsor_choice:  "adm-chip-sponsor-choice",
-        delegate_choice: "adm-chip-delegate-choice",
-        admin:           "adm-chip-admin",
-    };
-    const labelMap: Record<MeetingMatchKind, string> = {
-        mutual:          "Mutual",
-        sponsor_choice:  "Sponsor choice",
-        delegate_choice: "Delegate choice",
-        admin:           "Admin created",
-    };
-    return <span className={`adm-chip ${classMap[kind]}`}>{labelMap[kind]}</span>;
-}
-
-function SyncChip({ status }: { status: SyncStatus }) {
-    const classMap: Record<SyncStatus, string> = {
-        synced:     "adm-chip-synced",
-        modified:   "adm-chip-modified",
-        not_pushed: "adm-chip-not-pushed",
-    };
-    const labelMap: Record<SyncStatus, string> = {
-        synced:     "Synced",
-        modified:   "Modified",
-        not_pushed: "Not pushed",
-    };
-    return <span className={`adm-chip ${classMap[status]}`}>{labelMap[status]}</span>;
-}
-
-function SourceChip({ source }: { source: MeetingSource }) {
-    return (
-        <span className={`adm-chip ${source === "portal" ? "adm-chip-portal" : "adm-chip-cvent"}`}>
-            {source === "portal" ? "Portal" : "Cvent"}
-        </span>
-    );
-}
-
-function LegendItem({ swatch, label }: { swatch: React.CSSProperties; label: string; }) {
-    return (
-        <span className="adm-legend-item">
-            <span className="adm-legend-swatch" style={swatch} />
-            {label}
-        </span>
     );
 }

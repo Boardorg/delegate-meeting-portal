@@ -179,7 +179,7 @@ export function sponsorCompaniesByAccountId(
 
 /**
  * The company's reps who can host a Cvent appointment, ordered by Salesforce id.
- * A rep can host when they have a Cvent contact id and haven't cancelled in Cvent.
+ * A rep can host when they have a Cvent contact id and are registered in Cvent.
  * A contact id shared by two reps is only listed once.
  *
  * @param {SponsorCompany} company - The company.
@@ -247,7 +247,7 @@ export function resolvePartyName(
  * @param {string} id - The party id.
  * @param {Map<string, SponsorCompany>} companies - Company map (by account id).
  * @param {Map<string, Attendee>} bySalesforceId - Attendee map (by salesforceId).
- * @returns {boolean} True when the party cancelled in Cvent.
+ * @returns {boolean} True when the party isn't registered in Cvent.
  */
 export function isPartyCancelled(
     id: string,

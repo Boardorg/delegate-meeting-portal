@@ -1,6 +1,8 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import type { Attendee, Location, Timeslot } from "@/types";
 import { emptyProfile } from "@/lib/attendees/formatProfile";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // The per-sponsor page: its meeting counts, and the slots the Edit and Create
@@ -26,14 +28,34 @@ function whereResult() {
 
 const dbUpdate = vi.fn();
 const dbInsert = vi.fn();
+// Every where condition, from selects, updates and deletes, so a test can read what they filtered on.
+const whereConds = vi.fn<(cond: SQL) => void>();
 
 vi.mock("@/lib/db/client", () => ({
     db: {
-        select: () => ({ from: () => ({ where: whereResult }) }),
+        select: () => ({
+            from: () => ({
+                where: (cond: SQL) => {
+                    whereConds(cond);
+                    return whereResult();
+                },
+            }),
+        }),
         update: (...a: unknown[]) => {
             dbUpdate(...a);
-            return { set: () => ({ where: async () => undefined }) };
+            return {
+                set: () => ({
+                    where: async (cond: SQL) => {
+                        whereConds(cond);
+                    },
+                }),
+            };
         },
+        delete: () => ({
+            where: async (cond: SQL) => {
+                whereConds(cond);
+            },
+        }),
         insert: (...a: unknown[]) => {
             dbInsert(...a);
             return { values: async () => undefined };
@@ -56,8 +78,10 @@ vi.mock("@/lib/cvent/client", () => ({
     cancelAppointment: vi.fn(),
 }));
 vi.mock("@/lib/cvent/push", () => ({
-    pushMeetingRows: vi.fn(),
+    pushMeetingRows: vi.fn(async () => ({ total: 0, pushed: 0, failed: 0, results: [] })),
     needsSync: vi.fn(),
+    // Every stored slot is listed in these tests, so the lookup is the listed slots.
+    loadStoredSlots: vi.fn(async (_eventCode: string, data: { timeslotById: Map<string, unknown> }) => data.timeslotById),
 }));
 
 import {
@@ -66,7 +90,11 @@ import {
     getMeetingDetail,
     getNewMeetingSlots,
     getSlotOptions,
+    pushAllForSponsor,
+    pushMeeting,
+    removeMeeting,
 } from "./actions";
+import { loadStoredSlots } from "@/lib/cvent/push";
 
 /**
  * Builds a sponsor rep.
@@ -270,6 +298,45 @@ describe("Edit and Create Meeting slots — booths", () => {
         expect(options.map((o) => o.timeslotId)).not.toContain("b2-09");
     });
 
+    test("Create leaves out a time the delegate is booked at in a slot Cvent no longer lists, reading only the two parties' meetings", async () => {
+        // d1 has a pushed meeting with another sponsor at 10:00, in a full slot Cvent dropped from its list.
+        const booked = { ...lakesideMeeting("x-10", "bx"), id: "m-other", attendeeA: "acct-21m", cventAppointmentId: "appt-x", lastPushedAt: new Date(0) };
+        const unrelated = { ...lakesideMeeting("b2-09", "b2"), id: "m-unrelated", attendeeA: "acct-21m", attendeeB: "d9" };
+        rows = [booked, unrelated];
+        vi.mocked(loadStoredSlots).mockImplementationOnce(async (_eventCode, data) => {
+            const map = new Map(data.timeslotById);
+            map.set("x-10", slot("x-10", "2026-11-10T10:00:00.000Z", "bx"));
+            return map;
+        });
+
+        const { options } = await getNewMeetingSlots({ sponsorId: "acct-lake", delegateId: "d1", eventCode: "NALES" });
+
+        expect(options.map((o) => o.timeslotId)).not.toContain("b3-10");
+        expect(options.map((o) => o.timeslotId)).toContain("b3-11");
+        // Fix 4: only rows of the sponsor or the delegate are sent, so the appointment list is read only when they need it.
+        expect(vi.mocked(loadStoredSlots).mock.calls[0][2]).toEqual([booked]);
+    });
+
+    test("Edit leaves out a time either party is booked at in a slot Cvent no longer lists, reading only the two parties' meetings", async () => {
+        const booked = { ...lakesideMeeting("x-11", "bx"), id: "m-other", attendeeA: "acct-21m", cventAppointmentId: "appt-x", lastPushedAt: new Date(0) };
+        const unrelated = { ...lakesideMeeting("b2-09", "b2"), id: "m-unrelated", attendeeA: "acct-21m", attendeeB: "d9" };
+        const editing = lakesideMeeting("b3-10", "b3");
+        // Every select returns these rows, so the meeting being edited is found first.
+        rows = [editing, booked, unrelated];
+        vi.mocked(loadStoredSlots).mockImplementationOnce(async (_eventCode, data) => {
+            const map = new Map(data.timeslotById);
+            map.set("x-11", slot("x-11", "2026-11-10T11:00:00.000Z", "bx"));
+            return map;
+        });
+
+        const { options } = await getSlotOptions({ meetingId: "m1", eventCode: "NALES" });
+
+        expect(options.map((o) => o.timeslotId)).not.toContain("b3-11");
+        const sent = vi.mocked(loadStoredSlots).mock.calls[0][2].map((r) => (r as unknown as { id: string }).id);
+        expect(sent).not.toContain("m-unrelated");
+        expect(sent).toContain("m-other");
+    });
+
     test("a manual mapping moves the sponsor's own booth", async () => {
         // Lakeside's booth number 3 is mapped to Table 1A, so Booth 3 is no one's booth now.
         getEventSettings.mockResolvedValue({ boothLocations: { "3": "tbl" } });
@@ -373,5 +440,60 @@ describe("Edit and Create Meeting saves — the server refuses another company's
 
         expect(result.ok).toBe(false);
         expect(dbInsert).not.toHaveBeenCalled();
+    });
+});
+
+describe("Edit, Remove and Push on a sponsor's page only act on sponsor meetings", () => {
+    /**
+     * The bound values of every where condition so far.
+     *
+     * @returns {unknown[][]} One list of values per condition.
+     */
+    function boundValues(): unknown[][] {
+        return whereConds.mock.calls.map(([cond]) => new PgDialect().sqlToQuery(cond).params);
+    }
+
+    test("Remove looks up and deletes the meeting only as a sponsor meeting", async () => {
+        rows = [];
+
+        await removeMeeting({ id: "d2d-1" });
+
+        expect(boundValues().length).toBe(2);
+        for (const params of boundValues()) expect(params).toEqual(["d2d-1", "portal", "sponsor_delegate"]);
+    });
+
+    test("Push looks up the meeting only as a sponsor meeting", async () => {
+        rows = [];
+
+        await pushMeeting({ id: "d2d-1", eventCode: "EVT" });
+
+        expect(boundValues()[0]).toEqual(["d2d-1", "portal", "sponsor_delegate"]);
+    });
+
+    test("Push looks up the company's other meetings for the host split only among sponsor meetings", async () => {
+        rows = [{ id: "m1", eventCode: "EVT", attendeeA: "acct-x", attendeeB: "d1", source: "portal", kind: "sponsor_delegate" }];
+
+        await pushMeeting({ id: "m1", eventCode: "EVT" });
+
+        expect(boundValues()).toHaveLength(2);
+        expect(boundValues()[1]).toEqual(["EVT", "portal", "sponsor_delegate", "acct-x"]);
+    });
+
+    test("Push All on a sponsor's page reads only that company's sponsor meetings", async () => {
+        rows = [];
+
+        await pushAllForSponsor({ sponsorId: "acct-x", eventCode: "EVT" });
+
+        expect(boundValues()[0]).toEqual(["EVT", "portal", "sponsor_delegate", "acct-x"]);
+    });
+
+    test("Edit finds nothing to change for a meeting that isn't a sponsor meeting", async () => {
+        rows = [];
+
+        const result = await editMeeting({ id: "d2d-1", timeslotId: "t1", day: 1, locationId: null });
+
+        expect(result).toEqual({ ok: false, error: "Error: meeting not found" });
+        expect(boundValues()[0]).toEqual(["d2d-1", "portal", "sponsor_delegate"]);
+        expect(dbUpdate).not.toHaveBeenCalled();
     });
 });

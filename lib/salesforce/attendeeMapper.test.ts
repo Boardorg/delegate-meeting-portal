@@ -261,7 +261,7 @@ describe('delegateFieldMappers.profile', () => {
         CventEvents_NP_Budget_Responsibility__c: '$50M–$250M',
         CventEvents_NP_Company_Size__c: 'More than 5,000',
         CventEvents_NP_Current_Focus_Topics__c: 'AI & Machine Learning;Data Governance',
-        CventEvents_NP_Transformation_Stage__c: 'Scaling up',
+        CventEvents_NP_Transformation_Stage__c: 'Scaling across functions',
         CventEvents_NP_Systems_and_Platforms__c: 'Veeva Vault;Snowflake;AWS',
         CventEvents_NP_One_to_One_Interests__c: 'Data & Analytics;Automation',
         CventEvents_NP_Initiative_Priority__c: 'AI-assisted drug discovery',
@@ -272,7 +272,7 @@ describe('delegateFieldMappers.profile', () => {
         expect(profile.annualRevenue).toBe('$1B–$10B');
         expect(profile.budgetaryResponsibility).toBe('$50M–$250M');
         expect(profile.companySize).toBe('More than 5,000');
-        expect(profile.transformationStage).toBe('Scaling up');
+        expect(profile.transformationStage).toBe('Scaling across functions');
         expect(profile.priorityInitiative).toBe('AI-assisted drug discovery');
     });
 
@@ -327,6 +327,35 @@ describe('delegateFieldMappers.profile', () => {
         expect(profile.interestAreas).toEqual([]);
         expect(profile.systemsAndPlatforms).toEqual([]);
         expect(profile.meetingInterests).toEqual([]);
+    });
+});
+
+// The two Cvent Attendee checkboxes that decide who delegate matching may use.
+describe('delegate matching flags', () => {
+    const ctx = makeContext();
+
+    test('reads Networking Profile Complete and Conference Only from the Cvent Attendee', () => {
+        const record: CventAttendeeRecord = {
+            CventEvents_NP_Profile_Complete__c: true,
+            CventEvents_Conference_Only__c: true,
+        };
+        expect(delegateFieldMappers.networkingProfileComplete(record, ctx)).toBe(true);
+        expect(delegateFieldMappers.conferenceOnly(record, ctx)).toBe(true);
+    });
+
+    test('treats unchecked, blank and missing boxes as false', () => {
+        expect(delegateFieldMappers.networkingProfileComplete({ CventEvents_NP_Profile_Complete__c: false }, ctx)).toBe(false);
+        expect(delegateFieldMappers.networkingProfileComplete({ CventEvents_NP_Profile_Complete__c: null }, ctx)).toBe(false);
+        expect(delegateFieldMappers.conferenceOnly({}, ctx)).toBe(false);
+    });
+
+    test('carries both flags onto the built attendee', () => {
+        const [a] = meetingDataToAttendees(
+            { delegates: [{ Id: 'sf-d1', CventEvents_NP_Profile_Complete__c: true }], sponsors: [] },
+            false,
+        );
+        expect(a.networkingProfileComplete).toBe(true);
+        expect(a.conferenceOnly).toBe(false);
     });
 });
 

@@ -10,7 +10,7 @@ import {
 import { loadAttendees } from "@/lib/attendees/loader";
 import { sponsorCompaniesByAccountId } from "@/lib/attendees/companies";
 import { loadEventScheduleData } from "@/lib/cvent/mapper";
-import { pushMeetingRows, needsSync } from "@/lib/cvent/push";
+import { pushMeetingRows, needsSync, loadStoredSlots } from "@/lib/cvent/push";
 import { buildSyncReport, type SyncReport } from "@/lib/cvent/syncReport";
 import {
     cancelAppointment,
@@ -51,7 +51,7 @@ export type MeetingRow = {
     delegateSalesforceId: string;
     delegateName: string;
     delegateCompany: string;
-    /** True when the delegate cancelled their Cvent registration. Push skips these meetings. */
+    /** True when the delegate isn't registered in Cvent, such as cancelled or never registered. Push skips these meetings. */
     delegateCancelled: boolean;
     matchKind: MeetingMatchKind;
     /**
@@ -385,7 +385,13 @@ export async function getSlotOptions(params: {
     const meeting = meetingRows[0];
     if (!meeting) return { current: null, options: [] };
 
-    const { timeslots, timeslotById, locationById } = scheduleData;
+    const { timeslots, locationById } = scheduleData;
+    // Stored meetings' slots, for their busy time and the current slot.
+    // A pushed meeting whose time Cvent no longer lists gets its slot from its Cvent appointment.
+    // Only the two parties' meetings are sent, so Cvent's appointment list is read only when one of theirs needs it.
+    const parties = [meeting.attendeeA, meeting.attendeeB];
+    const partyMeetings = otherMeetings.filter((m) => parties.includes(m.attendeeA) || parties.includes(m.attendeeB));
+    const timeslotById = await loadStoredSlots(params.eventCode, scheduleData, [meeting, ...partyMeetings]);
 
     // The company is always the A side of a sponsor meeting.
     const booth = await boothFilterForSponsor(
@@ -476,6 +482,8 @@ export async function editMeeting(params: {
             and(
                 eq(scheduledMeetings.id, params.id),
                 eq(scheduledMeetings.source, "portal"),
+                // Only sponsor meetings. D2D meetings are changed from the Delegate Meetings pages.
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         )
         .limit(1);
@@ -501,6 +509,8 @@ export async function editMeeting(params: {
             and(
                 eq(scheduledMeetings.id, params.id),
                 eq(scheduledMeetings.source, "portal"),
+                // Only sponsor meetings. D2D meetings are changed from the Delegate Meetings pages.
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         );
     revalidatePath("/admin/meetings", "layout");
@@ -532,6 +542,8 @@ export async function removeMeeting(params: { id: string }): Promise<void> {
             and(
                 eq(scheduledMeetings.id, params.id),
                 eq(scheduledMeetings.source, "portal"),
+                // Only sponsor meetings. D2D meetings are changed from the Delegate Meetings pages.
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         )
         .limit(1);
@@ -546,6 +558,8 @@ export async function removeMeeting(params: { id: string }): Promise<void> {
             and(
                 eq(scheduledMeetings.id, params.id),
                 eq(scheduledMeetings.source, "portal"),
+                // Only sponsor meetings. D2D meetings are changed from the Delegate Meetings pages.
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         );
     revalidatePath("/admin/meetings", "layout");
@@ -570,6 +584,8 @@ export async function pushMeeting(params: {
             and(
                 eq(scheduledMeetings.id, params.id),
                 eq(scheduledMeetings.source, "portal"),
+                // Only sponsor meetings. D2D meetings are changed from the Delegate Meetings pages.
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
             ),
         );
 
@@ -582,6 +598,7 @@ export async function pushMeeting(params: {
                   and(
                       eq(scheduledMeetings.eventCode, params.eventCode),
                       eq(scheduledMeetings.source, "portal"),
+                      eq(scheduledMeetings.kind, "sponsor_delegate"),
                       eq(scheduledMeetings.attendeeA, rows[0].attendeeA),
                   ),
               )
@@ -622,6 +639,7 @@ export async function pushAllForSponsor(params: {
             and(
                 eq(scheduledMeetings.eventCode, params.eventCode),
                 eq(scheduledMeetings.source, "portal"),
+                eq(scheduledMeetings.kind, "sponsor_delegate"),
                 // The company (account id) is always the A side of its meetings.
                 eq(scheduledMeetings.attendeeA, params.sponsorId),
             ),
@@ -694,7 +712,13 @@ export async function getNewMeetingSlots(params: {
         loadEventScheduleData(params.eventCode),
     ]);
 
-    const { timeslots, timeslotById, locationById } = scheduleData;
+    const { timeslots, locationById } = scheduleData;
+    // Stored meetings' slots, for their busy time.
+    // A pushed meeting whose time Cvent no longer lists gets its slot from its Cvent appointment.
+    // Only the two parties' meetings are sent, so Cvent's appointment list is read only when one of theirs needs it.
+    const parties = [params.sponsorId, params.delegateId];
+    const partyMeetings = allMeetings.filter((m) => parties.includes(m.attendeeA) || parties.includes(m.attendeeB));
+    const timeslotById = await loadStoredSlots(params.eventCode, scheduleData, partyMeetings);
     const bookedSponsor = bookedIntervals(
         allMeetings,
         params.sponsorId,

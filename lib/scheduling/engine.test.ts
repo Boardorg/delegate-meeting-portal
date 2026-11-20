@@ -268,26 +268,6 @@ describe('runScheduler — company diversity (by account)', () => {
 
         expect(schedule).toHaveLength(3);
     });
-
-    test('blocks a delegate from over-meeting the same company on day 2', async () => {
-        // dx mutually requests three delegates who share an account. dx's
-        // same-company cap (2) allows only two of them.
-        const dx  = makeAttendee('dx',  'Xco',  'delegate', 'acct-dx');
-        const dd1 = makeAttendee('dd1', 'Sco', 'delegate', 'acct-s');
-        const dd2 = makeAttendee('dd2', 'Sco', 'delegate', 'acct-s');
-        const dd3 = makeAttendee('dd3', 'Sco', 'delegate', 'acct-s');
-        const timeslots = [makeTimeslot('t1', 2, '09:00'), makeTimeslot('t2', 2, '10:00'), makeTimeslot('t3', 2, '11:00')];
-        const requests = [
-            makeRequest('dx', 'dd1', 5), makeRequest('dd1', 'dx', 5),
-            makeRequest('dx', 'dd2', 5), makeRequest('dd2', 'dx', 5),
-            makeRequest('dx', 'dd3', 5), makeRequest('dd3', 'dx', 5),
-        ];
-
-        const { schedule } = await runScheduler([dx, dd1, dd2, dd3], requests, timeslots, NO_LOCATIONS);
-
-        const dxMeetings = schedule.filter(m => m.attendeeA === 'dx' || m.attendeeB === 'dx');
-        expect(dxMeetings).toHaveLength(2);
-    });
 });
 
 // A company (all its reps) is one scheduling unit: combined schedule + one
@@ -799,27 +779,15 @@ describe('runScheduler — meeting kinds', () => {
         expect(schedule).toHaveLength(0);
     });
 
-    test('passes 6 and 7 only book delegate_delegate slots', async () => {
+    test('never books delegate-to-delegate requests, since D2D meetings come from profile matching', async () => {
         const delegates = makeDelegates(4);
         const timeslots = [
             makeTimeslot('d2-s2d',   2, '08:00', 5, 'sponsor_delegate'),
-            makeTimeslot('d2-group', 2, '08:30', 5, 'delegate_group'),
             makeTimeslot('d2-d2d-1', 2, '10:00', 1, 'delegate_delegate'),
             makeTimeslot('d2-d2d-2', 2, '11:00', 1, 'delegate_delegate'),
         ];
-        // d1 and d2 are mutual (pass 6). d3 asks d4 one way (pass 7).
+        // d1 and d2 ask each other, and d3 asks d4 one way. The old passes 6 and 7 booked these.
         const requests = [makeRequest('d1', 'd2', 3), makeRequest('d2', 'd1', 3), makeRequest('d3', 'd4', 2)];
-
-        const { schedule } = await runScheduler(delegates, requests, timeslots, NO_LOCATIONS);
-
-        expect(schedule.map(m => m.passNumber).sort()).toEqual([6, 7]);
-        expect(bookedKinds(schedule, timeslots)).toEqual(['delegate_delegate', 'delegate_delegate']);
-    });
-
-    test('passes 6 and 7 book nothing when Day 2 has no delegate_delegate slot', async () => {
-        const delegates = makeDelegates(2);
-        const timeslots = [makeTimeslot('d2-s2d', 2, '08:00', 5, 'sponsor_delegate')];
-        const requests  = [makeRequest('d1', 'd2', 3), makeRequest('d2', 'd1', 3)];
 
         const { schedule } = await runScheduler(delegates, requests, timeslots, NO_LOCATIONS);
 

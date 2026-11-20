@@ -20,6 +20,10 @@ const getAppointmentsByEvent = vi.fn();
 // The event's Cvent appointments with their hosts. None by default, so every rep is free.
 const getEventAppointments = vi.fn();
 const dbUpdate = vi.fn();
+// The values of each db set() call, in order.
+const dbSet = vi.fn();
+// The rows a save's returning() reports. One row by default, so the save finds its meeting.
+const savedRows = vi.fn(() => [{ id: "mtg-1" }]);
 
 vi.mock("@/lib/cvent/client", () => ({
     createAppointment: (...a: unknown[]) => createAppointment(...a),
@@ -58,7 +62,12 @@ vi.mock("@/lib/db/client", () => ({
     db: {
         update: (...a: unknown[]) => {
             dbUpdate(...a);
-            return { set: () => ({ where: async () => undefined }) };
+            return {
+                set: (values: unknown) => {
+                    dbSet(values);
+                    return { where: () => ({ returning: async () => savedRows() }) };
+                },
+            };
         },
     },
 }));
@@ -66,6 +75,7 @@ vi.mock("@/lib/db/client", () => ({
 import {
     appointmentCode,
     appointmentTypeWarning,
+    pushDelegateMeetingRows,
     pushMeetingRows,
     sameAppointmentType,
     sameStartTime,
@@ -101,6 +111,7 @@ function row(overrides: Partial<ScheduledMeetingRow> = {}): ScheduledMeetingRow 
     return {
         id: "mtg-1",
         eventCode: "EVT",
+        kind: "sponsor_delegate",
         attendeeA: "acct-acme",
         attendeeB: "d1-sf",
         day: 1,
@@ -211,7 +222,7 @@ describe("pushMeetingRows — multi-host", () => {
 
         expect(summary.pushed).toBe(1);
         expect(lastInput().hostContactIds).toEqual(["h1"]);
-        expect(lastInput().attendeeContactIds).toEqual([]);
+        expect(lastInput().attendeeContactIds).toBeUndefined();
         expect(summary.results[0].warning).toBeTruthy();
     });
 });
@@ -525,7 +536,7 @@ describe("pushMeetingRows — cancelled Cvent registrations", () => {
         expect(summary.pushed).toBe(1);
         expect(lastInput().hostContactIds).toEqual(["h1"]);
         expect(summary.results[0].warning).toBe(
-            "Sam cancelled in Cvent, so that rep was not added as a host.",
+            "Sam isn't registered in Cvent, so that rep was not added as a host.",
         );
     });
 
@@ -702,7 +713,7 @@ describe("pushMeetingRows — reps split across same-time meetings", () => {
         const summary = await pushMeetingRows("EVT", [m2], [m1, m2]);
 
         expect(summary.pushed).toBe(0);
-        expect(summary.results[0].reason).toBe("host_not_in_cvent");
+        expect(summary.results[0].reason).toBe("host_busy");
         expect(summary.results[0].error).toContain("already hosting");
         // M1 is never changed to free up a rep.
         expect(createAppointment).not.toHaveBeenCalled();
@@ -779,6 +790,255 @@ describe("pushMeetingRows — reps split across same-time meetings", () => {
         ]);
 
         expect(summary.pushed).toBe(1);
-        expect(summary.results.find((r) => r.meetingId === "m-b")?.reason).toBe("host_not_in_cvent");
+        expect(summary.results.find((r) => r.meetingId === "m-b")?.reason).toBe("host_busy");
+    });
+});
+
+describe("pushDelegateMeetingRows", () => {
+    /**
+     * A D2D meeting row between delegates d1-sf (host) and d2-sf.
+     *
+     * @param {Partial<ScheduledMeetingRow>} [overrides] - Fields to change.
+     * @returns {ScheduledMeetingRow} The row.
+     */
+    function d2dRow(overrides: Partial<ScheduledMeetingRow> = {}): ScheduledMeetingRow {
+        return row({
+            id: "d2d-1",
+            kind: "delegate_delegate",
+            attendeeA: "d1-sf",
+            attendeeB: "d2-sf",
+            matchKind: "profile_match",
+            rank: null,
+            ...overrides,
+        });
+    }
+
+    beforeEach(() => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", name: "Dee", cventContactId: "cd1" }),
+            att({ id: "d2", role: "delegate", salesforceId: "d2-sf", name: "Eve", cventContactId: "cd2" }),
+        ]);
+    });
+
+    test("makes attendee A the host and attendee B the attendee", async () => {
+        const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect(summary.pushed).toBe(1);
+        expect(lastInput().hostContactIds).toEqual(["cd1"]);
+        expect(lastInput().attendeeContactIds).toEqual(["cd2"]);
+        expect(lastInput().subject).toBe("Dee & Eve");
+        expect(lastInput().code).toBe("d2d-1");
+        expect(dbUpdate).toHaveBeenCalled();
+    });
+
+    test("decision 24: pushes a D2D meeting with no description", async () => {
+        await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect("description" in lastInput()).toBe(false);
+    });
+
+    test("fails without calling Cvent when the host already hosts another appointment then", async () => {
+        getEventAppointments.mockResolvedValue([
+            { id: "other", startTime: "2025-01-15T09:00:00Z", participantContactIds: ["cd1"], hostContactIds: ["cd1"], locationName: null },
+        ]);
+
+        const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect(summary.pushed).toBe(0);
+        expect(summary.results[0].reason).toBe("host_busy");
+        expect(createAppointment).not.toHaveBeenCalled();
+    });
+
+    test("skips a meeting with a delegate who cancelled in Cvent", async () => {
+        loadAttendees.mockResolvedValue([
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+            att({ id: "d2", role: "delegate", salesforceId: "d2-sf", cventContactId: "cd2", cventCancelled: true }),
+        ]);
+
+        const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect(summary.results[0].reason).toBe("attendee_cancelled");
+        expect(createAppointment).not.toHaveBeenCalled();
+    });
+
+    test("replaces an edited meeting and cancels the old appointment", async () => {
+        const edited = d2dRow({
+            cventAppointmentId: "appt-old",
+            lastPushedAt: new Date("2025-01-01T00:00:00Z"),
+            lastModifiedAt: new Date("2025-01-02T00:00:00Z"),
+        });
+
+        const summary = await pushDelegateMeetingRows("EVT", [edited]);
+
+        expect(summary.results[0]).toMatchObject({ ok: true, kind: "update" });
+        expect(cancelAppointment).toHaveBeenCalledWith("EVT", "appt-old");
+        expect(lastInput().code).toBe(`d2d-1-${new Date("2025-01-01T00:00:00Z").getTime()}`);
+    });
+
+    test("warns when the meeting sits in a slot that isn't delegate_delegate", async () => {
+        const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect(summary.results[0].warning).toBe("Pushed as Sponsor to Delegate Meetings.");
+    });
+
+    test("finding 7a: fails and names the new appointment when the meeting was deleted during the push", async () => {
+        savedRows.mockReturnValueOnce([]);
+
+        const summary = await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        expect(summary.results[0]).toMatchObject({ ok: false, reason: "unknown" });
+        expect(summary.results[0].error).toContain("appt-123");
+    });
+
+    test("finding 9: saves the push time taken before Cvent was called", async () => {
+        let calledAt = 0;
+        createAppointment.mockImplementationOnce(async () => {
+            calledAt = Date.now();
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            return "appt-123";
+        });
+
+        await pushDelegateMeetingRows("EVT", [d2dRow()]);
+
+        const { lastPushedAt } = dbSet.mock.calls[0][0] as { lastPushedAt: Date };
+        expect(lastPushedAt.getTime()).toBeLessThanOrEqual(calledAt);
+    });
+});
+
+describe("a pushed meeting whose slot Cvent no longer lists", () => {
+    // The stored slot ts-booked is full, so Cvent's available-times list dropped it.
+    // The meeting's appointment still holds the time.
+    const BOOKED_START = "2025-01-15T09:00:00.000Z";
+
+    beforeEach(() => {
+        const listedSlot = {
+            id: "ts-next",
+            day: 1,
+            startTime: "2025-01-15T09:30:00.000Z",
+            endTime: "2025-01-15T10:00:00.000Z",
+            capacity: 1,
+            locationId: "loc-1",
+            appointmentTypeId: "type-1",
+            appointmentTypeName: "Sponsor to Delegate Meetings",
+            kind: "sponsor_delegate",
+        };
+        loadEventScheduleData.mockResolvedValue({
+            timeslots: [listedSlot],
+            timeslotById: new Map([[listedSlot.id, listedSlot]]),
+            locations: [{ id: "loc-1", name: "Booth 1", capacity: 1, parentLocationId: null }],
+            locationById: new Map(),
+            appointmentTypes: [
+                { id: "type-1", name: "Sponsor to Delegate Meetings" },
+                { id: "type-d", name: "Delegate to Delegate Meetings" },
+            ],
+            appointmentTypeKinds: { "type-1": "sponsor_delegate", "type-d": "delegate_delegate" },
+        });
+        // The full location rejects the replacement, so push falls back to updating in place.
+        createAppointment.mockRejectedValue(cventError(409, "NO_MORE_APPT_AT_THIS_TIME_FOR_HOST"));
+        updateAppointment.mockImplementation(async (_e: string, id: string) => id);
+    });
+
+    /**
+     * Lists one active appointment at the booked time, as both of Cvent's appointment lists return it.
+     *
+     * @param {string} typeName - The appointment's type name.
+     */
+    function bookedAppointment(typeName: string): void {
+        getEventAppointments.mockResolvedValue([
+            {
+                id: "appt-old",
+                startTime: BOOKED_START,
+                endTime: "2025-01-15T09:30:00.000Z",
+                participantContactIds: [],
+                hostContactIds: [],
+                locationName: "Booth 1",
+                locationId: null,
+                typeName,
+                typeId: null,
+            },
+        ]);
+        getAppointmentsByEvent.mockResolvedValue(listed("appt-old", typeName, BOOKED_START));
+    }
+
+    test("a synced sponsor meeting re-pushes from its appointment's time and is updated in place", async () => {
+        bookedAppointment("Sponsor to Delegate Meetings");
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+        ]);
+        // Not modified since its push, so its stored slot is the one its appointment was pushed for.
+        const synced = row({
+            timeslotId: "ts-booked",
+            cventAppointmentId: "appt-old",
+            lastPushedAt: new Date("2025-01-02T00:00:00Z"),
+            lastModifiedAt: new Date("2025-01-01T00:00:00Z"),
+        });
+
+        const summary = await pushMeetingRows("EVT", [synced]);
+
+        expect(summary.results[0]).toMatchObject({ ok: true, kind: "update", cventAppointmentId: "appt-old" });
+        expect(lastInput().startTime).toEqual(new Date(BOOKED_START));
+        expect(updateAppointment.mock.calls[0][1]).toBe("appt-old");
+        expect(cancelAppointment).not.toHaveBeenCalled();
+    });
+
+    test("a synced D2D meeting re-pushes from its appointment's time and is updated in place", async () => {
+        bookedAppointment("Delegate to Delegate Meetings");
+        loadAttendees.mockResolvedValue([
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", name: "Dee", cventContactId: "cd1" }),
+            att({ id: "d2", role: "delegate", salesforceId: "d2-sf", name: "Eve", cventContactId: "cd2" }),
+        ]);
+        const synced = row({
+            id: "d2d-1",
+            kind: "delegate_delegate",
+            attendeeA: "d1-sf",
+            attendeeB: "d2-sf",
+            timeslotId: "ts-booked",
+            cventAppointmentId: "appt-old",
+            lastPushedAt: new Date("2025-01-01T00:00:00Z"),
+            lastModifiedAt: null,
+        });
+
+        const summary = await pushDelegateMeetingRows("EVT", [synced]);
+
+        expect(summary.results[0]).toMatchObject({ ok: true, kind: "update", cventAppointmentId: "appt-old" });
+        expect(updateAppointment.mock.calls[0][1]).toBe("appt-old");
+        expect(cancelAppointment).not.toHaveBeenCalled();
+    });
+
+    test("fix 1: a meeting moved since its push, to a slot no longer listed, fails without touching Cvent", async () => {
+        // The appointment is still at the old time, so it can't stand in for the new slot.
+        bookedAppointment("Sponsor to Delegate Meetings");
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+        ]);
+        const moved = row({
+            timeslotId: "ts-new-full",
+            cventAppointmentId: "appt-old",
+            lastPushedAt: new Date("2025-01-01T00:00:00Z"),
+            lastModifiedAt: new Date("2025-01-02T00:00:00Z"),
+        });
+
+        const summary = await pushMeetingRows("EVT", [moved]);
+
+        expect(summary.results[0]).toMatchObject({ ok: false, reason: "missing_timeslot" });
+        expect(summary.results[0].error).toContain("Move it to another slot.");
+        expect(createAppointment).not.toHaveBeenCalled();
+        expect(updateAppointment).not.toHaveBeenCalled();
+    });
+
+    test("a meeting with no listed slot and no appointment fails with missing_timeslot and a hint", async () => {
+        getEventAppointments.mockResolvedValue([]);
+        loadAttendees.mockResolvedValue([
+            att({ id: "s1", role: "sponsor", company: "Acme", accountId: "acct-acme", cventContactId: "h1" }),
+            att({ id: "d1", role: "delegate", salesforceId: "d1-sf", cventContactId: "cd1" }),
+        ]);
+
+        const summary = await pushMeetingRows("EVT", [row({ timeslotId: "ts-booked", cventAppointmentId: "appt-old" })]);
+
+        expect(summary.results[0]).toMatchObject({ ok: false, reason: "missing_timeslot" });
+        expect(summary.results[0].error).toContain("Move it to another slot.");
+        expect(createAppointment).not.toHaveBeenCalled();
     });
 });

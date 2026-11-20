@@ -57,7 +57,7 @@ Lint warnings that already exist are fine. New errors are not.
 These were learned the hard way. When you learn something new, add it here and add a test so it can't regress.
 
 - Cvent never frees an appointment code, even after the appointment is cancelled.
-- A cancelled registrant fails with `ATTENDEE_NOT_FOUND`.
+- Only registrants with the status Accepted can be in an appointment. Anyone else fails with `ATTENDEE_NOT_FOUND`, on a 422. That includes a cancelled registrant and an invitee who never registered ("No Response"). Tested in `lib/cvent/client.test.ts` ("isRegisteredStatus") and `lib/cvent/syncReport.test.ts` ("treats Cvent's ATTENDEE_NOT_FOUND…").
 - Sponsor reps also appear in the delegate list unless they are removed.
 - An appointment's type can't be changed after it is created.
 - Moving an appointment to the same start time collides unless it is updated in place.

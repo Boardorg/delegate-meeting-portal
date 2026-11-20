@@ -507,15 +507,34 @@ export type CventEventAttendee = {
     contactId: string;
     /** Contact email — the key used to match against Salesforce attendees. */
     email: string;
-    /** True when the registration's Cvent status is Cancelled. */
+    /**
+     * True when the person isn't registered for the event in Cvent.
+     * That covers every status but Accepted, such as Cancelled or No Response.
+     */
     cancelled: boolean;
 };
 
 /**
+ * Whether a Cvent attendee status means the person is registered for the event.
+ * Cvent only takes registered attendees as appointment participants, and Accepted is its registered status.
+ * The others, such as Cancelled, No Response (invited, never registered) or Pending Approval, fail with ATTENDEE_NOT_FOUND.
+ * A missing status counts as registered, so a record without one isn't dropped.
+ *
+ * @param {string | undefined} status - The attendee's Cvent status.
+ * @returns {boolean} True when the person can be booked into an appointment.
+ */
+export function isRegisteredStatus(status: string | undefined): boolean {
+    return status === undefined || status === "Accepted";
+}
+
+/**
  * Reduces raw Cvent attendee records to `{ contactId, email, cancelled }`, dropping any
  * record missing either id field (both are required to match + push).
+ *
+ * @param {Array<{ contact?: { id?: string; email?: string }; status?: string }>} data - Raw Cvent attendee records.
+ * @returns {CventEventAttendee[]} The records the cross-check can use.
  */
-function toCventEventAttendees(
+export function toCventEventAttendees(
     data: Array<{ contact?: { id?: string; email?: string }; status?: string }>,
 ): CventEventAttendee[] {
     const out: CventEventAttendee[] = [];
@@ -523,9 +542,9 @@ function toCventEventAttendees(
         const contactId = a.contact?.id;
         const email = a.contact?.email;
         if (contactId && email) {
-            // Cvent drops cancelled registrants from the appointment roster.
-            // Pushing one as a participant fails with ATTENDEE_NOT_FOUND.
-            out.push({ contactId, email, cancelled: a.status === "Cancelled" });
+            // Cvent only takes registered attendees as appointment participants.
+            // Pushing anyone else fails with ATTENDEE_NOT_FOUND.
+            out.push({ contactId, email, cancelled: !isRegisteredStatus(a.status) });
         }
     }
     return out;

@@ -38,6 +38,12 @@ export const ADMIN_NAV: AdminNavItem[] = [
                 href: "/admin/booths",
                 icon: "🏷️",
             },
+            {
+                // The delegates sponsors see in the frontend catalog.
+                label: "Delegates",
+                href: "/admin/delegates",
+                icon: "🧑‍💼",
+            },
         ],
     },
     {

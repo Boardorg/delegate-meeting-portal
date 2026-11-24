@@ -42,3 +42,19 @@ export function isOwnParty(attendee: Attendee, viewer: Attendee): boolean {
     if (viewer.role !== "sponsor" || !viewer.accountId) return false;
     return attendee.accountId === partyId(viewer);
 }
+
+// The frontend catalog and the admin Delegates page both use this rule.
+// Keeping it in one place means the admin page always shows what sponsors see.
+
+/**
+ * Whether an attendee is a delegate that sponsors see in the catalog.
+ * Delegates who cancelled in Cvent aren't attending, so they're left out.
+ * The frontend also hides the viewer's own company from a sponsor rep.
+ * That depends on who is looking, so it isn't part of this rule.
+ *
+ * @param {Attendee} attendee - An attendee from the event's list.
+ * @returns {boolean} True when sponsors see this attendee in the catalog.
+ */
+export function isCatalogDelegate(attendee: Attendee): boolean {
+    return attendee.role === "delegate" && !attendee.cventCancelled;
+}

@@ -1,7 +1,7 @@
 import "@/app/frontend.css";
 import { redirect } from "next/navigation";
 import { loadAttendees } from "@/lib/attendees/loader";
-import { isOwnParty } from "@/lib/attendees/self";
+import { isCatalogDelegate, isOwnParty } from "@/lib/attendees/self";
 import {
     partyId,
     resolveCompanyPackage,
@@ -49,7 +49,8 @@ export default async function Home() {
     ).maximum;
 
     // Delegates who cancelled in Cvent aren't attending, so they're left out of the catalog.
-    const delegates = allDelegates.filter((a) => !a.cventCancelled);
+    // The admin Delegates page uses the same rule, so it shows what sponsors see.
+    const delegates = allDelegates.filter(isCatalogDelegate);
 
     // The drawer still lists any requests the sponsor made for them, marked as no longer attending.
     // It only needs enough to label and remove the request, so the full profile isn't sent.

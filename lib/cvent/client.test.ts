@@ -4,7 +4,9 @@ import {
     buildUpdateAppointmentRequest,
     getAppointmentTypes,
     getTimeslotsByEvent,
+    isRegisteredStatus,
     toAppointmentsPage,
+    toCventEventAttendees,
     toAppointmentTypes,
     toAppointmentTypesPage,
     toExistingAppointments,
@@ -45,6 +47,49 @@ describe("buildCreateAppointmentRequest", () => {
         expect("attendees" in req).toBe(false);
         expect("location" in req).toBe(false);
         expect("code" in req).toBe(false);
+        expect("description" in req).toBe(false);
+    });
+
+    test("finding 1: still leaves attendees out of a create when the list is empty", () => {
+        const req = buildCreateAppointmentRequest({ ...base, hostContactIds: ["h1"], attendeeContactIds: [] });
+        expect("attendees" in req).toBe(false);
+    });
+
+    test("sends a description when given, including an empty one", () => {
+        expect(buildCreateAppointmentRequest({ ...base, hostContactIds: ["h1"], description: "Note" }).description).toBe("Note");
+        const cleared = buildCreateAppointmentRequest({ ...base, hostContactIds: ["h1"], description: "" });
+        expect("description" in cleared).toBe(true);
+        expect(cleared.description).toBe("");
+    });
+});
+
+describe("buildUpdateAppointmentRequest description", () => {
+    const base = {
+        subject: "Leadership",
+        startTime: new Date("2025-01-15T09:00:00Z"),
+        endTime: new Date("2025-01-15T09:30:00Z"),
+        appointmentTypeId: "type-g",
+        hostContactIds: ["h1"],
+    };
+
+    test("sends a description when given, including an empty one", () => {
+        expect(buildUpdateAppointmentRequest("appt-1", { ...base, description: "Note" }).description).toBe("Note");
+        const cleared = buildUpdateAppointmentRequest("appt-1", { ...base, description: "" });
+        expect("description" in cleared).toBe(true);
+        expect(cleared.description).toBe("");
+    });
+
+    test("finding 1: sends an empty attendee list, so a roundtable that drops to its host alone loses its old attendees", () => {
+        const req = buildUpdateAppointmentRequest("appt-1", { ...base, attendeeContactIds: [] });
+        expect(req.attendees).toEqual([]);
+    });
+
+    test("finding 1: leaves attendees out when none are given, as for an unlinked sponsor or D2D delegate", () => {
+        expect("attendees" in buildUpdateAppointmentRequest("appt-1", base)).toBe(false);
+    });
+
+    test("leaves the description out when none is given, as for sponsor and D2D meetings", () => {
+        expect("description" in buildUpdateAppointmentRequest("appt-1", base)).toBe(false);
     });
 });
 
@@ -136,6 +181,76 @@ describe("toExistingAppointments", () => {
             hostContactIds: ["h1", "reg-only"],
             locationName: "Booth 13",
         });
+    });
+
+    test("reads the end time and the type name, with null ids when Cvent sends only names", () => {
+        const out = toExistingAppointments([
+            {
+                id: "appt-1",
+                start: new Date("2026-10-31T14:30:00Z"),
+                end: new Date("2026-10-31T14:50:00Z"),
+                status: "ACTIVE",
+                location: { name: "D2D Table B" },
+                type: { name: " Delegate Group Meetings " },
+            },
+        ]);
+        expect(out[0]).toMatchObject({
+            endTime: "2026-10-31T14:50:00.000Z",
+            locationName: "D2D Table B",
+            locationId: null,
+            typeName: "Delegate Group Meetings",
+            typeId: null,
+        });
+    });
+
+    test("reads the location and type ids when a raw record has them", () => {
+        const out = toExistingAppointments([
+            {
+                id: "appt-1",
+                start: "2026-10-31T14:30:00Z",
+                end: "2026-10-31T14:50:00Z",
+                location: { id: "loc-b", name: "D2D Table B" },
+                type: { id: "type-g", name: "Delegate Group Meetings" },
+            },
+        ]);
+        expect(out[0]).toMatchObject({ endTime: "2026-10-31T14:50:00Z", locationId: "loc-b", typeId: "type-g" });
+    });
+
+    test("gives a null end time when Cvent omits it", () => {
+        const out = toExistingAppointments([{ id: "appt-1", start: "2026-10-31T14:30:00Z" }]);
+        expect(out[0].endTime).toBeNull();
+    });
+});
+
+describe("isRegisteredStatus", () => {
+    test("counts only Accepted as registered, and a missing status as registered", () => {
+        expect(isRegisteredStatus("Accepted")).toBe(true);
+        expect(isRegisteredStatus(undefined)).toBe(true);
+    });
+
+    test("treats every other Cvent status as not registered, since Cvent rejects them with ATTENDEE_NOT_FOUND", () => {
+        for (const status of ["Cancelled", "No Response", "Declined", "Visited", "Waitlisted", "Pending Approval", "Denied Approval"]) {
+            expect(isRegisteredStatus(status)).toBe(false);
+        }
+    });
+});
+
+describe("toCventEventAttendees", () => {
+    test("flags an invitee who never registered, as well as a cancelled one", () => {
+        const out = toCventEventAttendees([
+            { contact: { id: "c1", email: "a@x.com" }, status: "Accepted" },
+            { contact: { id: "c2", email: "b@x.com" }, status: "No Response" },
+            { contact: { id: "c3", email: "c@x.com" }, status: "Cancelled" },
+        ]);
+        expect(out).toEqual([
+            { contactId: "c1", email: "a@x.com", cancelled: false },
+            { contactId: "c2", email: "b@x.com", cancelled: true },
+            { contactId: "c3", email: "c@x.com", cancelled: true },
+        ]);
+    });
+
+    test("drops a record with no contact id or email", () => {
+        expect(toCventEventAttendees([{ contact: { id: "c1" }, status: "Accepted" }, { status: "Accepted" }])).toEqual([]);
     });
 });
 

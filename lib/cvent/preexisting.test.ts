@@ -48,7 +48,7 @@ function appt(
     hostContactIds: string[] = [],
     locationName: string | null = null,
 ): CventExistingAppointment {
-    return { id: null, startTime, participantContactIds, hostContactIds, locationName };
+    return { id: null, startTime, endTime: null, participantContactIds, hostContactIds, locationName, locationId: null, typeName: null, typeId: null };
 }
 
 describe("preexistingFromAppointments", () => {

@@ -47,6 +47,27 @@ export const ADMIN_NAV: AdminNavItem[] = [
         ],
     },
     {
+        // A group heading with no page of its own.
+        label: "Delegate Meetings",
+        children: [
+            {
+                label: "Delegate Meetings",
+                href: "/admin/delegate-meetings",
+                icon: "👥",
+            },
+            {
+                label: "Roundtables",
+                href: "/admin/roundtables",
+                icon: "🪑",
+            },
+            {
+                label: "Matching Settings",
+                href: "/admin/matching-settings",
+                icon: "🎚️",
+            },
+        ],
+    },
+    {
         label: "Event Settings",
         href: "/admin/event-settings",
         icon: "⚙️",

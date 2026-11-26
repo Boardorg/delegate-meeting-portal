@@ -42,7 +42,7 @@ const REASON_LABEL: Record<SchedulerFailureReason, string> = {
     no_booth_slots: "No sponsor timeslots at booth in Cvent",
     self_request: "Self request",
     not_an_attendee: "Not in attendee list",
-    attendee_cancelled: "Cancelled in Cvent",
+    attendee_cancelled: "Not registered in Cvent",
     already_scheduled: "Already meets in Cvent",
     no_pass_match: "No matching pass",
     conflict_existing: "Conflicts with pushed meeting",
@@ -83,6 +83,13 @@ export default function SchedulerReportPanel({
                     Dismiss
                 </button>
             </div>
+
+            {/* The run happened after D2D meetings or roundtables were made. It still went ahead. */}
+            {report.orderWarnings.map((w) => (
+                <div key={w} className="adm-modal-warn-at" style={{ marginTop: 12, marginBottom: 16 }}>
+                    {w}
+                </div>
+            ))}
 
             {/* Appointment types with no meeting kind. Their slots were not used this run. */}
             {report.unmappedAppointmentTypes.length > 0 && (
@@ -247,12 +254,13 @@ export default function SchedulerReportPanel({
                         none of the scheduling passes, so it was never
                         considered. Meetings are placed in priority order:
                         mutual sponsor–delegate pairs, high-interest (rank ≥ 4)
-                        sponsor→delegate and delegate→sponsor requests, all
-                        remaining sponsor→delegate requests, then mutual and
-                        remaining delegate–delegate requests on day 2. Requests
+                        sponsor→delegate and delegate→sponsor requests, then all
+                        remaining sponsor→delegate requests. Requests
                         outside these rules — most commonly a low-interest
                         (rank &lt; 4) delegate→sponsor request or a
                         sponsor→sponsor request — are never scheduled.
+                        Delegate meetings come from D2D matching on the
+                        Delegate Meetings page instead.
                     </p>
                 )}
             </div>

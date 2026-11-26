@@ -323,8 +323,9 @@ export default function EventSettingsForm({
                             <span className="adm-field-hint adm-field-mb">
                                 Map each Cvent appointment type to a meeting
                                 kind. The scheduler only books sponsor meetings
-                                into types mapped to “Sponsor to delegate”. That
-                                is the only mapping needed for now.
+                                into types mapped to “Sponsor to delegate”. D2D
+                                matching uses “Delegate to delegate” slots, and
+                                each “Delegate group” slot is one roundtable.
                             </span>
                             <span className="adm-field-hint adm-field-mb">
                                 The scheduler won’t use slots of a type set to

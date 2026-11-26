@@ -71,6 +71,33 @@ describe("classifyPushError", () => {
         expect(classifyPushError(codeExists)).toBe("cvent_code_exists");
     });
 
+    it("treats Cvent's 422 for a full location as no availability", () => {
+        const full = cventError(
+            "Response validation failed",
+            422,
+            JSON.stringify({
+                message: "AppointmentRequest failed to validate. Only 1 Appointment allowed for timeslot in location D2D Table C.",
+                code: "invalid",
+            }),
+        );
+        expect(classifyPushError(full)).toBe("cvent_no_availability");
+
+        const other = cventError("invalid", 422, JSON.stringify({ message: "Subject is required.", code: "invalid" }));
+        expect(classifyPushError(other)).toBe("cvent_validation");
+    });
+
+    it("treats Cvent's ATTENDEE_NOT_FOUND as a participant who isn't registered", () => {
+        const notRegistered = cventError(
+            "Response validation failed",
+            422,
+            JSON.stringify({
+                message: "Attendee failed to validate. Attendee 38241b44-050f-409c-bd04-7a96af7df8a0 not found",
+                code: "ATTENDEE_NOT_FOUND",
+            }),
+        );
+        expect(classifyPushError(notRegistered)).toBe("attendee_cancelled");
+    });
+
     it("treats a status-less transport failure as a network error", () => {
         expect(classifyPushError(new Error("fetch failed"))).toBe("network_error");
         expect(classifyPushError(new Error("connect ETIMEDOUT"))).toBe(

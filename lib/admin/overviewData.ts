@@ -94,6 +94,7 @@ export async function loadEventOverview(event: EventSettingsRow): Promise<EventO
             .where(eq(meetingRequests.eventCode, event.code)),
         db
             .select({
+                kind: scheduledMeetings.kind,
                 cventAppointmentId: scheduledMeetings.cventAppointmentId,
                 lastModifiedAt: scheduledMeetings.lastModifiedAt,
                 lastPushedAt: scheduledMeetings.lastPushedAt,
@@ -112,6 +113,10 @@ export async function loadEventOverview(event: EventSettingsRow): Promise<EventO
         setup: summarizeSetup(event),
         boothProblems,
         requests: summarizeRequests(requestRows),
-        meetings: summarizeMeetings(meetingRows, onlyInCvent),
+        // The card is about sponsor meetings, so D2D meetings are left out of its counts.
+        meetings: summarizeMeetings(
+            meetingRows.filter((m) => m.kind === "sponsor_delegate"),
+            onlyInCvent,
+        ),
     };
 }

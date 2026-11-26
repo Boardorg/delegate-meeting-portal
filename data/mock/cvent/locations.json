@@ -4,7 +4,7 @@
     "nextToken": "1a2b3c4d5e6f7g8h9i10j11k",
     "currentToken": "1a2b3c4d5e6f7g8h9i10j11k",
     "limit": 100,
-    "totalCount": 13,
+    "totalCount": 19,
     "_links": {
       "next": {
         "href": "?token=90c5f062-76ad-4ea4-aa53-00eb698d9262"
@@ -90,6 +90,60 @@
       "capacity": -1,
       "id": "44444444-0000-4000-8000-000000000013",
       "name": "Booth 13"
+    },
+    {
+      "parentLocation": {
+        "id": "11111111-0000-4000-8000-000000000001",
+        "name": "Main Ballroom"
+      },
+      "capacity": 4,
+      "id": "55555555-0000-4000-8000-000000000001",
+      "name": "D2D Lounge A"
+    },
+    {
+      "parentLocation": {
+        "id": "11111111-0000-4000-8000-000000000001",
+        "name": "Main Ballroom"
+      },
+      "capacity": 4,
+      "id": "55555555-0000-4000-8000-000000000002",
+      "name": "D2D Lounge B"
+    },
+    {
+      "parentLocation": {
+        "id": "11111111-0000-4000-8000-000000000001",
+        "name": "Main Ballroom"
+      },
+      "capacity": 5,
+      "id": "66666666-0000-4000-8000-000000000001",
+      "name": "Roundtable 1"
+    },
+    {
+      "parentLocation": {
+        "id": "11111111-0000-4000-8000-000000000001",
+        "name": "Main Ballroom"
+      },
+      "capacity": 5,
+      "id": "66666666-0000-4000-8000-000000000002",
+      "name": "Roundtable 2"
+    },
+    {
+      "parentLocation": {
+        "id": "11111111-0000-4000-8000-000000000001",
+        "name": "Main Ballroom"
+      },
+      "capacity": 5,
+      "id": "66666666-0000-4000-8000-000000000003",
+      "name": "Roundtable 3"
+    },
+    {
+      "parentLocation": {
+        "id": "11111111-0000-4000-8000-000000000001",
+        "name": "Main Ballroom"
+      },
+      "capacity": 5,
+      "id": "66666666-0000-4000-8000-000000000004",
+      "name": "Roundtable 4"
     }
   ]
 }

@@ -13,7 +13,7 @@
  * The meeting kinds an appointment type can be mapped to, in display order.
  * - sponsor_delegate: a sponsor company meeting a delegate.
  * - delegate_delegate: two delegates meeting each other.
- * - delegate_group: delegates plus one staff member. Nothing uses it yet.
+ * - delegate_group: a roundtable of delegates. Each slot, at its location, is one table.
  * - ignore: slots the portal never uses. Unmapped types behave the same way.
  */
 export const MEETING_KINDS = [

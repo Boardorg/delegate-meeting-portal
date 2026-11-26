@@ -57,7 +57,7 @@ Lint warnings that already exist are fine. New errors are not.
 These were learned the hard way. When you learn something new, add it here and add a test so it can't regress.
 
 - Cvent never frees an appointment code, even after the appointment is cancelled.
-- A cancelled registrant fails with `ATTENDEE_NOT_FOUND`.
+- Only registrants with the status Accepted can be in an appointment. Anyone else fails with `ATTENDEE_NOT_FOUND`, on a 422. That includes a cancelled registrant and an invitee who never registered ("No Response"). Tested in `lib/cvent/client.test.ts` ("isRegisteredStatus") and `lib/cvent/syncReport.test.ts` ("treats Cvent's ATTENDEE_NOT_FOUND…").
 - Sponsor reps also appear in the delegate list unless they are removed.
 - An appointment's type can't be changed after it is created.
 - Moving an appointment to the same start time collides unless it is updated in place.
@@ -66,4 +66,6 @@ These were learned the hard way. When you learn something new, add it here and a
 - Creating an appointment without a `location` fails with `TIMESLOT_NOT_FOUND`, even for a real slot.
 - Cvent rejects a host who is already in another appointment at that time. Tested in `lib/cvent/push.test.ts` ("C2" and "C3") and `lib/cvent/hostSplit.test.ts`.
 - Cancelling an appointment emails its participants unless the call passes `suppressNotifications`. Unpush and Remove both cancel. Tested in `lib/cvent/client.notifications.test.ts`.
-- A slot's `availableAppointments` is the location's max-at-same-time setting, not the room left, and full slots are still listed. Tested in `lib/scheduling/engine.booths.test.ts` ("a slot's room is Cvent's setting minus…").
+- A slot's `availableAppointments` is the location's max-at-same-time setting, not the room left. A booth that allows 2 at a time stayed listed when full. Tested in `lib/scheduling/engine.booths.test.ts` ("a slot's room is Cvent's setting minus…").
+- The available-times list only lists free times. A booked time at a location that allows one appointment at a time drops out of it, so a pushed meeting's stored slot id can be missing. Resolve it from the meeting's Cvent appointment. Tested in `lib/cvent/storedSlots.test.ts` ("rebuilds a pushed row's unlisted slot from its Cvent appointment, under the stored id") and `lib/cvent/roundtablePush.test.ts` ("re-pushes a table whose booked slot Cvent no longer lists…").
+- A create at a location that already holds its allowed appointments at that time fails with a 422, code `invalid`, and a message like "Only 1 Appointment allowed for timeslot in location …". It is not a 409. A re-push at the same time hits this, so it must be treated as no availability and update in place. Tested in `lib/cvent/syncReport.test.ts` ("treats Cvent's 422 for a full location…") and `lib/cvent/roundtablePush.test.ts` ("updates in place when Cvent rejects the replacement because the location is full").

@@ -17,13 +17,18 @@
  * - missing_timeslot: the meeting's timeslot no longer exists in Cvent.
  * - missing_location: the meeting has no location assigned to send.
  * - host_not_in_cvent: the requester (appointment host) has no Cvent contact id.
- * - attendee_cancelled: the delegate, or every rep of the company, cancelled their Cvent registration.
+ * - host_busy: no host is free at that time, because they already host another Cvent appointment then or are needed for another meeting in the same push.
+ * - attendee_cancelled: the delegate, or every rep of the company, isn't registered in Cvent.
+ *   They cancelled, or were invited and never registered. Cvent's ATTENDEE_NOT_FOUND maps here too.
  * - cvent_type_change: a re-push would need to edit the old appointment in place to a slot of another
  *   appointment type, which Cvent can't do. Also used when the old appointment's type can't be checked.
  *   Nothing changes in Cvent or the portal, and the meeting stays in Cvent under its old type.
+ * - missing_theme: a roundtable has no theme title, which Cvent needs as the appointment's subject.
+ * - empty_table: a roundtable has no seated delegates, so it has no host.
  *
  * Returned by Cvent when the appointment was rejected:
- * - cvent_no_availability: host has no free appointment slot at that time (409).
+ * - cvent_no_availability: the host has no free appointment slot at that time (409),
+ *   or the location already holds as many appointments at that time as it allows (422).
  * - cvent_validation: Cvent rejected the appointment data (400 / 422).
  * - cvent_conflict: a conflicting appointment (409).
  * - cvent_code_exists: Cvent already has an appointment with this meeting's code (409).
@@ -41,8 +46,11 @@ export type SyncFailureReason =
     | "missing_timeslot"
     | "missing_location"
     | "host_not_in_cvent"
+    | "host_busy"
     | "attendee_cancelled"
     | "cvent_type_change"
+    | "missing_theme"
+    | "empty_table"
     | "cvent_no_availability"
     | "cvent_validation"
     | "cvent_conflict"
@@ -171,7 +179,7 @@ export function classifyPushError(err: unknown): SyncFailureReason {
 
     const e = err as { statusCode?: number; body?: string };
     const status = e.statusCode;
-    const { code } = parseCventError(e.body);
+    const { message, code } = parseCventError(e.body);
 
     // No HTTP status usually means the request never completed — a transport
     // failure rather than a Cvent rejection.
@@ -187,6 +195,9 @@ export function classifyPushError(err: unknown): SyncFailureReason {
     }
 
     if (status === 401 || status === 403) return "cvent_auth";
+    // Cvent rejects a participant who isn't registered for the event with this code, on a 422.
+    // The portal normally catches them before the call, so this covers a status that changed since the load.
+    if (code === "ATTENDEE_NOT_FOUND") return "attendee_cancelled";
     if (status === 404) return "cvent_not_found";
     if (status === 429) return "cvent_rate_limited";
     if (status === 409) {
@@ -198,6 +209,11 @@ export function classifyPushError(err: unknown): SyncFailureReason {
         // Each push cycle gets a new code, so a repeat means this exact push already reached Cvent.
         if (code === "APPT_CODE_ALREADY_EXISTS") return "cvent_code_exists";
         return "cvent_conflict";
+    }
+    // A full location comes back as a 422 with the code "invalid", so only its message tells it apart.
+    // An example is "Only 1 Appointment allowed for timeslot in location D2D Table C."
+    if (status === 422 && message && /allowed for timeslot in location/i.test(message)) {
+        return "cvent_no_availability";
     }
     if (status === 400 || status === 422) return "cvent_validation";
     if (status >= 500) return "cvent_server_error";

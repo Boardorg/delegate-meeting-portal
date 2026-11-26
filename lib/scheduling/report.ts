@@ -43,7 +43,7 @@ import {
  * The engine never attempted the pair (rejected during candidate collection):
  * - self_request: the request targets the requester themselves.
  * - not_an_attendee: requester and/or target isn't in the attendee list.
- * - attendee_cancelled: requester and/or target cancelled their Cvent registration.
+ * - attendee_cancelled: requester and/or target isn't registered in Cvent, such as cancelled or never registered.
  *   The scheduler leaves cancelled attendees out, so the pair is never a candidate.
  * - already_scheduled: the pair already meets in Cvent, so the engine treated
  *   it as pre-booked and never considered it a candidate.
@@ -125,6 +125,11 @@ export interface SchedulerReport {
      * The panel lists them as a warning and links to the Sponsor booths page.
      */
     boothProblems: CompanyBoothProblem[];
+    /**
+     * Warnings that the run happened out of order, such as after D2D meetings or roundtables exist.
+     * The run still went ahead. The panel shows them above the counts.
+     */
+    orderWarnings: string[];
 }
 
 /** Inputs for {@link buildSchedulerReport}. */
@@ -146,6 +151,8 @@ export interface BuildReportArgs {
     unmappedAppointmentTypes?: string[];
     /** Each sponsor company's booth, keyed by Account id. Defaults to none, so no booth problems are reported. */
     companyBooths?: Map<string, CompanyBooth>;
+    /** Out-of-order warnings to show in the report. Defaults to none. */
+    orderWarnings?: string[];
 }
 
 // Interest levels the chart always shows a bar for, lowest to highest.
@@ -173,6 +180,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         preexistingPairs,
         unmappedAppointmentTypes = [],
         companyBooths = new Map<string, CompanyBooth>(),
+        orderWarnings = [],
     } = args;
 
     // Name lookup for rendering the unscheduled list without extra queries.
@@ -188,7 +196,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
     const partyName = (id: string): string | undefined =>
         resolvePartyName(id, companies, attendeesBySalesforceId)?.name;
 
-    // Parties the scheduler left out because they cancelled in Cvent.
+    // Parties the scheduler left out because they aren't registered in Cvent.
     const isCancelled = (id: string): boolean =>
         isPartyCancelled(id, companies, attendeesBySalesforceId);
 
@@ -274,6 +282,7 @@ export function buildSchedulerReport(args: BuildReportArgs): SchedulerReport {
         unscheduledRequests,
         unmappedAppointmentTypes: [...unmappedAppointmentTypes],
         boothProblems: listBoothProblems(companyBooths, companies),
+        orderWarnings: [...orderWarnings],
     };
 }
 

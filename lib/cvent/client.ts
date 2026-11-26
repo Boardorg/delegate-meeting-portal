@@ -507,15 +507,34 @@ export type CventEventAttendee = {
     contactId: string;
     /** Contact email — the key used to match against Salesforce attendees. */
     email: string;
-    /** True when the registration's Cvent status is Cancelled. */
+    /**
+     * True when the person isn't registered for the event in Cvent.
+     * That covers every status but Accepted, such as Cancelled or No Response.
+     */
     cancelled: boolean;
 };
 
 /**
+ * Whether a Cvent attendee status means the person is registered for the event.
+ * Cvent only takes registered attendees as appointment participants, and Accepted is its registered status.
+ * The others, such as Cancelled, No Response (invited, never registered) or Pending Approval, fail with ATTENDEE_NOT_FOUND.
+ * A missing status counts as registered, so a record without one isn't dropped.
+ *
+ * @param {string | undefined} status - The attendee's Cvent status.
+ * @returns {boolean} True when the person can be booked into an appointment.
+ */
+export function isRegisteredStatus(status: string | undefined): boolean {
+    return status === undefined || status === "Accepted";
+}
+
+/**
  * Reduces raw Cvent attendee records to `{ contactId, email, cancelled }`, dropping any
  * record missing either id field (both are required to match + push).
+ *
+ * @param {Array<{ contact?: { id?: string; email?: string }; status?: string }>} data - Raw Cvent attendee records.
+ * @returns {CventEventAttendee[]} The records the cross-check can use.
  */
-function toCventEventAttendees(
+export function toCventEventAttendees(
     data: Array<{ contact?: { id?: string; email?: string }; status?: string }>,
 ): CventEventAttendee[] {
     const out: CventEventAttendee[] = [];
@@ -523,9 +542,9 @@ function toCventEventAttendees(
         const contactId = a.contact?.id;
         const email = a.contact?.email;
         if (contactId && email) {
-            // Cvent drops cancelled registrants from the appointment roster.
-            // Pushing one as a participant fails with ATTENDEE_NOT_FOUND.
-            out.push({ contactId, email, cancelled: a.status === "Cancelled" });
+            // Cvent only takes registered attendees as appointment participants.
+            // Pushing anyone else fails with ATTENDEE_NOT_FOUND.
+            out.push({ contactId, email, cancelled: !isRegisteredStatus(a.status) });
         }
     }
     return out;
@@ -581,6 +600,8 @@ export type CventExistingAppointment = {
     id: string | null;
     /** ISO 8601 UTC start time of the appointment. */
     startTime: string;
+    /** ISO 8601 UTC end time of the appointment. Null when Cvent omits it. */
+    endTime: string | null;
     /** Cvent contact ids of the appointment's participants (hosts + attendees). */
     participantContactIds: string[];
     /**
@@ -594,6 +615,18 @@ export type CventExistingAppointment = {
      * Appointments carry only the location's name, not its id.
      */
     locationName: string | null;
+    /**
+     * The location's id, when the record has one.
+     * The SDK's appointment type has no location id, so this is usually null.
+     */
+    locationId: string | null;
+    /** The appointment type's name, trimmed. Null when Cvent omits it. */
+    typeName: string | null;
+    /**
+     * The appointment type's id, when the record has one.
+     * The SDK's appointment type only names the type, so this is usually null.
+     */
+    typeId: string | null;
 };
 
 /**
@@ -604,7 +637,9 @@ export type CventExistingAppointment = {
 type RawCventAppointment = {
     id?: string;
     start?: Date | string;
-    location?: { name?: string | null } | null;
+    end?: Date | string;
+    location?: { id?: string | null; name?: string | null } | null;
+    type?: { id?: unknown; name?: unknown } | null;
     deleted?: boolean;
     /** e.g. "ACTIVE", "CONFIRMED", "CANCELLED" — see AppointmentStatusJson. */
     status?: string;
@@ -650,9 +685,17 @@ export function toExistingAppointments(
                 typeof appt.start === "string"
                     ? appt.start
                     : appt.start.toISOString(),
+            endTime: !appt.end
+                ? null
+                : typeof appt.end === "string"
+                  ? appt.end
+                  : appt.end.toISOString(),
             participantContactIds,
             hostContactIds,
             locationName: appt.location?.name ?? null,
+            locationId: appt.location?.id ?? null,
+            typeName: typeNameOf(appt.type ?? undefined),
+            typeId: typeof appt.type?.id === "string" && appt.type.id ? appt.type.id : null,
         });
     }
     return out;
@@ -783,6 +826,12 @@ export const getEventAppointments = cache(
 export type CventAppointmentInput = {
     /** Appointment title shown in Cvent. */
     subject: string;
+    /**
+     * Appointment description, shown as the appointment's message in Cvent.
+     * Roundtables send their description, even when it is empty.
+     * Sponsor and D2D meetings leave it out, so Cvent gets no description field.
+     */
+    description?: string;
     /** Appointment start (UTC). */
     startTime: Date;
     /** Appointment end (UTC). */
@@ -797,7 +846,10 @@ export type CventAppointmentInput = {
     appointmentTypeId: string;
     /** Cvent location id. Omitted from the request when null/undefined. */
     locationId?: string | null;
-    /** Cvent contact ids of the appointment attendees (the requested delegate). */
+    /**
+     * Cvent contact ids of the appointment attendees (the requested delegate).
+     * On update, an empty list removes every attendee, and undefined leaves them out of the request.
+     */
     attendeeContactIds?: string[];
     /**
      * External reference code, built by appointmentCode() in lib/cvent/push.ts.
@@ -825,6 +877,7 @@ function toUuidList(ids: string[]): Array<{ id: string }> {
 export function buildCreateAppointmentRequest(input: CventAppointmentInput) {
     return {
         subject: input.subject,
+        ...(input.description !== undefined ? { description: input.description } : {}),
         startTime: input.startTime,
         endTime: input.endTime,
         hosts: toUuidList(input.hostContactIds),
@@ -857,11 +910,14 @@ export function buildUpdateAppointmentRequest(
     return {
         id: apptId,
         subject: input.subject,
+        ...(input.description !== undefined ? { description: input.description } : {}),
         startTime: input.startTime,
         endTime: input.endTime,
         hosts: toUuidList(input.hostContactIds),
         ...(input.locationId ? { location: input.locationId } : {}),
-        ...(input.attendeeContactIds?.length
+        // An empty list is still sent, so an update can remove every attendee.
+        // Leaving attendeeContactIds undefined leaves the attendees out of the request.
+        ...(input.attendeeContactIds !== undefined
             ? { attendees: toUuidList(input.attendeeContactIds) }
             : {}),
     };

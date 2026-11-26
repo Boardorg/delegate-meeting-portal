@@ -368,6 +368,11 @@ const CVENT_ATTENDEE_FIELDS = [
     // Account ids this delegate asked to meet, which becomes the delegate side
     // of the scheduling engine's request graph.
     "CventEvents_NP_People_to_Meet__c",
+    // Formula checkboxes that decide who delegate matching may use.
+    // Only delegates with a complete Networking Profile get D2D meetings.
+    // Conference-only delegates get no D2D meetings and no roundtable seat.
+    "CventEvents_NP_Profile_Complete__c",
+    "CventEvents_Conference_Only__c",
 ] as const;
 
 /**
